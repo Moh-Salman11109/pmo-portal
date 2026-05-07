@@ -58,16 +58,35 @@ const THEMES = {
   },
 };
 
-// ─── THEME CONTEXT ────────────────────────────────────────────────
-const ThemeContext = createContext(null);
+// ─── THEME STORE (module-level, no context needed) ────────────────
+// Simple pub/sub store - guaranteed to work
+const themeStore = {
+  dark: false,
+  listeners: new Set(),
+  get T() { return this.dark ? THEMES.dark : THEMES.light; },
+  toggle() {
+    this.dark = !this.dark;
+    this.listeners.forEach(fn => fn());
+  },
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+};
+
+// Hook that re-renders on theme change
 const useT = () => {
-  const ctx = useContext(ThemeContext);
-  return ctx ? ctx.T : THEMES.light;
+  const [, rerender] = useState(0);
+  useEffect(() => {
+    const unsub = themeStore.subscribe(() => rerender(n => n + 1));
+    return unsub;
+  }, []);
+  return themeStore.T;
 };
-const useDark = () => {
-  const ctx = useContext(ThemeContext);
-  return ctx ? ctx.dark : false;
-};
+
+// Keep ThemeContext for compatibility (Header needs dark prop)
+const ThemeContext = createContext(null);
+const useDark = () => themeStore.dark;
 
 let T = THEMES.light;
 
@@ -2752,15 +2771,11 @@ const AllProjectsView = ({ projects, setRoute }) => {
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
   const [dark, setDark] = useState(false);
-  const [themeVersion, setThemeVersion] = useState(0);
   const toggleDark = () => {
-    setDark(d => !d);
-    setThemeVersion(v => v + 1); // force all useT() consumers to re-render
+    themeStore.toggle();           // notifies ALL useT() subscribers instantly
+    setDark(themeStore.dark);      // keep local state in sync for Header prop
   };
-
-  // ── Update T synchronously on every render ────────────────────
-  const activeT = dark ? THEMES.dark : THEMES.light;
-  Object.assign(T, activeT); // keeps T in sync for any code using it directly
+  const activeT = themeStore.T;
   const [projects, setProjects] = useState(PROJECTS);
 
   // ── Departments live state ─────────────────────────────────────
@@ -2770,30 +2785,7 @@ export default function App() {
   const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
   const deptCtx = { departments, addDept, updateDept, deleteDept };
 
-  // ── Inject CSS variables → instant theme switch everywhere ───────
-  useEffect(() => {
-    const r = document.documentElement.style;
-    const t = activeT;
-    r.setProperty("--pmo-bg",           t.bg);
-    r.setProperty("--pmo-surface",      t.surface);
-    r.setProperty("--pmo-border",       t.border);
-    r.setProperty("--pmo-text",         t.text);
-    r.setProperty("--pmo-muted",        t.muted);
-    r.setProperty("--pmo-primary",      t.primary);
-    r.setProperty("--pmo-accent",       t.accent);
-    r.setProperty("--pmo-sidebar",      t.sidebarBg);
-    r.setProperty("--pmo-header",       t.headerBg);
-    r.setProperty("--pmo-btn-bg",       t.btnPrimBg);
-    r.setProperty("--pmo-btn-text",     t.btnPrimText);
-    r.setProperty("--pmo-input-bg",     t.inputBg);
-    r.setProperty("--pmo-input-text",   t.inputText);
-    r.setProperty("--pmo-select-bg",    t.selectBg);
-    r.setProperty("--pmo-table-bg",     t.tableBg);
-    r.setProperty("--pmo-hover",        t.cardHover);
-    document.body.style.background = t.bg;
-    document.body.style.color      = t.text;
-    document.body.style.transition = "background 0.25s, color 0.25s";
-  }, [dark]);
+  // theme handled by themeStore pub/sub
 
   // ── CRUD helpers passed down to AdminView ──────────────────────
   const addProject = useCallback((data) => {
@@ -2863,9 +2855,7 @@ export default function App() {
 
   const [title, subtitle] = getTitle();
 
-  // Wrap everything in a key div OUTSIDE providers so remount forces fresh context
   return (
-    <React.Fragment key={themeVersion}>
     <ThemeContext.Provider value={{ T: activeT, dark }}>
     <DeptContext.Provider value={deptCtx}>
     <div style={{
@@ -2889,6 +2879,5 @@ export default function App() {
     </div>
     </DeptContext.Provider>
     </ThemeContext.Provider>
-    </React.Fragment>
   );
 }
