@@ -22,6 +22,7 @@ const THEMES = {
     tableBg:    "#f4f6f4",
     // semantic
     headerBg:   "#003932",   // project header, banners
+    headerText: "#ffffff",   // text ON dark header backgrounds
     btnPrimBg:  "#003932",   // primary button bg
     btnPrimText:"#00ffb3",   // primary button text
     accentText: "#0d1f1c",   // text ON accent-coloured backgrounds
@@ -47,6 +48,7 @@ const THEMES = {
     tableBg:    "#0a1512",
     // semantic
     headerBg:   "#061210",   // very dark for project header / banners
+    headerText: "#e8f5f0",   // text ON dark header backgrounds
     btnPrimBg:  "#00ffb3",   // primary button bg in dark = accent
     btnPrimText:"#061210",   // dark text ON green button
     accentText: "#061210",   // text ON accent backgrounds
@@ -1325,7 +1327,7 @@ const HomeView = ({ projects, setRoute }) => {
                   </div>
                 ))}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: `1px solid rgba(255,255,255,0.15)` }}>
                 <div style={{ fontSize: 12, color: T.muted }}>Budget: <span style={{ fontWeight: 600, color: T.text }}>{fmtSAR(stats.totalBudget)}</span></div>
                 <div style={{ fontSize: 12, color: T.muted }}>High Risk: <span style={{ fontWeight: 600, color: stats.highRisk > 0 ? "#dc2626" : T.text }}>{stats.highRisk}</span></div>
               </div>
@@ -1505,13 +1507,13 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
       {/* Project Header */}
-      <div style={{ background: T.headerBg, borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: T.text }}>
+      <div style={{ background: T.headerBg, borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: T.headerText }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <span style={{ background: T.accent, color: T.accentText, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
-              <span style={{ background: "rgba(255,255,255,0.12)", color: T.text, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.gate}</span>
-              <span style={{ background: "rgba(255,255,255,0.12)", color: T.text, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
+              <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.gate}</span>
+              <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
               <TypeBadge type={project.projectType || "Project"} />
             </div>
             <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
@@ -1530,7 +1532,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
               <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi}</div>
               <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 700 }}>IPI Score</div>
             </div>
-            <div style={{ fontSize: 11, color: T.text, lineHeight: 1.8, opacity: 0.9 }}>
+            <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.8, opacity: 0.85 }}>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>SPI</span> {project.spi?.toFixed(2)} × 50% = <strong style={{ color: T.accent }}>{((Math.min(project.spi ?? 1, 1.2)) * 0.5 * 100).toFixed(0)}pts</strong></div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {project.cpi?.toFixed(2)} × 25% = <strong style={{ color: T.accent }}>{((Math.min(project.cpi ?? 1, 1.2)) * 0.25 * 100).toFixed(0)}pts</strong></div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>Docs</span> {docsCompliance}% × 25% = <strong style={{ color: T.accent }}>{(docsCompliance * 0.25).toFixed(0)}pts</strong></div>
@@ -2104,8 +2106,8 @@ const DeptCRUD = ({ projects }) => {
             <div style={{ background: T.headerBg, borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 28 }}>{form.icon}</span>
               <div>
-                <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>{form.name || "Department Name"}</div>
-                <div style={{ color: T.muted, fontSize: 11 }}>ID: {form.id || "dept-id"}</div>
+                <div style={{ color: T.headerText, fontWeight: 700, fontSize: 15 }}>{form.name || "Department Name"}</div>
+                <div style={{ color: T.headerText, fontSize: 11, opacity: 0.7 }}>ID: {form.id || "dept-id"}</div>
               </div>
             </div>
 
@@ -2537,14 +2539,14 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
       </div>
 
       {/* Portfolio IPI banner */}
-      <div style={{ background: T.headerBg, borderRadius: 16, padding: "20px 28px", marginBottom: 28, display: "flex", alignItems: "center", gap: 24 }}>
+      <div style={{ background: T.headerBg, borderRadius: 16, padding: "20px 28px", marginBottom: 28, display: "flex", alignItems: "center", gap: 24, color: T.headerText }}>
         <div style={{ background: portfolioIpiC.bg, borderRadius: 14, padding: "14px 28px", textAlign: "center" }}>
           <div style={{ fontSize: 36, fontWeight: 900, color: portfolioIpiC.color, lineHeight: 1 }}>{portfolioIPI}</div>
           <div style={{ fontSize: 11, color: portfolioIpiC.color, fontWeight: 700, marginTop: 2 }}>Portfolio IPI</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
-          <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.headerText, marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
+          <div style={{ fontSize: 12, color: T.headerText, opacity: 0.7, marginBottom: 12 }}>
             Weighted average of all department IPIs — Formula: SPI×50% + CPI×25% + Docs Compliance×25%
           </div>
           <div style={{ display: "flex", gap: 20 }}>
@@ -2594,8 +2596,8 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 22 }}>{d.icon}</span>
                 <div>
-                  <div style={{ color: T.text, fontWeight: 800, fontSize: 14 }}>{d.name}</div>
-                  <div style={{ color: T.muted, fontSize: 11 }}>{d.stats.total} projects</div>
+                  <div style={{ color: T.headerText, fontWeight: 800, fontSize: 14 }}>{d.name}</div>
+                  <div style={{ color: T.headerText, fontSize: 11, opacity: 0.7 }}>{d.stats.total} projects</div>
                 </div>
               </div>
               {/* IPI score */}
