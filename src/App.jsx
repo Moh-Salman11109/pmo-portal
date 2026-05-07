@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, createContext, useContext } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, AreaChart, Area } from "recharts";
 
 // ─── BRAND TOKENS ───────────────────────────────────────────────
@@ -30,12 +30,16 @@ const DEPARTMENTS = [
   { id: "performance", name: "Performance", icon: "📈", color: "#db2777" },
 ];
 
+// ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────
+const DeptContext = createContext(null);
+const useDepts = () => useContext(DeptContext);
+
 const PROJECTS = [
   // STRATEGY & PMO
   {
     id: "P001", code: "STRAT-2025-001", deptId: "strategy",
     name: "Enterprise PMO Transformation",
-    pm: "Mohammed Al-Qahtani", sponsor: "Alhanouf Al-Rashid",
+    pm: "Mohammed", sponsor: "Alhanouf",
     phase: "Execution", gate: "Gate 3", status: "On Track", priority: "Critical",
     progress: 72, plannedProgress: 68, startDate: "2025-01-15", plannedEnd: "2025-12-31",
     budget: 4500000, forecast: 4350000, actualCost: 2800000,
@@ -44,29 +48,29 @@ const PROJECTS = [
     objective: "Transform the enterprise PMO into a world-class governance function",
     businessCase: "Improve project success rate from 62% to 90% within 24 months",
     milestones: [
-      { id: "M1", name: "PMO Framework Approved", date: "2025-02-28", status: "Completed", owner: "Mohammed Al-Qahtani" },
-      { id: "M2", name: "Tooling Implementation", date: "2025-06-30", status: "In Progress", owner: "Nawaf Al-Saud" },
-      { id: "M3", name: "Training Programme Launch", date: "2025-09-15", status: "Upcoming", owner: "Munira Al-Harbi" },
-      { id: "M4", name: "Go-Live", date: "2025-12-15", status: "Upcoming", owner: "Mohammed Al-Qahtani" },
+      { id: "M1", name: "PMO Framework Approved", date: "2025-02-28", status: "Completed", owner: "Mohammed" },
+      { id: "M2", name: "Tooling Implementation", date: "2025-06-30", status: "In Progress", owner: "Nawaf" },
+      { id: "M3", name: "Training Programme Launch", date: "2025-09-15", status: "Upcoming", owner: "Munira" },
+      { id: "M4", name: "Go-Live", date: "2025-12-15", status: "Upcoming", owner: "Mohammed" },
     ],
     risks: [
-      { id: "R1", title: "Resource availability constraints", probability: "High", impact: "High", level: "Critical", owner: "Abdulrahman Al-Dosari", status: "Open", mitigation: "Pre-book resource pipeline Q3-Q4", dueDate: "2025-06-01" },
-      { id: "R2", title: "Stakeholder adoption resistance", probability: "Medium", impact: "High", level: "High", owner: "Nawaf Al-Saud", status: "Open", mitigation: "Change management programme initiated", dueDate: "2025-07-01" },
-      { id: "R3", title: "Tooling integration complexity", probability: "Low", impact: "Medium", level: "Medium", owner: "Ali Al-Zahrani", status: "Mitigated", mitigation: "POC completed successfully", dueDate: "2025-05-15" },
+      { id: "R1", title: "Resource availability constraints", probability: "High", impact: "High", level: "Critical", owner: "Abdulrahman", status: "Open", mitigation: "Pre-book resource pipeline Q3-Q4", dueDate: "2025-06-01" },
+      { id: "R2", title: "Stakeholder adoption resistance", probability: "Medium", impact: "High", level: "High", owner: "Nawaf", status: "Open", mitigation: "Change management programme initiated", dueDate: "2025-07-01" },
+      { id: "R3", title: "Tooling integration complexity", probability: "Low", impact: "Medium", level: "Medium", owner: "Ali", status: "Mitigated", mitigation: "POC completed successfully", dueDate: "2025-05-15" },
     ],
     issues: [
-      { id: "I1", title: "Delayed vendor contract sign-off", severity: "High", status: "Open", owner: "Alhanouf Al-Rashid", raised: "2025-04-10", escalated: true },
-      { id: "I2", title: "Training venue booking conflict", severity: "Medium", status: "In Progress", owner: "Munira Al-Harbi", raised: "2025-04-22", escalated: false },
+      { id: "I1", title: "Delayed vendor contract sign-off", severity: "High", status: "Open", owner: "Alhanouf", raised: "2025-04-10", escalated: true },
+      { id: "I2", title: "Training venue booking conflict", severity: "Medium", status: "In Progress", owner: "Munira", raised: "2025-04-22", escalated: false },
     ],
     benefits: [
-      { id: "B1", category: "Efficiency", kpi: "Project Success Rate", baseline: "62%", target: "90%", current: "71%", owner: "Mohammed Al-Qahtani", realization: 38, contribution: "High" },
-      { id: "B2", category: "Cost", kpi: "Portfolio Cost Savings", baseline: "0", target: "SAR 2M", current: "SAR 650K", owner: "Alhanouf Al-Rashid", realization: 33, contribution: "Medium" },
-      { id: "B3", category: "Governance", kpi: "Compliance Score", baseline: "55%", target: "95%", current: "78%", owner: "Abdulrahman Al-Dosari", realization: 55, contribution: "High" },
+      { id: "B1", category: "Efficiency", kpi: "Project Success Rate", baseline: "62%", target: "90%", current: "71%", owner: "Mohammed", realization: 38, contribution: "High" },
+      { id: "B2", category: "Cost", kpi: "Portfolio Cost Savings", baseline: "0", target: "SAR 2M", current: "SAR 650K", owner: "Alhanouf", realization: 33, contribution: "Medium" },
+      { id: "B3", category: "Governance", kpi: "Compliance Score", baseline: "55%", target: "95%", current: "78%", owner: "Abdulrahman", realization: 55, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Business Case Approval", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2025-02-01", comments: "Approved with conditions on budget" },
-      { id: "A2", gate: "Gate 2", title: "Design Approval", status: "Approved", owner: "Nawaf Al-Saud", date: "2025-03-15", comments: "Full approval granted" },
-      { id: "A3", gate: "Gate 3", title: "Execution Approval", status: "Pending", owner: "Alhanouf Al-Rashid", date: null, comments: "" },
+      { id: "A1", gate: "Gate 1", title: "Business Case Approval", status: "Approved", owner: "Alhanouf", date: "2025-02-01", comments: "Approved with conditions on budget" },
+      { id: "A2", gate: "Gate 2", title: "Design Approval", status: "Approved", owner: "Nawaf", date: "2025-03-15", comments: "Full approval granted" },
+      { id: "A3", gate: "Gate 3", title: "Execution Approval", status: "Pending", owner: "Alhanouf", date: null, comments: "" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v2.1", lastUpdated: "2025-02-01" },
@@ -76,9 +80,9 @@ const PROJECTS = [
       { id: "D5", name: "Lessons Learned", type: "Lessons Learned", status: "Draft", version: "v0.1", lastUpdated: "2025-04-15" },
     ],
     updates: [
-      { id: "U1", date: "2025-05-01", owner: "Mohammed Al-Qahtani", note: "Milestone 2 on track. Vendor contract escalated to sponsor for resolution. Q3 resource pipeline confirmed with HR." },
-      { id: "U2", date: "2025-04-15", owner: "Nawaf Al-Saud", note: "Training needs analysis completed. 3 venues shortlisted for programme delivery in September." },
-      { id: "U3", date: "2025-04-01", owner: "Mohammed Al-Qahtani", note: "Gate 2 approval received. Moving into full execution phase as planned." },
+      { id: "U1", date: "2025-05-01", owner: "Mohammed", note: "Milestone 2 on track. Vendor contract escalated to sponsor for resolution. Q3 resource pipeline confirmed with HR." },
+      { id: "U2", date: "2025-04-15", owner: "Nawaf", note: "Training needs analysis completed. 3 venues shortlisted for programme delivery in September." },
+      { id: "U3", date: "2025-04-01", owner: "Mohammed", note: "Gate 2 approval received. Moving into full execution phase as planned." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Amber", benefits: "Green", governance: "Green" },
     spi: 1.06, cpi: 1.03, daysRemaining: 243, daysDelayed: 0, scheduleVariance: "+4 days",
@@ -86,7 +90,7 @@ const PROJECTS = [
   {
     id: "P002", code: "STRAT-2025-002", deptId: "strategy",
     name: "Strategic Planning Framework 2030",
-    pm: "Nawaf Al-Saud", sponsor: "Bader Al-Otaibi",
+    pm: "Nawaf", sponsor: "Bader",
     phase: "Planning", gate: "Gate 2", status: "At Risk", priority: "High",
     progress: 35, plannedProgress: 45, startDate: "2025-02-01", plannedEnd: "2025-10-30",
     budget: 1800000, forecast: 2100000, actualCost: 620000,
@@ -95,22 +99,22 @@ const PROJECTS = [
     objective: "Develop a robust 5-year strategic planning framework",
     businessCase: "Align all departments to Vision 2030 strategic pillars",
     milestones: [
-      { id: "M1", name: "Stakeholder Workshops", date: "2025-03-31", status: "Delayed", owner: "Nawaf Al-Saud" },
-      { id: "M2", name: "Framework Draft", date: "2025-06-15", status: "Upcoming", owner: "Lujain Al-Mutairi" },
-      { id: "M3", name: "Board Approval", date: "2025-09-01", status: "Upcoming", owner: "Bader Al-Otaibi" },
+      { id: "M1", name: "Stakeholder Workshops", date: "2025-03-31", status: "Delayed", owner: "Nawaf" },
+      { id: "M2", name: "Framework Draft", date: "2025-06-15", status: "Upcoming", owner: "Lujain" },
+      { id: "M3", name: "Board Approval", date: "2025-09-01", status: "Upcoming", owner: "Bader" },
     ],
     risks: [
-      { id: "R1", title: "Key stakeholder unavailability", probability: "High", impact: "High", level: "Critical", owner: "Nawaf Al-Saud", status: "Open", mitigation: "Rescheduling with exec assistants", dueDate: "2025-05-30" },
+      { id: "R1", title: "Key stakeholder unavailability", probability: "High", impact: "High", level: "Critical", owner: "Nawaf", status: "Open", mitigation: "Rescheduling with exec assistants", dueDate: "2025-05-30" },
     ],
     issues: [
-      { id: "I1", title: "Workshop facilitator contract delay", severity: "High", status: "Escalated", owner: "Bader Al-Otaibi", raised: "2025-03-20", escalated: true },
+      { id: "I1", title: "Workshop facilitator contract delay", severity: "High", status: "Escalated", owner: "Bader", raised: "2025-03-20", escalated: true },
     ],
     benefits: [
-      { id: "B1", category: "Strategic", kpi: "Strategy Alignment Score", baseline: "45%", target: "85%", current: "52%", owner: "Nawaf Al-Saud", realization: 18, contribution: "High" },
+      { id: "B1", category: "Strategic", kpi: "Strategy Alignment Score", baseline: "45%", target: "85%", current: "52%", owner: "Nawaf", realization: 18, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Approved", owner: "Bader Al-Otaibi", date: "2025-02-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning Approval", status: "Returned", owner: "Bader Al-Otaibi", date: "2025-04-05", comments: "Revise scope and timeline" },
+      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Approved", owner: "Bader", date: "2025-02-10", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning Approval", status: "Returned", owner: "Bader", date: "2025-04-05", comments: "Revise scope and timeline" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-02-05" },
@@ -118,7 +122,7 @@ const PROJECTS = [
       { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v3.0", lastUpdated: "2025-04-28" },
     ],
     updates: [
-      { id: "U1", date: "2025-04-28", owner: "Nawaf Al-Saud", note: "Gate 2 returned. Revising scope per sponsor feedback. Workshops rescheduled to May 2025." },
+      { id: "U1", date: "2025-04-28", owner: "Nawaf", note: "Gate 2 returned. Revising scope per sponsor feedback. Workshops rescheduled to May 2025." },
     ],
     health: { scope: "Amber", schedule: "Red", budget: "Red", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
     spi: 0.78, cpi: 0.88, daysRemaining: 185, daysDelayed: 18, scheduleVariance: "-18 days",
@@ -128,7 +132,7 @@ const PROJECTS = [
   {
     id: "P003", code: "DIGI-2025-001", deptId: "digital",
     name: "Digital Customer Portal Phase 2",
-    pm: "Ali Al-Zahrani", sponsor: "Haifa Al-Ghamdi",
+    pm: "Ali", sponsor: "Haifa",
     phase: "Execution", gate: "Gate 3", status: "On Track", priority: "Critical",
     progress: 61, plannedProgress: 58, startDate: "2025-01-01", plannedEnd: "2025-11-30",
     budget: 8200000, forecast: 8000000, actualCost: 4500000,
@@ -137,24 +141,24 @@ const PROJECTS = [
     objective: "Launch next-generation customer self-service portal",
     businessCase: "Reduce call centre volume by 40% and increase NPS by 25 points",
     milestones: [
-      { id: "M1", name: "UX Design Approved", date: "2025-02-28", status: "Completed", owner: "Ali Al-Zahrani" },
-      { id: "M2", name: "Backend API Integration", date: "2025-05-31", status: "In Progress", owner: "Naif Al-Shammari" },
-      { id: "M3", name: "UAT Sign-off", date: "2025-09-30", status: "Upcoming", owner: "Haifa Al-Ghamdi" },
-      { id: "M4", name: "Production Launch", date: "2025-11-15", status: "Upcoming", owner: "Ali Al-Zahrani" },
+      { id: "M1", name: "UX Design Approved", date: "2025-02-28", status: "Completed", owner: "Ali" },
+      { id: "M2", name: "Backend API Integration", date: "2025-05-31", status: "In Progress", owner: "Naif" },
+      { id: "M3", name: "UAT Sign-off", date: "2025-09-30", status: "Upcoming", owner: "Haifa" },
+      { id: "M4", name: "Production Launch", date: "2025-11-15", status: "Upcoming", owner: "Ali" },
     ],
     risks: [
-      { id: "R1", title: "Third-party API latency issues", probability: "Medium", impact: "High", level: "High", owner: "Naif Al-Shammari", status: "Open", mitigation: "Caching layer implementation", dueDate: "2025-05-31" },
-      { id: "R2", title: "Security penetration test findings", probability: "Medium", impact: "Critical", level: "High", owner: "Ali Al-Zahrani", status: "Open", mitigation: "VAPT scheduled for June", dueDate: "2025-06-30" },
+      { id: "R1", title: "Third-party API latency issues", probability: "Medium", impact: "High", level: "High", owner: "Naif", status: "Open", mitigation: "Caching layer implementation", dueDate: "2025-05-31" },
+      { id: "R2", title: "Security penetration test findings", probability: "Medium", impact: "Critical", level: "High", owner: "Ali", status: "Open", mitigation: "VAPT scheduled for June", dueDate: "2025-06-30" },
     ],
     issues: [],
     benefits: [
-      { id: "B1", category: "Customer", kpi: "NPS Score", baseline: "42", target: "67", current: "51", owner: "Haifa Al-Ghamdi", realization: 36, contribution: "High" },
-      { id: "B2", category: "Cost", kpi: "Call Centre Volume Reduction", baseline: "0%", target: "40%", current: "12%", owner: "Ali Al-Zahrani", realization: 30, contribution: "High" },
+      { id: "B1", category: "Customer", kpi: "NPS Score", baseline: "42", target: "67", current: "51", owner: "Haifa", realization: 36, contribution: "High" },
+      { id: "B2", category: "Cost", kpi: "Call Centre Volume Reduction", baseline: "0%", target: "40%", current: "12%", owner: "Ali", realization: 30, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Haifa Al-Ghamdi", date: "2025-01-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Design", status: "Approved", owner: "Haifa Al-Ghamdi", date: "2025-03-01", comments: "Approved with UX revisions" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Haifa Al-Ghamdi", date: "2025-04-01", comments: "Full approval" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Haifa", date: "2025-01-10", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Design", status: "Approved", owner: "Haifa", date: "2025-03-01", comments: "Approved with UX revisions" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Haifa", date: "2025-04-01", comments: "Full approval" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
@@ -163,7 +167,7 @@ const PROJECTS = [
       { id: "D4", name: "April Status Report", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-05-02" },
     ],
     updates: [
-      { id: "U1", date: "2025-05-02", owner: "Ali Al-Zahrani", note: "Backend integration 75% complete. Security review scheduled for June. UAT plan being finalised with business stakeholders." },
+      { id: "U1", date: "2025-05-02", owner: "Ali", note: "Backend integration 75% complete. Security review scheduled for June. UAT plan being finalised with business stakeholders." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.05, cpi: 1.04, daysRemaining: 212, daysDelayed: 0, scheduleVariance: "+3 days",
@@ -171,7 +175,7 @@ const PROJECTS = [
   {
     id: "P004", code: "DIGI-2025-002", deptId: "digital",
     name: "AI Analytics Platform",
-    pm: "Maram Al-Anazi", sponsor: "Haifa Al-Ghamdi",
+    pm: "Maram", sponsor: "Haifa",
     phase: "Initiation", gate: "Gate 1", status: "Not Started", priority: "High",
     progress: 8, plannedProgress: 15, startDate: "2025-04-01", plannedEnd: "2026-03-31",
     budget: 12000000, forecast: 12000000, actualCost: 320000,
@@ -180,25 +184,25 @@ const PROJECTS = [
     objective: "Build enterprise AI analytics and predictive intelligence platform",
     businessCase: "Enable data-driven decision making across all business units",
     milestones: [
-      { id: "M1", name: "Vendor Selection", date: "2025-05-31", status: "In Progress", owner: "Maram Al-Anazi" },
-      { id: "M2", name: "Architecture Design", date: "2025-07-31", status: "Upcoming", owner: "Naif Al-Shammari" },
+      { id: "M1", name: "Vendor Selection", date: "2025-05-31", status: "In Progress", owner: "Maram" },
+      { id: "M2", name: "Architecture Design", date: "2025-07-31", status: "Upcoming", owner: "Naif" },
     ],
     risks: [
-      { id: "R1", title: "AI talent scarcity in market", probability: "High", impact: "High", level: "Critical", owner: "Maram Al-Anazi", status: "Open", mitigation: "Partner with specialist vendor", dueDate: "2025-06-01" },
+      { id: "R1", title: "AI talent scarcity in market", probability: "High", impact: "High", level: "Critical", owner: "Maram", status: "Open", mitigation: "Partner with specialist vendor", dueDate: "2025-06-01" },
     ],
     issues: [],
     benefits: [
-      { id: "B1", category: "Innovation", kpi: "Predictive Accuracy", baseline: "N/A", target: "85%", current: "N/A", owner: "Maram Al-Anazi", realization: 0, contribution: "High" },
+      { id: "B1", category: "Innovation", kpi: "Predictive Accuracy", baseline: "N/A", target: "85%", current: "N/A", owner: "Maram", realization: 0, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Pending", owner: "Haifa Al-Ghamdi", date: null, comments: "" },
+      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Pending", owner: "Haifa", date: null, comments: "" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Draft", version: "v0.3", lastUpdated: "2025-04-18" },
       { id: "D2", name: "Business Case", type: "Business Case", status: "Under Review", version: "v1.0", lastUpdated: "2025-04-15" },
     ],
     updates: [
-      { id: "U1", date: "2025-04-20", owner: "Maram Al-Anazi", note: "Vendor RFP issued. 4 responses received. Evaluation committee formed with IT and Finance." },
+      { id: "U1", date: "2025-04-20", owner: "Maram", note: "Vendor RFP issued. 4 responses received. Evaluation committee formed with IT and Finance." },
     ],
     health: { scope: "Amber", schedule: "Amber", budget: "Green", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
     spi: 0.53, cpi: 1.00, daysRemaining: 335, daysDelayed: 0, scheduleVariance: "-7 days",
@@ -208,7 +212,7 @@ const PROJECTS = [
   {
     id: "P005", code: "OPS-2025-001", deptId: "operations",
     name: "Supply Chain Optimisation",
-    pm: "Adel Al-Mutlaq", sponsor: "Munira Al-Harbi",
+    pm: "Adel", sponsor: "Munira",
     phase: "Execution", gate: "Gate 3", status: "Delayed", priority: "High",
     progress: 42, plannedProgress: 58, startDate: "2024-10-01", plannedEnd: "2025-09-30",
     budget: 6500000, forecast: 7200000, actualCost: 3800000,
@@ -217,26 +221,26 @@ const PROJECTS = [
     objective: "Reduce supply chain costs by 20% and improve delivery performance",
     businessCase: "Deliver SAR 8M annual savings through process and supplier optimisation",
     milestones: [
-      { id: "M1", name: "Process Mapping Complete", date: "2024-12-31", status: "Completed", owner: "Adel Al-Mutlaq" },
-      { id: "M2", name: "Supplier Renegotiation", date: "2025-03-31", status: "Delayed", owner: "Naif Al-Shammari" },
-      { id: "M3", name: "System Integration", date: "2025-07-31", status: "Upcoming", owner: "Ali Al-Zahrani" },
+      { id: "M1", name: "Process Mapping Complete", date: "2024-12-31", status: "Completed", owner: "Adel" },
+      { id: "M2", name: "Supplier Renegotiation", date: "2025-03-31", status: "Delayed", owner: "Naif" },
+      { id: "M3", name: "System Integration", date: "2025-07-31", status: "Upcoming", owner: "Ali" },
     ],
     risks: [
-      { id: "R1", title: "Supplier contract disputes", probability: "High", impact: "Critical", level: "Critical", owner: "Adel Al-Mutlaq", status: "Open", mitigation: "Legal team engaged. Escalated to CFO.", dueDate: "2025-05-15" },
-      { id: "R2", title: "ERP system integration delays", probability: "High", impact: "High", level: "High", owner: "Ali Al-Zahrani", status: "Open", mitigation: "Dedicated integration sprint team formed", dueDate: "2025-06-30" },
+      { id: "R1", title: "Supplier contract disputes", probability: "High", impact: "Critical", level: "Critical", owner: "Adel", status: "Open", mitigation: "Legal team engaged. Escalated to CFO.", dueDate: "2025-05-15" },
+      { id: "R2", title: "ERP system integration delays", probability: "High", impact: "High", level: "High", owner: "Ali", status: "Open", mitigation: "Dedicated integration sprint team formed", dueDate: "2025-06-30" },
     ],
     issues: [
-      { id: "I1", title: "Key supplier refusing contract terms", severity: "Critical", status: "Escalated", owner: "Munira Al-Harbi", raised: "2025-03-15", escalated: true },
-      { id: "I2", title: "ERP module delivery 6 weeks late", severity: "High", status: "Open", owner: "Adel Al-Mutlaq", raised: "2025-04-01", escalated: false },
+      { id: "I1", title: "Key supplier refusing contract terms", severity: "Critical", status: "Escalated", owner: "Munira", raised: "2025-03-15", escalated: true },
+      { id: "I2", title: "ERP module delivery 6 weeks late", severity: "High", status: "Open", owner: "Adel", raised: "2025-04-01", escalated: false },
     ],
     benefits: [
-      { id: "B1", category: "Cost", kpi: "Annual Savings", baseline: "0", target: "SAR 8M", current: "SAR 1.2M", owner: "Munira Al-Harbi", realization: 15, contribution: "High" },
-      { id: "B2", category: "Operations", kpi: "On-Time Delivery Rate", baseline: "72%", target: "92%", current: "76%", owner: "Adel Al-Mutlaq", realization: 20, contribution: "Medium" },
+      { id: "B1", category: "Cost", kpi: "Annual Savings", baseline: "0", target: "SAR 8M", current: "SAR 1.2M", owner: "Munira", realization: 15, contribution: "High" },
+      { id: "B2", category: "Operations", kpi: "On-Time Delivery Rate", baseline: "72%", target: "92%", current: "76%", owner: "Adel", realization: 20, contribution: "Medium" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Munira Al-Harbi", date: "2024-10-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Munira Al-Harbi", date: "2024-11-30", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Munira Al-Harbi", date: "2025-02-01", comments: "Approved" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Munira", date: "2024-10-10", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Munira", date: "2024-11-30", comments: "Approved" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Munira", date: "2025-02-01", comments: "Approved" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2024-10-05" },
@@ -245,7 +249,7 @@ const PROJECTS = [
       { id: "D4", name: "Status Report - April", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
     ],
     updates: [
-      { id: "U1", date: "2025-04-30", owner: "Adel Al-Mutlaq", note: "Critical supplier escalation ongoing. Legal resolution expected by May 15. ERP delays impact schedule by estimated 6 weeks. Recovery plan presented to sponsor." },
+      { id: "U1", date: "2025-04-30", owner: "Adel", note: "Critical supplier escalation ongoing. Legal resolution expected by May 15. ERP delays impact schedule by estimated 6 weeks. Recovery plan presented to sponsor." },
     ],
     health: { scope: "Amber", schedule: "Red", budget: "Red", risk: "Red", quality: "Amber", resource: "Amber", benefits: "Red", governance: "Amber" },
     spi: 0.72, cpi: 0.81, daysRemaining: 153, daysDelayed: 28, scheduleVariance: "-28 days",
@@ -255,7 +259,7 @@ const PROJECTS = [
   {
     id: "P006", code: "GRC-2025-001", deptId: "grc",
     name: "Regulatory Compliance Framework",
-    pm: "Abdulrahman Al-Dosari", sponsor: "Bader Al-Otaibi",
+    pm: "Abdulrahman", sponsor: "Bader",
     phase: "Execution", gate: "Gate 3", status: "On Track", priority: "Critical",
     progress: 55, plannedProgress: 52, startDate: "2025-01-01", plannedEnd: "2025-12-31",
     budget: 3200000, forecast: 3100000, actualCost: 1600000,
@@ -264,22 +268,22 @@ const PROJECTS = [
     objective: "Achieve full regulatory compliance across all business lines",
     businessCase: "Mitigate SAR 15M regulatory fine exposure and enhance audit readiness",
     milestones: [
-      { id: "M1", name: "Gap Assessment Complete", date: "2025-02-28", status: "Completed", owner: "Abdulrahman Al-Dosari" },
-      { id: "M2", name: "Policy Framework Published", date: "2025-05-31", status: "In Progress", owner: "Lujain Al-Mutairi" },
-      { id: "M3", name: "Training Rollout", date: "2025-08-31", status: "Upcoming", owner: "Munira Al-Harbi" },
-      { id: "M4", name: "Audit Readiness Sign-off", date: "2025-11-30", status: "Upcoming", owner: "Bader Al-Otaibi" },
+      { id: "M1", name: "Gap Assessment Complete", date: "2025-02-28", status: "Completed", owner: "Abdulrahman" },
+      { id: "M2", name: "Policy Framework Published", date: "2025-05-31", status: "In Progress", owner: "Lujain" },
+      { id: "M3", name: "Training Rollout", date: "2025-08-31", status: "Upcoming", owner: "Munira" },
+      { id: "M4", name: "Audit Readiness Sign-off", date: "2025-11-30", status: "Upcoming", owner: "Bader" },
     ],
     risks: [
-      { id: "R1", title: "Regulatory changes post-publication", probability: "Medium", impact: "High", level: "High", owner: "Abdulrahman Al-Dosari", status: "Open", mitigation: "Monthly regulatory watch process established", dueDate: "Ongoing" },
+      { id: "R1", title: "Regulatory changes post-publication", probability: "Medium", impact: "High", level: "High", owner: "Abdulrahman", status: "Open", mitigation: "Monthly regulatory watch process established", dueDate: "Ongoing" },
     ],
     issues: [],
     benefits: [
-      { id: "B1", category: "Compliance", kpi: "Regulatory Compliance Score", baseline: "61%", target: "98%", current: "74%", owner: "Abdulrahman Al-Dosari", realization: 35, contribution: "High" },
+      { id: "B1", category: "Compliance", kpi: "Regulatory Compliance Score", baseline: "61%", target: "98%", current: "74%", owner: "Abdulrahman", realization: 35, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Bader Al-Otaibi", date: "2025-01-08", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Bader Al-Otaibi", date: "2025-02-15", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Bader Al-Otaibi", date: "2025-03-10", comments: "Approved" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Bader", date: "2025-01-08", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Bader", date: "2025-02-15", comments: "Approved" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Bader", date: "2025-03-10", comments: "Approved" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-01-05" },
@@ -289,7 +293,7 @@ const PROJECTS = [
       { id: "D5", name: "Policy Framework v0.8", type: "Governance", status: "Draft", version: "v0.8", lastUpdated: "2025-04-28" },
     ],
     updates: [
-      { id: "U1", date: "2025-05-01", owner: "Abdulrahman Al-Dosari", note: "Policy framework 80% complete. Legal review underway. Training content development commenced. On track for May 31 milestone." },
+      { id: "U1", date: "2025-05-01", owner: "Abdulrahman", note: "Policy framework 80% complete. Legal review underway. Training content development commenced. On track for May 31 milestone." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.06, cpi: 1.03, daysRemaining: 244, daysDelayed: 0, scheduleVariance: "+3 days",
@@ -299,7 +303,7 @@ const PROJECTS = [
   {
     id: "P007", code: "HR-2025-001", deptId: "hr",
     name: "Talent Management System Implementation",
-    pm: "Lujain Al-Mutairi", sponsor: "Alhanouf Al-Rashid",
+    pm: "Lujain", sponsor: "Alhanouf",
     phase: "Execution", gate: "Gate 3", status: "On Track", priority: "High",
     progress: 68, plannedProgress: 65, startDate: "2024-11-01", plannedEnd: "2025-08-31",
     budget: 5500000, forecast: 5400000, actualCost: 3500000,
@@ -308,23 +312,23 @@ const PROJECTS = [
     objective: "Deploy end-to-end talent management platform across the organisation",
     businessCase: "Reduce time-to-hire by 35% and improve retention by 20%",
     milestones: [
-      { id: "M1", name: "System Configuration", date: "2025-01-31", status: "Completed", owner: "Lujain Al-Mutairi" },
-      { id: "M2", name: "Data Migration", date: "2025-04-30", status: "Completed", owner: "Ali Al-Zahrani" },
-      { id: "M3", name: "User Acceptance Testing", date: "2025-06-30", status: "In Progress", owner: "Munira Al-Harbi" },
-      { id: "M4", name: "Go-Live", date: "2025-08-15", status: "Upcoming", owner: "Lujain Al-Mutairi" },
+      { id: "M1", name: "System Configuration", date: "2025-01-31", status: "Completed", owner: "Lujain" },
+      { id: "M2", name: "Data Migration", date: "2025-04-30", status: "Completed", owner: "Ali" },
+      { id: "M3", name: "User Acceptance Testing", date: "2025-06-30", status: "In Progress", owner: "Munira" },
+      { id: "M4", name: "Go-Live", date: "2025-08-15", status: "Upcoming", owner: "Lujain" },
     ],
     risks: [
-      { id: "R1", title: "Data quality issues during migration", probability: "Low", impact: "Medium", level: "Medium", owner: "Ali Al-Zahrani", status: "Mitigated", mitigation: "Data cleansing completed successfully", dueDate: "2025-04-30" },
+      { id: "R1", title: "Data quality issues during migration", probability: "Low", impact: "Medium", level: "Medium", owner: "Ali", status: "Mitigated", mitigation: "Data cleansing completed successfully", dueDate: "2025-04-30" },
     ],
     issues: [],
     benefits: [
-      { id: "B1", category: "HR", kpi: "Time-to-Hire (days)", baseline: "45", target: "29", current: "38", owner: "Lujain Al-Mutairi", realization: 44, contribution: "High" },
-      { id: "B2", category: "HR", kpi: "Employee Retention Rate", baseline: "78%", target: "93%", current: "82%", owner: "Alhanouf Al-Rashid", realization: 27, contribution: "Medium" },
+      { id: "B1", category: "HR", kpi: "Time-to-Hire (days)", baseline: "45", target: "29", current: "38", owner: "Lujain", realization: 44, contribution: "High" },
+      { id: "B2", category: "HR", kpi: "Employee Retention Rate", baseline: "78%", target: "93%", current: "82%", owner: "Alhanouf", realization: 27, contribution: "Medium" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2024-11-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2024-12-10", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2025-02-01", comments: "Approved" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Alhanouf", date: "2024-11-05", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Alhanouf", date: "2024-12-10", comments: "Approved" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf", date: "2025-02-01", comments: "Approved" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2024-11-02" },
@@ -334,7 +338,7 @@ const PROJECTS = [
       { id: "D5", name: "UAT Plan", type: "Governance", status: "Approved", version: "v1.0", lastUpdated: "2025-04-20" },
     ],
     updates: [
-      { id: "U1", date: "2025-04-30", owner: "Lujain Al-Mutairi", note: "Data migration completed successfully. UAT phase commenced May 1. 45 test users onboarded. Go-live preparation timeline confirmed." },
+      { id: "U1", date: "2025-04-30", owner: "Lujain", note: "Data migration completed successfully. UAT phase commenced May 1. 45 test users onboarded. Go-live preparation timeline confirmed." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.05, cpi: 1.02, daysRemaining: 118, daysDelayed: 0, scheduleVariance: "+3 days",
@@ -344,7 +348,7 @@ const PROJECTS = [
   {
     id: "P008", code: "IT-2025-001", deptId: "it",
     name: "Cloud Infrastructure Migration",
-    pm: "Naif Al-Shammari", sponsor: "Nawaf Al-Saud",
+    pm: "Naif", sponsor: "Nawaf",
     phase: "Execution", gate: "Gate 3", status: "At Risk", priority: "Critical",
     progress: 48, plannedProgress: 55, startDate: "2025-01-01", plannedEnd: "2025-12-31",
     budget: 15000000, forecast: 16500000, actualCost: 7200000,
@@ -353,26 +357,26 @@ const PROJECTS = [
     objective: "Migrate 95% of on-premise workloads to cloud infrastructure",
     businessCase: "Reduce infrastructure costs by 30% and improve system availability to 99.99%",
     milestones: [
-      { id: "M1", name: "Wave 1 Migration (Dev/Test)", date: "2025-03-31", status: "Completed", owner: "Naif Al-Shammari" },
-      { id: "M2", name: "Wave 2 Migration (Non-Critical)", date: "2025-06-30", status: "In Progress", owner: "Ali Al-Zahrani" },
-      { id: "M3", name: "Wave 3 Migration (Critical)", date: "2025-10-31", status: "Upcoming", owner: "Naif Al-Shammari" },
-      { id: "M4", name: "Legacy Decommission", date: "2025-12-15", status: "Upcoming", owner: "Nawaf Al-Saud" },
+      { id: "M1", name: "Wave 1 Migration (Dev/Test)", date: "2025-03-31", status: "Completed", owner: "Naif" },
+      { id: "M2", name: "Wave 2 Migration (Non-Critical)", date: "2025-06-30", status: "In Progress", owner: "Ali" },
+      { id: "M3", name: "Wave 3 Migration (Critical)", date: "2025-10-31", status: "Upcoming", owner: "Naif" },
+      { id: "M4", name: "Legacy Decommission", date: "2025-12-15", status: "Upcoming", owner: "Nawaf" },
     ],
     risks: [
-      { id: "R1", title: "Critical system downtime during migration", probability: "Medium", impact: "Critical", level: "Critical", owner: "Naif Al-Shammari", status: "Open", mitigation: "Blue-green deployment strategy implemented", dueDate: "2025-10-31" },
-      { id: "R2", title: "Cloud costs exceeding estimates", probability: "High", impact: "High", level: "High", owner: "Nawaf Al-Saud", status: "Open", mitigation: "FinOps team engaged. Cost governance process established", dueDate: "Ongoing" },
+      { id: "R1", title: "Critical system downtime during migration", probability: "Medium", impact: "Critical", level: "Critical", owner: "Naif", status: "Open", mitigation: "Blue-green deployment strategy implemented", dueDate: "2025-10-31" },
+      { id: "R2", title: "Cloud costs exceeding estimates", probability: "High", impact: "High", level: "High", owner: "Nawaf", status: "Open", mitigation: "FinOps team engaged. Cost governance process established", dueDate: "Ongoing" },
     ],
     issues: [
-      { id: "I1", title: "Legacy application incompatibility discovered", severity: "High", status: "In Progress", owner: "Naif Al-Shammari", raised: "2025-04-15", escalated: false },
+      { id: "I1", title: "Legacy application incompatibility discovered", severity: "High", status: "In Progress", owner: "Naif", raised: "2025-04-15", escalated: false },
     ],
     benefits: [
-      { id: "B1", category: "Cost", kpi: "Infrastructure Cost Reduction", baseline: "0%", target: "30%", current: "8%", owner: "Nawaf Al-Saud", realization: 27, contribution: "High" },
-      { id: "B2", category: "Availability", kpi: "System Uptime", baseline: "99.2%", target: "99.99%", current: "99.7%", owner: "Naif Al-Shammari", realization: 54, contribution: "High" },
+      { id: "B1", category: "Cost", kpi: "Infrastructure Cost Reduction", baseline: "0%", target: "30%", current: "8%", owner: "Nawaf", realization: 27, contribution: "High" },
+      { id: "B2", category: "Availability", kpi: "System Uptime", baseline: "99.2%", target: "99.99%", current: "99.7%", owner: "Naif", realization: 54, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Nawaf Al-Saud", date: "2025-01-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Nawaf Al-Saud", date: "2025-02-15", comments: "Approved with budget caveat" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Nawaf Al-Saud", date: "2025-03-20", comments: "Approved" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Nawaf", date: "2025-01-10", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Nawaf", date: "2025-02-15", comments: "Approved with budget caveat" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Nawaf", date: "2025-03-20", comments: "Approved" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
@@ -381,7 +385,7 @@ const PROJECTS = [
       { id: "D4", name: "Architecture Design", type: "Technical", status: "Approved", version: "v2.0", lastUpdated: "2025-02-10" },
     ],
     updates: [
-      { id: "U1", date: "2025-05-01", owner: "Naif Al-Shammari", note: "Wave 2 migration 60% complete. Legacy app compatibility issue being resolved by vendor. FinOps review identifies SAR 1.2M potential savings if right-sizing implemented by Q3." },
+      { id: "U1", date: "2025-05-01", owner: "Naif", note: "Wave 2 migration 60% complete. Legacy app compatibility issue being resolved by vendor. FinOps review identifies SAR 1.2M potential savings if right-sizing implemented by Q3." },
     ],
     health: { scope: "Green", schedule: "Amber", budget: "Red", risk: "Red", quality: "Green", resource: "Amber", benefits: "Amber", governance: "Green" },
     spi: 0.87, cpi: 0.86, daysRemaining: 244, daysDelayed: 12, scheduleVariance: "-12 days",
@@ -391,7 +395,7 @@ const PROJECTS = [
   {
     id: "P009", code: "FIN-2025-001", deptId: "finance",
     name: "Finance Transformation Programme",
-    pm: "Haifa Al-Ghamdi", sponsor: "Bader Al-Otaibi",
+    pm: "Haifa", sponsor: "Bader",
     phase: "Planning", gate: "Gate 2", status: "On Track", priority: "High",
     progress: 28, plannedProgress: 25, startDate: "2025-03-01", plannedEnd: "2026-06-30",
     budget: 9800000, forecast: 9800000, actualCost: 1100000,
@@ -400,20 +404,20 @@ const PROJECTS = [
     objective: "Transform finance function through automation and process standardisation",
     businessCase: "Reduce month-end close from 12 to 5 days and automate 70% of manual processes",
     milestones: [
-      { id: "M1", name: "Current State Assessment", date: "2025-03-31", status: "Completed", owner: "Haifa Al-Ghamdi" },
-      { id: "M2", name: "Future State Design", date: "2025-06-30", status: "In Progress", owner: "Adel Al-Mutlaq" },
-      { id: "M3", name: "Technology Selection", date: "2025-09-30", status: "Upcoming", owner: "Naif Al-Shammari" },
+      { id: "M1", name: "Current State Assessment", date: "2025-03-31", status: "Completed", owner: "Haifa" },
+      { id: "M2", name: "Future State Design", date: "2025-06-30", status: "In Progress", owner: "Adel" },
+      { id: "M3", name: "Technology Selection", date: "2025-09-30", status: "Upcoming", owner: "Naif" },
     ],
     risks: [
-      { id: "R1", title: "Complexity of ERP integration", probability: "Medium", impact: "High", level: "High", owner: "Haifa Al-Ghamdi", status: "Open", mitigation: "Specialist ERP consultant engaged", dueDate: "2025-09-30" },
+      { id: "R1", title: "Complexity of ERP integration", probability: "Medium", impact: "High", level: "High", owner: "Haifa", status: "Open", mitigation: "Specialist ERP consultant engaged", dueDate: "2025-09-30" },
     ],
     issues: [],
     benefits: [
-      { id: "B1", category: "Efficiency", kpi: "Month-End Close Duration (days)", baseline: "12", target: "5", current: "12", owner: "Haifa Al-Ghamdi", realization: 0, contribution: "High" },
+      { id: "B1", category: "Efficiency", kpi: "Month-End Close Duration (days)", baseline: "12", target: "5", current: "12", owner: "Haifa", realization: 0, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Bader Al-Otaibi", date: "2025-03-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Pending", owner: "Bader Al-Otaibi", date: null, comments: "" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Bader", date: "2025-03-05", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Pending", owner: "Bader", date: null, comments: "" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-03-03" },
@@ -421,7 +425,7 @@ const PROJECTS = [
       { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v4.0", lastUpdated: "2025-04-28" },
     ],
     updates: [
-      { id: "U1", date: "2025-04-28", owner: "Haifa Al-Ghamdi", note: "Current state assessment report completed and distributed. Future state workshops scheduled for May and June. Gate 2 approval pack being prepared." },
+      { id: "U1", date: "2025-04-28", owner: "Haifa", note: "Current state assessment report completed and distributed. Future state workshops scheduled for May and June. Gate 2 approval pack being prepared." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Amber", governance: "Green" },
     spi: 1.12, cpi: 1.00, daysRemaining: 425, daysDelayed: 0, scheduleVariance: "+8 days",
@@ -431,7 +435,7 @@ const PROJECTS = [
   {
     id: "P010", code: "QUAL-2025-001", deptId: "quality",
     name: "ISO 9001:2025 Certification",
-    pm: "Munira Al-Harbi", sponsor: "Abdulrahman Al-Dosari",
+    pm: "Munira", sponsor: "Abdulrahman",
     phase: "Execution", gate: "Gate 3", status: "Completed", priority: "Critical",
     progress: 100, plannedProgress: 100, startDate: "2024-07-01", plannedEnd: "2025-04-30",
     budget: 2200000, forecast: 2100000, actualCost: 2050000,
@@ -440,21 +444,21 @@ const PROJECTS = [
     objective: "Achieve ISO 9001:2025 certification across all business units",
     businessCase: "Required for key client contracts and regulatory requirements",
     milestones: [
-      { id: "M1", name: "Gap Analysis", date: "2024-09-30", status: "Completed", owner: "Munira Al-Harbi" },
-      { id: "M2", name: "Process Documentation", date: "2024-12-31", status: "Completed", owner: "Lujain Al-Mutairi" },
-      { id: "M3", name: "Internal Audit", date: "2025-02-28", status: "Completed", owner: "Munira Al-Harbi" },
-      { id: "M4", name: "Certification Audit", date: "2025-04-15", status: "Completed", owner: "Abdulrahman Al-Dosari" },
+      { id: "M1", name: "Gap Analysis", date: "2024-09-30", status: "Completed", owner: "Munira" },
+      { id: "M2", name: "Process Documentation", date: "2024-12-31", status: "Completed", owner: "Lujain" },
+      { id: "M3", name: "Internal Audit", date: "2025-02-28", status: "Completed", owner: "Munira" },
+      { id: "M4", name: "Certification Audit", date: "2025-04-15", status: "Completed", owner: "Abdulrahman" },
     ],
     risks: [],
     issues: [],
     benefits: [
-      { id: "B1", category: "Quality", kpi: "Certification Achievement", baseline: "Not Certified", target: "Certified", current: "Certified", owner: "Munira Al-Harbi", realization: 100, contribution: "High" },
+      { id: "B1", category: "Quality", kpi: "Certification Achievement", baseline: "Not Certified", target: "Certified", current: "Certified", owner: "Munira", realization: 100, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Abdulrahman Al-Dosari", date: "2024-07-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Abdulrahman Al-Dosari", date: "2024-08-15", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Abdulrahman Al-Dosari", date: "2024-10-01", comments: "Approved" },
-      { id: "A4", gate: "Gate 4", title: "Closure", status: "Approved", owner: "Abdulrahman Al-Dosari", date: "2025-05-01", comments: "Certified. Outstanding programme delivery." },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Abdulrahman", date: "2024-07-05", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Abdulrahman", date: "2024-08-15", comments: "Approved" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Abdulrahman", date: "2024-10-01", comments: "Approved" },
+      { id: "A4", gate: "Gate 4", title: "Closure", status: "Approved", owner: "Abdulrahman", date: "2025-05-01", comments: "Certified. Outstanding programme delivery." },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2024-07-03" },
@@ -464,7 +468,7 @@ const PROJECTS = [
       { id: "D5", name: "ISO Certificate", type: "Governance", status: "Received", version: "v1.0", lastUpdated: "2025-04-25" },
     ],
     updates: [
-      { id: "U1", date: "2025-05-01", owner: "Munira Al-Harbi", note: "Certification achieved on April 25, 2025. Excellent audit outcome. Closure report approved. Lessons learned documented." },
+      { id: "U1", date: "2025-05-01", owner: "Munira", note: "Certification achieved on April 25, 2025. Excellent audit outcome. Closure report approved. Lessons learned documented." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.00, cpi: 1.02, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "On Time",
@@ -474,7 +478,7 @@ const PROJECTS = [
   {
     id: "P011", code: "PERF-2025-001", deptId: "performance",
     name: "KPI Management Platform",
-    pm: "Mohammed Al-Qahtani", sponsor: "Alhanouf Al-Rashid",
+    pm: "Mohammed", sponsor: "Alhanouf",
     phase: "Execution", gate: "Gate 3", status: "On Track", priority: "High",
     progress: 58, plannedProgress: 55, startDate: "2025-02-01", plannedEnd: "2025-10-31",
     budget: 3800000, forecast: 3700000, actualCost: 1900000,
@@ -483,21 +487,21 @@ const PROJECTS = [
     objective: "Implement enterprise KPI management and performance reporting platform",
     businessCase: "Enable real-time performance visibility for all executives and department heads",
     milestones: [
-      { id: "M1", name: "KPI Library Defined", date: "2025-03-31", status: "Completed", owner: "Mohammed Al-Qahtani" },
-      { id: "M2", name: "Platform Configuration", date: "2025-06-30", status: "In Progress", owner: "Maram Al-Anazi" },
-      { id: "M3", name: "Executive Dashboard Launch", date: "2025-09-15", status: "Upcoming", owner: "Alhanouf Al-Rashid" },
+      { id: "M1", name: "KPI Library Defined", date: "2025-03-31", status: "Completed", owner: "Mohammed" },
+      { id: "M2", name: "Platform Configuration", date: "2025-06-30", status: "In Progress", owner: "Maram" },
+      { id: "M3", name: "Executive Dashboard Launch", date: "2025-09-15", status: "Upcoming", owner: "Alhanouf" },
     ],
     risks: [
-      { id: "R1", title: "Data source integration complexity", probability: "Low", impact: "Medium", level: "Low", owner: "Mohammed Al-Qahtani", status: "Open", mitigation: "API integration plan reviewed and approved", dueDate: "2025-06-30" },
+      { id: "R1", title: "Data source integration complexity", probability: "Low", impact: "Medium", level: "Low", owner: "Mohammed", status: "Open", mitigation: "API integration plan reviewed and approved", dueDate: "2025-06-30" },
     ],
     issues: [],
     benefits: [
-      { id: "B1", category: "Performance", kpi: "Executive Reporting Automation", baseline: "20%", target: "90%", current: "35%", owner: "Mohammed Al-Qahtani", realization: 17, contribution: "High" },
+      { id: "B1", category: "Performance", kpi: "Executive Reporting Automation", baseline: "20%", target: "90%", current: "35%", owner: "Mohammed", realization: 17, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2025-02-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2025-03-15", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf Al-Rashid", date: "2025-04-01", comments: "Approved" },
+      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Alhanouf", date: "2025-02-05", comments: "Approved" },
+      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Alhanouf", date: "2025-03-15", comments: "Approved" },
+      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf", date: "2025-04-01", comments: "Approved" },
     ],
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-02-03" },
@@ -505,7 +509,7 @@ const PROJECTS = [
       { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v7.0", lastUpdated: "2025-04-29" },
     ],
     updates: [
-      { id: "U1", date: "2025-04-29", owner: "Mohammed Al-Qahtani", note: "Platform configuration 45% complete. KPI mapping sessions completed with 7 departments. Integration with ERP and BI tools in progress." },
+      { id: "U1", date: "2025-04-29", owner: "Mohammed", note: "Platform configuration 45% complete. KPI mapping sessions completed with 7 departments. Integration with ERP and BI tools in progress." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.05, cpi: 1.03, daysRemaining: 185, daysDelayed: 0, scheduleVariance: "+3 days",
@@ -669,6 +673,7 @@ const Tab = ({ tabs, active, onSelect }) => (
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
 const Sidebar = ({ route, setRoute, projects }) => {
+  const { departments } = useDepts();
   const navItems = [
     { icon: "🏠", label: "Portfolio Overview", route: "home" },
     { icon: "📁", label: "Departments", route: "departments" },
@@ -698,7 +703,7 @@ const Sidebar = ({ route, setRoute, projects }) => {
           </button>
         ))}
         <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
-        {DEPARTMENTS.map(d => {
+        {departments.map(d => {
           const stats = getDeptStats(d.id, projects);
           return (
             <button key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })} style={{
@@ -716,7 +721,7 @@ const Sidebar = ({ route, setRoute, projects }) => {
       </nav>
       <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)` }}>
         <div style={{ fontSize: 11, color: T.secondary }}>Logged in as</div>
-        <div style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>Mohammed Al-Qahtani</div>
+        <div style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>Mohammed</div>
         <div style={{ fontSize: 11, color: T.secondary }}>PMO Director</div>
       </div>
     </div>
@@ -744,6 +749,7 @@ const Header = ({ title, subtitle, route, setRoute }) => (
 
 // ─── HOME / PORTFOLIO OVERVIEW ────────────────────────────────────
 const HomeView = ({ projects, setRoute }) => {
+  const { departments } = useDepts();
   const allProjects = projects;
   const byStatus = { "On Track": 0, "At Risk": 0, "Delayed": 0, "Completed": 0, "Not Started": 0 };
   allProjects.forEach(p => { byStatus[p.status] = (byStatus[p.status] || 0) + 1; });
@@ -753,76 +759,206 @@ const HomeView = ({ projects, setRoute }) => {
   const budgetTotal = allProjects.reduce((s, p) => s + p.budget, 0);
   const costTotal = allProjects.reduce((s, p) => s + p.actualCost, 0);
 
-  const deptPerf = DEPARTMENTS.map(d => {
+  const deptPerf = departments.map(d => {
     const s = getDeptStats(d.id, allProjects);
-    return { name: d.name.replace("Strategy & PMO", "Strategy").replace("Operations", "Ops").replace("Performance", "Perf"), health: s.health, projects: s.total };
+    const ipi = calcDeptIPI(d.id, allProjects);
+    // shorten name to fit chart
+    const short = d.name
+      .replace("Strategy & PMO", "Strategy")
+      .replace("Operations", "Ops")
+      .replace("Performance", "Perf")
+      .replace("Finance", "Finance");
+    return { name: short, health: s.health, ipi, projects: s.total, icon: d.icon };
   });
 
   const riskDist = [
-    { name: "Low", value: allProjects.filter(p => p.riskLevel === "Low").length },
-    { name: "Medium", value: allProjects.filter(p => p.riskLevel === "Medium").length },
-    { name: "High", value: allProjects.filter(p => p.riskLevel === "High").length },
-    { name: "Critical", value: allProjects.filter(p => p.riskLevel === "Critical").length },
+    { name: "Low",      value: allProjects.filter(p => p.riskLevel === "Low").length,      fill: "#16a34a" },
+    { name: "Medium",   value: allProjects.filter(p => p.riskLevel === "Medium").length,    fill: "#eab308" },
+    { name: "High",     value: allProjects.filter(p => p.riskLevel === "High").length,      fill: "#dc2626" },
+    { name: "Critical", value: allProjects.filter(p => p.riskLevel === "Critical").length,  fill: "#490300" },
   ].filter(x => x.value);
 
+  // budget per dept for bar chart
+  const budgetPerDept = departments.map(d => {
+    const s = getDeptStats(d.id, allProjects);
+    const short = d.name.replace("Strategy & PMO","Strategy").replace("Operations","Ops").replace("Performance","Perf");
+    return { name: short, budget: +(s.totalBudget/1000000).toFixed(1), spent: +(s.actualCost/1000000).toFixed(1) };
+  });
+
   return (
-    <div style={{ padding: "32px", maxWidth: 1400 }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: T.text }}>Enterprise Portfolio Dashboard</h1>
-        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 14 }}>Real-time portfolio overview across all departments · May 2025</p>
+    <div style={{ padding: "32px", maxWidth: 1500 }}>
+      {/* Page header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}>Enterprise Portfolio Dashboard</h1>
+        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Real-time portfolio overview across all departments · May 2025</p>
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 28 }}>
-        <KPICard label="Total Projects" value={allProjects.length} icon="📋" />
-        <KPICard label="Active" value={byStatus["On Track"]} color="#16a34a" icon="✅" />
-        <KPICard label="At Risk" value={byStatus["At Risk"]} color="#eab308" icon="⚠️" />
-        <KPICard label="Delayed" value={byStatus["Delayed"]} color="#dc2626" icon="🔴" />
-        <KPICard label="Completed" value={byStatus["Completed"]} color="#3b82f6" icon="🏁" />
-        <KPICard label="Portfolio Budget" value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 24 }}>
+        <KPICard label="Total Projects"    value={allProjects.length}          icon="📋" />
+        <KPICard label="On Track"          value={byStatus["On Track"] || 0}   color="#16a34a" icon="✅" />
+        <KPICard label="At Risk"           value={byStatus["At Risk"] || 0}    color="#eab308" icon="⚠️" />
+        <KPICard label="Delayed"           value={byStatus["Delayed"] || 0}    color="#dc2626" icon="🔴" />
+        <KPICard label="Completed"         value={byStatus["Completed"] || 0}  color="#3b82f6" icon="🏁" />
+        <KPICard label="Portfolio Budget"  value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
       </div>
 
-      {/* Charts Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700 }}>Status Distribution</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie data={statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                {statusPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700 }}>Department Health Score</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={deptPerf} barSize={18}>
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(v) => `${v}%`} />
-              <Bar dataKey="health" fill={T.accent} radius={[4, 4, 0, 0]} />
+      {/* ── ROW 1: Department Health (wide) + Status Pie ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 20 }}>
+
+        {/* Department Health Score — full width bar chart */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Department Health Score</h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>Portfolio progress % across all {departments.length} departments</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={deptPerf} barSize={28} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11, fill: T.muted, fontWeight: 600 }}
+                axisLine={false} tickLine={false}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 11, fill: T.muted }}
+                axisLine={false} tickLine={false}
+                tickFormatter={v => `${v}%`}
+                width={38}
+              />
+              <Tooltip
+                formatter={v => [`${v}%`, "Health"]}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}` }}
+              />
+              <Bar dataKey="health" radius={[6, 6, 0, 0]}>
+                {deptPerf.map((entry, i) => (
+                  <Cell key={i} fill={entry.health >= 70 ? T.accent : entry.health >= 50 ? "#eab308" : "#dc2626"} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700 }}>Risk Distribution</h3>
-          <ResponsiveContainer width="100%" height={180}>
+
+        {/* Status Distribution Pie */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Status Distribution</h3>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: T.muted }}>{allProjects.length} total projects</p>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name} (${value})`} fontSize={10}>
-                {riskDist.map((entry, i) => <Cell key={i} fill={["#16a34a", "#eab308", "#dc2626", "#490300"][i]} />)}
+              <Pie
+                data={statusPie} dataKey="value" nameKey="name"
+                cx="50%" cy="50%" outerRadius={80} innerRadius={40}
+              >
+                {statusPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
               </Pie>
-              <Tooltip />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
             </PieChart>
           </ResponsiveContainer>
+          {/* Legend */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {statusPie.map((s, i) => (
+              <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: PIE_COLORS[i] }} />
+                  <span style={{ fontSize: 12, color: T.text }}>{s.name}</span>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{s.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── ROW 2: IPI per Dept + Risk + Budget ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+
+        {/* Department IPI Chart */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Department IPI Scores</h3>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + Docs×25% — all {departments.length} departments</p>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={deptPerf} barSize={28} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} width={38} tickFormatter={v => v} />
+              <Tooltip formatter={v => [v, "IPI Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}` }} />
+              <Bar dataKey="ipi" radius={[6, 6, 0, 0]}>
+                {deptPerf.map((entry, i) => {
+                  const c = ipiColor(entry.ipi);
+                  return <Cell key={i} fill={c.color} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          {/* IPI legend */}
+          <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
+            {[{ label: "Excellent 85+", color: "#15803d" }, { label: "Good 70+", color: T.primary }, { label: "Fair 55+", color: "#854d0e" }, { label: "Poor <55", color: "#991b1b" }].map(b => (
+              <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: b.color }} />
+                <span style={{ fontSize: 10, color: T.muted }}>{b.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Risk Distribution */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Risk Profile</h3>
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: T.muted }}>By risk level</p>
+          <ResponsiveContainer width="100%" height={160}>
+            <PieChart>
+              <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35}>
+                {riskDist.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 8 }}>
+            {riskDist.map(r => (
+              <div key={r.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: r.fill }} />
+                  <span style={{ fontSize: 11, color: T.text }}>{r.name}</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700 }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Budget Utilisation */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Budget Summary</h3>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: T.muted }}>Portfolio level</p>
+          {[
+            { label: "Total Approved", value: fmtSAR(budgetTotal), color: T.text },
+            { label: "Total Spent",    value: fmtSAR(costTotal),   color: T.text },
+            { label: "Remaining",      value: fmtSAR(budgetTotal - costTotal), color: (budgetTotal - costTotal) >= 0 ? "#16a34a" : "#dc2626" },
+            { label: "Utilisation",    value: `${budgetTotal ? Math.round((costTotal/budgetTotal)*100) : 0}%`, color: T.primary },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+              <span style={{ fontSize: 12, color: T.muted }}>{label}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}</span>
+            </div>
+          ))}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: T.muted }}>Overall Utilisation</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{budgetTotal ? Math.round((costTotal/budgetTotal)*100) : 0}%</span>
+            </div>
+            <Progress value={budgetTotal ? Math.round((costTotal/budgetTotal)*100) : 0} height={8}
+              color={budgetTotal && costTotal/budgetTotal > 0.9 ? "#dc2626" : T.accent} />
+          </div>
         </div>
       </div>
 
       {/* Department Cards */}
       <SectionHeader title="Department Portfolio Overview" subtitle="Click a department to view its projects" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-        {DEPARTMENTS.map(d => {
+        {departments.map(d => {
           const stats = getDeptStats(d.id, allProjects);
           return (
             <div key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
@@ -869,7 +1005,8 @@ const HomeView = ({ projects, setRoute }) => {
 
 // ─── DEPARTMENT VIEW ──────────────────────────────────────────────
 const DepartmentView = ({ projects, deptId, setRoute }) => {
-  const dept = DEPARTMENTS.find(d => d.id === deptId);
+  const { departments } = useDepts();
+  const dept = departments.find(d => d.id === deptId);
   const deptProjects = projects.filter(p => p.deptId === deptId);
   const stats = getDeptStats(deptId, projects);
   const [search, setSearch] = useState("");
@@ -998,6 +1135,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
 const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
+  const { departments } = useDepts();
   const project = projects.find(p => p.id === projectId);
   const [tab, setTab] = useState("Overview");
   const TABS = ["Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
@@ -1056,7 +1194,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
           {[
             { label: "PM", value: project.pm },
             { label: "Sponsor", value: project.sponsor },
-            { label: "Department", value: DEPARTMENTS.find(d => d.id === project.deptId)?.name },
+            { label: "Department", value: departments.find(d => d.id === project.deptId)?.name },
             { label: "Phase", value: project.phase },
             { label: "Start Date", value: project.startDate },
             { label: "Planned End", value: project.plannedEnd },
@@ -1474,8 +1612,211 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   );
 };
 
+// ─── DEPARTMENT CRUD COMPONENT ────────────────────────────────────
+const ICON_OPTIONS = ["⚡","💻","⚙️","🛡️","👥","🖥️","💰","✅","📈","🏗️","📊","🔬","📣","🤝","🌐","🔒","📦","🧪","🏆","💡"];
+
+const DeptCRUD = ({ projects }) => {
+  const { departments, addDept, updateDept, deleteDept } = useDepts();
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: "", id: "", icon: "⚡", color: "#003932" });
+  const [toast, setToast] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ name: "", id: "", icon: "⚡", color: "#003932" });
+    setShowForm(true);
+  };
+
+  const openEdit = (d) => {
+    setEditing(d.id);
+    setForm({ name: d.name, id: d.id, icon: d.icon, color: d.color });
+    setShowForm(true);
+  };
+
+  const handleSave = () => {
+    if (!form.name.trim()) { showToast("Department name is required", "error"); return; }
+    if (!editing && !form.id.trim()) { showToast("Department ID is required", "error"); return; }
+    if (!editing && departments.find(d => d.id === form.id.trim().toLowerCase())) {
+      showToast("Department ID already exists", "error"); return;
+    }
+    if (editing) {
+      updateDept(editing, { name: form.name, icon: form.icon, color: form.color });
+      showToast("Department updated ✓");
+    } else {
+      addDept({ id: form.id.trim().toLowerCase().replace(/\s+/g, "-"), name: form.name, icon: form.icon, color: form.color });
+      showToast("Department added ✓");
+    }
+    setShowForm(false);
+  };
+
+  const handleDelete = (id) => {
+    const hasProjects = projects.filter(p => p.deptId === id).length > 0;
+    if (hasProjects) { showToast("Cannot delete — department has projects. Archive projects first.", "error"); return; }
+    deleteDept(id);
+    setConfirmDelete(null);
+    showToast("Department deleted ✓");
+  };
+
+  return (
+    <div>
+      {toast && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 1000, background: toast.type === "error" ? "#dc2626" : T.primary, color: "#fff", padding: "12px 20px", borderRadius: 12, fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
+          {toast.type === "error" ? "⚠ " : "✓ "}{toast.msg}
+        </div>
+      )}
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 400, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800 }}>Delete Department?</h3>
+            <p style={{ margin: "0 0 24px", color: T.muted, fontSize: 13 }}>
+              This will permanently remove <strong>{departments.find(d => d.id === confirmDelete)?.name}</strong>. This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button onClick={() => setConfirmDelete(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 24px", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+              <button onClick={() => handleDelete(confirmDelete)} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Form Modal */}
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 480 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{editing ? "Edit Department" : "Add New Department"}</h2>
+              <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.muted }}>×</button>
+            </div>
+
+            {/* Preview */}
+            <div style={{ background: T.primary, borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 28 }}>{form.icon}</span>
+              <div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>{form.name || "Department Name"}</div>
+                <div style={{ color: T.secondary, fontSize: 11 }}>ID: {form.id || "dept-id"}</div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 4 }}>Department Name *</label>
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Strategy & PMO"
+                  style={{ width: "100%", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              {!editing && (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 4 }}>Department ID * <span style={{ fontWeight: 400 }}>(unique, no spaces)</span></label>
+                  <input value={form.id} onChange={e => setForm(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s+/g, "-") }))}
+                    placeholder="e.g. strategy"
+                    style={{ width: "100%", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 8 }}>Icon</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {ICON_OPTIONS.map(ic => (
+                    <button key={ic} onClick={() => setForm(p => ({ ...p, icon: ic }))}
+                      style={{ width: 38, height: 38, fontSize: 20, border: `2px solid ${form.icon === ic ? T.primary : T.border}`, borderRadius: 8, background: form.icon === ic ? "#e8f5f0" : "#fff", cursor: "pointer" }}>
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 4 }}>Color</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
+                    style={{ width: 44, height: 36, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", padding: 2 }} />
+                  <span style={{ fontSize: 12, color: T.muted }}>{form.color}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+              <button onClick={() => setShowForm(false)} style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 20px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleSave} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {editing ? "Save Changes" : "Add Department"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: T.muted }}>{departments.length} departments in system</div>
+        <button onClick={openAdd} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Department</button>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr style={{ background: T.bg }}>
+            {["Icon", "Department Name", "ID", "Total Projects", "On Track", "Delayed", "Completed", "Health", "IPI", "Actions"].map(h => (
+              <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>{departments.map((d, i) => {
+            const s = getDeptStats(d.id, projects);
+            const dIPI = calcDeptIPI(d.id, projects);
+            const ipiC = ipiColor(dIPI);
+            const hasProjects = s.total > 0;
+            return (
+              <tr key={d.id} style={{ borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? "transparent" : T.bg }}>
+                <td style={{ padding: "12px 14px", fontSize: 22 }}>{d.icon}</td>
+                <td style={{ padding: "12px 14px", fontSize: 14, fontWeight: 700 }}>{d.name}</td>
+                <td style={{ padding: "12px 14px" }}>
+                  <span style={{ fontSize: 11, background: "#e8f5f0", color: T.primary, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>{d.id}</span>
+                </td>
+                <td style={{ padding: "12px 14px", fontSize: 15, fontWeight: 800 }}>{s.total}</td>
+                <td style={{ padding: "12px 14px" }}><span style={{ color: "#16a34a", fontWeight: 700 }}>{s.active}</span></td>
+                <td style={{ padding: "12px 14px" }}><span style={{ color: "#dc2626", fontWeight: 700 }}>{s.delayed}</span></td>
+                <td style={{ padding: "12px 14px" }}><span style={{ color: "#3b82f6", fontWeight: 700 }}>{s.completed}</span></td>
+                <td style={{ padding: "12px 14px", minWidth: 120 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ flex: 1 }}><Progress value={s.health} height={5} color={s.health > 70 ? T.accent : s.health > 50 ? "#eab308" : "#dc2626"} /></div>
+                    <span style={{ fontSize: 11, fontWeight: 700 }}>{s.health}%</span>
+                  </div>
+                </td>
+                <td style={{ padding: "12px 14px" }}>
+                  <span style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{dIPI}</span>
+                </td>
+                <td style={{ padding: "12px 14px" }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => openEdit(d)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                    <button onClick={() => setConfirmDelete(d.id)} disabled={hasProjects}
+                      title={hasProjects ? "Archive all projects first" : "Delete department"}
+                      style={{ background: hasProjects ? "#f3f4f6" : "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: hasProjects ? "not-allowed" : "pointer", color: hasProjects ? "#9ca3af" : "#dc2626", fontWeight: 600 }}>
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 // ─── ADMIN PANEL ──────────────────────────────────────────────────
 const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProject }) => {
+  const { departments } = useDepts();
   const [adminTab, setAdminTab] = useState("Projects");
   const [editingProject, setEditingProject] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -1566,7 +1907,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <Field label="Project Name *" field="name" />
                   <Field label="Project Code *" field="code" />
-                  <Field label="Department" field="deptId" options={DEPARTMENTS.map(d => d.id)} />
+                  <Field label="Department" field="deptId" options={departments.map(d => d.id)} />
                   <Field label="Project Manager" field="pm" />
                   <Field label="Sponsor" field="sponsor" />
                   <Field label="Phase" field="phase" options={["Initiation", "Planning", "Execution", "Monitoring", "Closure"]} />
@@ -1606,7 +1947,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 700, color: T.muted }}>{p.id}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary }}>{p.code}</td>
                   <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600 }}>{p.name}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{DEPARTMENTS.find(d => d.id === p.deptId)?.name}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{departments.find(d => d.id === p.deptId)?.name}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.pm}</td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px", minWidth: 100 }}>
@@ -1631,35 +1972,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
       )}
 
       {adminTab === "Departments" && (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr style={{ background: T.bg }}>
-              {["Icon", "Department", "ID", "Total Projects", "On Track", "Delayed", "Completed", "Portfolio Health"].map(h => (
-                <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>{DEPARTMENTS.map(d => {
-              const s = getDeptStats(d.id, projects);
-              return (
-                <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
-                  <td style={{ padding: "12px 14px", fontSize: 20 }}>{d.icon}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 14, fontWeight: 700 }}>{d.name}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.id}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 14, fontWeight: 800 }}>{s.total}</td>
-                  <td style={{ padding: "12px 14px" }}><span style={{ color: "#16a34a", fontWeight: 700 }}>{s.active}</span></td>
-                  <td style={{ padding: "12px 14px" }}><span style={{ color: "#dc2626", fontWeight: 700 }}>{s.delayed}</span></td>
-                  <td style={{ padding: "12px 14px" }}><span style={{ color: "#3b82f6", fontWeight: 700 }}>{s.completed}</span></td>
-                  <td style={{ padding: "12px 14px", minWidth: 140 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ flex: 1 }}><Progress value={s.health} height={6} color={s.health > 70 ? T.accent : s.health > 50 ? "#eab308" : "#dc2626"} /></div>
-                      <span style={{ fontSize: 12, fontWeight: 700 }}>{s.health}%</span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
-        </div>
+        <DeptCRUD projects={projects} />
       )}
 
     </div>
@@ -1668,9 +1981,10 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
 
 // ─── DEPARTMENTS OVERVIEW PAGE ───────────────────────────────────
 const DepartmentsOverview = ({ projects, setRoute }) => {
+  const { departments } = useDepts();
   const [sort, setSort] = useState("ipi-desc");
 
-  const deptData = useMemo(() => DEPARTMENTS.map(d => {
+  const deptData = useMemo(() => departments.map(d => {
     const dp = projects.filter(p => p.deptId === d.id);
     const stats = getDeptStats(d.id, projects);
     const deptIPI = calcDeptIPI(d.id, projects);
@@ -1713,7 +2027,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
       <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}>Departments Overview</h1>
-          <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>IPI-driven comparison across all {DEPARTMENTS.length} departments · {projects.length} total projects</p>
+          <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>IPI-driven comparison across all {departments.length} departments · {projects.length} total projects</p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontSize: 12, color: T.muted }}>Sort by:</span>
@@ -1751,13 +2065,16 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             ))}
           </div>
         </div>
-        {/* mini bar chart of dept IPIs */}
-        <div style={{ width: 220 }}>
-          <ResponsiveContainer width="100%" height={80}>
-            <BarChart data={deptData.map(d => ({ name: d.name.split(" ")[0], ipi: d.deptIPI }))} barSize={16}>
-              <XAxis dataKey="name" tick={{ fontSize: 9, fill: "rgba(255,255,255,0.5)" }} />
+        {/* mini bar chart of dept IPIs — wider to show all */}
+        <div style={{ width: 280 }}>
+          <ResponsiveContainer width="100%" height={90}>
+            <BarChart data={deptData.map(d => ({
+              name: d.name.replace("Strategy & PMO","Strategy").replace("Operations","Ops").replace("Performance","Perf").split(" ")[0],
+              ipi: d.deptIPI
+            }))} barSize={20} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} hide />
-              <Tooltip formatter={v => `IPI: ${v}`} contentStyle={{ fontSize: 11 }} />
+              <Tooltip formatter={v => [`IPI: ${v}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
               <Bar dataKey="ipi" radius={[3, 3, 0, 0]}>
                 {deptData.map((d, i) => (
                   <Cell key={i} fill={ipiColor(d.deptIPI).color} />
@@ -1883,6 +2200,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 
 // ─── ALL PROJECTS VIEW ────────────────────────────────────────────
 const AllProjectsView = ({ projects, setRoute }) => {
+  const { departments } = useDepts();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterDept, setFilterDept] = useState("All");
@@ -1907,7 +2225,7 @@ const AllProjectsView = ({ projects, setRoute }) => {
         </select>
         <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}>
           <option value="All">All Departments</option>
-          {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
         <div style={{ display: "flex", alignItems: "center", fontSize: 13, color: T.muted, whiteSpace: "nowrap" }}>{filtered.length} results</div>
       </div>
@@ -1920,7 +2238,7 @@ const AllProjectsView = ({ projects, setRoute }) => {
           </tr></thead>
           <tbody>
             {filtered.map((p, i) => {
-              const dept = DEPARTMENTS.find(d => d.id === p.deptId);
+              const dept = departments.find(d => d.id === p.deptId);
               return (
                 <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg }}
                   onMouseEnter={e => e.currentTarget.style.background = "#f0f7f4"}
@@ -1958,9 +2276,14 @@ const AllProjectsView = ({ projects, setRoute }) => {
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
-
-  // ✅ Single source of truth — all views read from here
   const [projects, setProjects] = useState(PROJECTS);
+
+  // ── Departments live state ─────────────────────────────────────
+  const [departments, setDepartments] = useState(DEPARTMENTS);
+  const addDept    = useCallback((d) => setDepartments(prev => [...prev, d]), []);
+  const updateDept = useCallback((id, data) => setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...data } : d)), []);
+  const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
+  const deptCtx = { departments, addDept, updateDept, deleteDept };
 
   // ── CRUD helpers passed down to AdminView ──────────────────────
   const addProject = useCallback((data) => {
@@ -1990,11 +2313,11 @@ export default function App() {
   // ── Dynamic title ───────────────────────────────────────────────
   const getTitle = () => {
     if (route.view === "home") return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
-    if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${DEPARTMENTS.length} departments`];
+    if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${departments.length} departments`];
     if (route.view === "projects") return ["All Projects", "Complete project portfolio"];
     if (route.view === "admin") return ["Admin Panel", "System data management"];
     if (route.view === "department") {
-      const d = DEPARTMENTS.find(x => x.id === route.deptId);
+      const d = departments.find(x => x.id === route.deptId);
       return [d?.name || "Department", "Project portfolio"];
     }
     if (route.view === "project") {
@@ -2007,6 +2330,7 @@ export default function App() {
   const [title, subtitle] = getTitle();
 
   return (
+    <DeptContext.Provider value={deptCtx}>
     <div style={{ display: "flex", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: T.bg, color: T.text, overflow: "hidden" }}>
       <Sidebar route={route} setRoute={setRoute} projects={projects} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -2021,5 +2345,6 @@ export default function App() {
         </main>
       </div>
     </div>
+    </DeptContext.Provider>
   );
 }
