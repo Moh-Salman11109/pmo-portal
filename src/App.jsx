@@ -1148,7 +1148,7 @@ const HomeView = ({ projects, setRoute }) => {
     <div style={{ padding: "32px", maxWidth: 1500 }}>
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}> from Helloe World to مثل منت شايف</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}> Hello World 😒</h1>
         <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Real-time portfolio overview across all departments · May 2025</p>
       </div>
 
