@@ -2,20 +2,67 @@
 import { useState, useMemo, useCallback, createContext, useContext } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, AreaChart, Area } from "recharts";
 
-// ─── BRAND TOKENS ───────────────────────────────────────────────
-const T = {
-  primary: "#003932",
-  accent: "#00ffb3",
-  secondary: "#a1b9ab",
-  light: "#c9d5c9",
-  danger: "#ff5000",
-  critical: "#490300",
-  bg: "#f4f6f4",
-  surface: "#ffffff",
-  border: "#dce8dc",
-  text: "#0d1f1c",
-  muted: "#5a7a6e",
+// ─── THEME TOKENS ────────────────────────────────────────────────
+const THEMES = {
+  light: {
+    primary:    "#003932",
+    accent:     "#00ffb3",
+    secondary:  "#a1b9ab",
+    light:      "#c9d5c9",
+    danger:     "#ff5000",
+    critical:   "#490300",
+    bg:         "#f4f6f4",
+    surface:    "#ffffff",
+    border:     "#dce8dc",
+    text:       "#0d1f1c",
+    muted:      "#5a7a6e",
+    sidebarBg:  "#003932",
+    cardHover:  "#f0f7f4",
+    inputBg:    "#ffffff",
+    tableBg:    "#f4f6f4",
+    // semantic
+    headerBg:   "#003932",   // project header, banners
+    btnPrimBg:  "#003932",   // primary button bg
+    btnPrimText:"#00ffb3",   // primary button text
+    accentText: "#0d1f1c",   // text ON accent-coloured backgrounds
+    badgeBg:    "#e8f5f0",   // light tint badge
+    inputText:  "#0d1f1c",
+    selectBg:   "#ffffff",
+  },
+  dark: {
+    primary:    "#00ffb3",   // accent is the "brand" highlight in dark
+    accent:     "#00ffb3",
+    secondary:  "#a1b9ab",
+    light:      "#c9d5c9",
+    danger:     "#ff5000",
+    critical:   "#ff6b6b",
+    bg:         "#0a1512",
+    surface:    "#0f1e1a",
+    border:     "#1a3330",
+    text:       "#e8f5f0",
+    muted:      "#7aaa96",
+    sidebarBg:  "#060e0c",
+    cardHover:  "#132820",
+    inputBg:    "#132820",
+    tableBg:    "#0a1512",
+    // semantic
+    headerBg:   "#061210",   // very dark for project header / banners
+    btnPrimBg:  "#00ffb3",   // primary button bg in dark = accent
+    btnPrimText:"#061210",   // dark text ON green button
+    accentText: "#061210",   // text ON accent backgrounds
+    badgeBg:    "#0f2a22",
+    inputText:  "#e8f5f0",
+    selectBg:   "#132820",
+  },
 };
+
+// ─── THEME CONTEXT ────────────────────────────────────────────────
+const ThemeContext = createContext(null);
+const useTheme = () => useContext(ThemeContext);
+const useT = () => useContext(ThemeContext).T;  // shorthand
+
+// Global T — components call useTheme() to get live T
+let T = THEMES.light; // fallback for non-component helpers
 
 // ─── DATA LAYER ─────────────────────────────────────────────────
 const DEPARTMENTS = [
@@ -613,6 +660,7 @@ const riskColor = {
 
 // ─── UI COMPONENTS ───────────────────────────────────────────────
 const Badge = ({ status, size = "sm" }) => {
+  const T = useT();
   const c = statusColor[status] || { bg: "#f3f4f6", text: "#374151", dot: "#9ca3af" };
   return (
     <span style={{ background: c.bg, color: c.text, fontSize: size === "sm" ? 11 : 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
@@ -634,46 +682,59 @@ const RiskBadge = ({ level }) => {
   return <span style={{ background: c.bg, color: c.text, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12 }}>{level}</span>;
 };
 
-const Progress = ({ value, color, height = 6 }) => (
-  <div style={{ background: "#e5e7eb", borderRadius: height, height, overflow: "hidden" }}>
-    <div style={{ width: `${Math.min(100, value)}%`, height: "100%", background: color || T.accent, borderRadius: height, transition: "width 0.3s" }} />
-  </div>
-);
-
-const KPICard = ({ label, value, sub, color, icon }) => (
-  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-      <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>{label}</span>
-      {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
+const Progress = ({ value, color, height = 6 }) => {
+  const T = useT();
+  return (
+    <div style={{ background: T.border, borderRadius: height, height, overflow: "hidden" }}>
+      <div style={{ width: `${Math.min(100, value)}%`, height: "100%", background: color || T.accent, borderRadius: height, transition: "width 0.3s" }} />
     </div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: color || T.text, lineHeight: 1 }}>{value}</div>
-    {sub && <div style={{ fontSize: 11, color: T.muted }}>{sub}</div>}
-  </div>
-);
+  );
+};
 
-const SectionHeader = ({ title, subtitle, action, onAction }) => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-    <div>
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: T.text }}>{title}</h2>
-      {subtitle && <p style={{ margin: "2px 0 0", fontSize: 13, color: T.muted }}>{subtitle}</p>}
+const KPICard = ({ label, value, sub, color, icon }) => {
+  const T = useT();
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>{label}</span>
+        {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: color || T.text, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: T.muted }}>{sub}</div>}
     </div>
-    {action && (
-      <button onClick={onAction} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{action}</button>
-    )}
-  </div>
-);
+  );
+};
 
-const Tab = ({ tabs, active, onSelect }) => (
-  <div style={{ display: "flex", gap: 4, borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
-    {tabs.map(t => (
-      <button key={t} onClick={() => onSelect(t)} style={{ background: "none", border: "none", borderBottom: active === t ? `2px solid ${T.primary}` : "2px solid transparent", marginBottom: -2, padding: "10px 16px", fontSize: 13, fontWeight: active === t ? 700 : 500, color: active === t ? T.primary : T.muted, cursor: "pointer", transition: "all 0.15s" }}>{t}</button>
-    ))}
-  </div>
-);
+const SectionHeader = ({ title, subtitle, action, onAction }) => {
+  const T = useT();
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: T.text }}>{title}</h2>
+        {subtitle && <p style={{ margin: "2px 0 0", fontSize: 13, color: T.muted }}>{subtitle}</p>}
+      </div>
+      {action && (
+        <button onClick={onAction} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{action}</button>
+      )}
+    </div>
+  );
+};
+
+const Tab = ({ tabs, active, onSelect }) => {
+  const T = useT();
+  return (
+    <div style={{ display: "flex", gap: 4, borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
+      {tabs.map(t => (
+        <button key={t} onClick={() => onSelect(t)} style={{ background: "none", border: "none", borderBottom: active === t ? `2px solid ${T.primary}` : "2px solid transparent", marginBottom: -2, padding: "10px 16px", fontSize: 13, fontWeight: active === t ? 700 : 500, color: active === t ? T.primary : T.muted, cursor: "pointer", transition: "all 0.15s" }}>{t}</button>
+      ))}
+    </div>
+  );
+};
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
 const Sidebar = ({ route, setRoute, projects }) => {
   const { departments } = useDepts();
+  const T = useT();
   const navItems = [
     { icon: "🏠", label: "Portfolio Overview", route: "home" },
     { icon: "📁", label: "Departments", route: "departments" },
@@ -681,7 +742,7 @@ const Sidebar = ({ route, setRoute, projects }) => {
     { icon: "⚙️", label: "Admin Panel", route: "admin" },
   ];
   return (
-    <div style={{ width: 220, minWidth: 220, background: T.primary, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
+    <div style={{ width: 220, minWidth: 220, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
       <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid rgba(255,255,255,0.1)` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, background: T.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
@@ -729,28 +790,63 @@ const Sidebar = ({ route, setRoute, projects }) => {
 };
 
 // ─── HEADER ──────────────────────────────────────────────────────
-const Header = ({ title, subtitle, route, setRoute }) => (
-  <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      {route.view !== "home" && (
-        <button onClick={() => setRoute({ view: "home" })} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.muted }}>← Back</button>
-      )}
-      <div>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>{title}</h1>
-        {subtitle && <p style={{ margin: 0, fontSize: 12, color: T.muted }}>{subtitle}</p>}
+const Header = ({ title, subtitle, route, setRoute, dark, toggleDark }) => {
+  const T = useT();
+  return (
+    <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {route.view !== "home" && (
+          <button onClick={() => setRoute({ view: "home" })} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.muted }}>← Back</button>
+        )}
+        <div>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>{title}</h1>
+          {subtitle && <p style={{ margin: 0, fontSize: 12, color: T.muted }}>{subtitle}</p>}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: T.muted }}>May 2025</span>
+
+        {/* ── Dark Mode Toggle ── */}
+        <button onClick={toggleDark} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          style={{
+            display: "flex", alignItems: "center", gap: 7,
+            background: dark ? "#0f2a22" : T.bg,
+            border: `1px solid ${T.border}`,
+            borderRadius: 20, padding: "6px 14px",
+            cursor: "pointer", transition: "all 0.2s",
+            fontSize: 12, fontWeight: 600,
+            color: T.text,
+          }}>
+          <span style={{ fontSize: 15 }}>{dark ? "☀️" : "🌙"}</span>
+          <span style={{ color: T.text }}>{dark ? "Light" : "Dark"}</span>
+          {/* pill toggle */}
+          <div style={{
+            width: 32, height: 18, borderRadius: 10,
+            background: dark ? T.accent : "#cbd5e1",
+            position: "relative", transition: "background 0.3s", flexShrink: 0,
+          }}>
+            <div style={{
+              position: "absolute", top: 2,
+              left: dark ? 16 : 2,
+              width: 14, height: 14, borderRadius: "50%",
+              background: dark ? "#061210" : "#fff",
+              transition: "left 0.3s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+            }} />
+          </div>
+        </button>
+
+        <div style={{ width: 34, height: 34, background: dark ? T.accent : "#003932", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: dark ? "#061210" : T.accent, fontWeight: 700, fontSize: 14 }}>M</div>
       </div>
     </div>
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <span style={{ fontSize: 12, color: T.muted }}>May 2025</span>
-      <div style={{ width: 34, height: 34, background: T.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, fontWeight: 700, fontSize: 14 }}>M</div>
-    </div>
-  </div>
-);
+  );
+};
 
 // ─── HOME / PORTFOLIO OVERVIEW ────────────────────────────────────
 const HomeView = ({ projects, setRoute }) => {
   const { departments } = useDepts();
-  const allProjects = projects;
+  const T = useT();
+  const allProjects = projects.filter(p => !p.archived);
   const byStatus = { "On Track": 0, "At Risk": 0, "Delayed": 0, "Completed": 0, "Not Started": 0 };
   allProjects.forEach(p => { byStatus[p.status] = (byStatus[p.status] || 0) + 1; });
   const statusPie = Object.entries(byStatus).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value }));
@@ -830,7 +926,7 @@ const HomeView = ({ projects, setRoute }) => {
               />
               <Tooltip
                 formatter={v => [`${v}%`, "Health"]}
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}` }}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }}
               />
               <Bar dataKey="health" radius={[6, 6, 0, 0]}>
                 {deptPerf.map((entry, i) => (
@@ -853,7 +949,7 @@ const HomeView = ({ projects, setRoute }) => {
               >
                 {statusPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
               </Pie>
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: T.surface, color: T.text }} />
             </PieChart>
           </ResponsiveContainer>
           {/* Legend */}
@@ -884,7 +980,7 @@ const HomeView = ({ projects, setRoute }) => {
             <BarChart data={deptPerf} barSize={28} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} width={38} tickFormatter={v => v} />
-              <Tooltip formatter={v => [v, "IPI Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}` }} />
+              <Tooltip formatter={v => [v, "IPI Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }} />
               <Bar dataKey="ipi" radius={[6, 6, 0, 0]}>
                 {deptPerf.map((entry, i) => {
                   const c = ipiColor(entry.ipi);
@@ -913,7 +1009,7 @@ const HomeView = ({ projects, setRoute }) => {
               <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35}>
                 {riskDist.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: T.surface, color: T.text }} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 8 }}>
@@ -1006,9 +1102,10 @@ const HomeView = ({ projects, setRoute }) => {
 // ─── DEPARTMENT VIEW ──────────────────────────────────────────────
 const DepartmentView = ({ projects, deptId, setRoute }) => {
   const { departments } = useDepts();
+  const T = useT();
   const dept = departments.find(d => d.id === deptId);
-  const deptProjects = projects.filter(p => p.deptId === deptId);
-  const stats = getDeptStats(deptId, projects);
+  const deptProjects = projects.filter(p => p.deptId === deptId && !p.archived);
+  const stats = getDeptStats(deptId, projects.filter(p => !p.archived));
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterRisk, setFilterRisk] = useState("All");
@@ -1044,11 +1141,11 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 
       {/* Filters */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 20px", marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or code..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, minWidth: 180 }} />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or code..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, minWidth: 180, background: T.inputBg, color: T.inputText }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
           {["All", "On Track", "At Risk", "Delayed", "Completed", "Not Started"].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select value={filterRisk} onChange={e => setFilterRisk(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}>
+        <select value={filterRisk} onChange={e => setFilterRisk(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
           {["All", "Low", "Medium", "High", "Critical"].map(r => <option key={r}>{r}</option>)}
         </select>
         <div style={{ display: "flex", gap: 4 }}>
@@ -1136,6 +1233,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
 const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   const { departments } = useDepts();
+  const T = useT();
   const project = projects.find(p => p.id === projectId);
   const [tab, setTab] = useState("Overview");
   const TABS = ["Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
@@ -1158,13 +1256,13 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
       {/* Project Header */}
-      <div style={{ background: T.primary, borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: "#fff" }}>
+      <div style={{ background: T.headerBg, borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: T.text }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <span style={{ background: T.accent, color: T.primary, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
-              <span style={{ background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.gate}</span>
-              <span style={{ background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
+              <span style={{ background: T.accent, color: T.accentText, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
+              <span style={{ background: "rgba(255,255,255,0.12)", color: T.text, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.gate}</span>
+              <span style={{ background: "rgba(255,255,255,0.12)", color: T.text, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
             </div>
             <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
             <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
@@ -1176,21 +1274,21 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
           </div>
         </div>
         {/* IPI banner row */}
-        <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.25)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
             <div style={{ background: ipiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 90 }}>
               <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi}</div>
               <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 700 }}>IPI Score</div>
             </div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", lineHeight: 1.8 }}>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>SPI</span> {project.spi?.toFixed(2)} × 50% = <strong style={{ color: "#fff" }}>{((Math.min(project.spi ?? 1, 1.2)) * 0.5 * 100).toFixed(0)}pts</strong></div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {project.cpi?.toFixed(2)} × 25% = <strong style={{ color: "#fff" }}>{((Math.min(project.cpi ?? 1, 1.2)) * 0.25 * 100).toFixed(0)}pts</strong></div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>Docs</span> {docsCompliance}% × 25% = <strong style={{ color: "#fff" }}>{(docsCompliance * 0.25).toFixed(0)}pts</strong></div>
+            <div style={{ fontSize: 11, color: T.text, lineHeight: 1.8, opacity: 0.9 }}>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>SPI</span> {project.spi?.toFixed(2)} × 50% = <strong style={{ color: T.accent }}>{((Math.min(project.spi ?? 1, 1.2)) * 0.5 * 100).toFixed(0)}pts</strong></div>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {project.cpi?.toFixed(2)} × 25% = <strong style={{ color: T.accent }}>{((Math.min(project.cpi ?? 1, 1.2)) * 0.25 * 100).toFixed(0)}pts</strong></div>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>Docs</span> {docsCompliance}% × 25% = <strong style={{ color: T.accent }}>{(docsCompliance * 0.25).toFixed(0)}pts</strong></div>
             </div>
           </div>
           <div style={{ background: ipiC.bg, color: ipiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{ipiC.label}</div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
           {[
             { label: "PM", value: project.pm },
             { label: "Sponsor", value: project.sponsor },
@@ -1518,7 +1616,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
                   {[["Baseline", b.baseline], ["Target", b.target], ["Current", b.current]].map(([label, val]) => (
-                    <div key={label} style={{ textAlign: "center", padding: "10px", background: "#fff", borderRadius: 8 }}>
+                    <div key={label} style={{ textAlign: "center", padding: "10px", background: T.surface, borderRadius: 8 }}>
                       <div style={{ fontSize: 11, color: T.muted }}>{label}</div>
                       <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginTop: 2 }}>{val}</div>
                     </div>
@@ -1617,6 +1715,7 @@ const ICON_OPTIONS = ["⚡","💻","⚙️","🛡️","👥","🖥️","💰","�
 
 const DeptCRUD = ({ projects }) => {
   const { departments, addDept, updateDept, deleteDept } = useDepts();
+  const T = useT();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", id: "", icon: "⚡", color: "#003932" });
@@ -1675,7 +1774,7 @@ const DeptCRUD = ({ projects }) => {
       {/* Confirm Delete Modal */}
       {confirmDelete && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 400, textAlign: "center" }}>
+          <div style={{ background: T.surface, borderRadius: 16, padding: 32, width: 400, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
             <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800 }}>Delete Department?</h3>
             <p style={{ margin: "0 0 24px", color: T.muted, fontSize: 13 }}>
@@ -1692,18 +1791,18 @@ const DeptCRUD = ({ projects }) => {
       {/* Add/Edit Form Modal */}
       {showForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 480 }}>
+          <div style={{ background: T.surface, borderRadius: 16, padding: 32, width: 480 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{editing ? "Edit Department" : "Add New Department"}</h2>
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.muted }}>×</button>
             </div>
 
             {/* Preview */}
-            <div style={{ background: T.primary, borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ background: T.headerBg, borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 28 }}>{form.icon}</span>
               <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>{form.name || "Department Name"}</div>
-                <div style={{ color: T.secondary, fontSize: 11 }}>ID: {form.id || "dept-id"}</div>
+                <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>{form.name || "Department Name"}</div>
+                <div style={{ color: T.muted, fontSize: 11 }}>ID: {form.id || "dept-id"}</div>
               </div>
             </div>
 
@@ -1729,7 +1828,7 @@ const DeptCRUD = ({ projects }) => {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {ICON_OPTIONS.map(ic => (
                     <button key={ic} onClick={() => setForm(p => ({ ...p, icon: ic }))}
-                      style={{ width: 38, height: 38, fontSize: 20, border: `2px solid ${form.icon === ic ? T.primary : T.border}`, borderRadius: 8, background: form.icon === ic ? "#e8f5f0" : "#fff", cursor: "pointer" }}>
+                      style={{ width: 38, height: 38, fontSize: 20, border: `2px solid ${form.icon === ic ? T.primary : T.border}`, borderRadius: 8, background: form.icon === ic ? T.badgeBg : T.surface, cursor: "pointer" }}>
                       {ic}
                     </button>
                   ))}
@@ -1748,7 +1847,7 @@ const DeptCRUD = ({ projects }) => {
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button onClick={() => setShowForm(false)} style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 20px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleSave} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={handleSave} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                 {editing ? "Save Changes" : "Add Department"}
               </button>
             </div>
@@ -1759,7 +1858,7 @@ const DeptCRUD = ({ projects }) => {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
         <div style={{ fontSize: 14, color: T.muted }}>{departments.length} departments in system</div>
-        <button onClick={openAdd} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Department</button>
+        <button onClick={openAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Department</button>
       </div>
 
       {/* Table */}
@@ -1815,8 +1914,11 @@ const DeptCRUD = ({ projects }) => {
 };
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────
-const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProject }) => {
+const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProject, restoreProject, deleteForever }) => {
   const { departments } = useDepts();
+  const T = useT();
+  const activeProjects  = projects.filter(p => !p.archived);
+  const archivedProjects = projects.filter(p =>  p.archived);
   const [adminTab, setAdminTab] = useState("Projects");
   const [editingProject, setEditingProject] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -1888,18 +1990,18 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
         <div style={{ background: "#fee2e2", color: "#991b1b", padding: "8px 16px", borderRadius: 10, fontSize: 12, fontWeight: 600 }}>🔒 Admin Access</div>
       </div>
 
-      <Tab tabs={["Projects", "Departments"]} active={adminTab} onSelect={setAdminTab} />
+      <Tab tabs={["Projects", "Archived", "Departments"]} active={adminTab} onSelect={setAdminTab} />
 
       {adminTab === "Projects" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-            <div style={{ fontSize: 14, color: T.muted }}>{projects.length} projects in system</div>
-            <button onClick={openAdd} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Project</button>
+            <div style={{ fontSize: 14, color: T.muted }}>{activeProjects.length} active projects · <span style={{ color: T.danger }}>{archivedProjects.length} archived</span></div>
+            <button onClick={openAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Project</button>
           </div>
 
           {showForm && (
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 640, maxHeight: "90vh", overflowY: "auto" }}>
+              <div style={{ background: T.surface, borderRadius: 16, padding: 32, width: 640, maxHeight: "90vh", overflowY: "auto" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
                   <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{editingProject ? "Edit Project" : "Add New Project"}</h2>
                   <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.muted }}>×</button>
@@ -1929,7 +2031,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                 </div>
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
                   <button onClick={() => setShowForm(false)} style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 20px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={handleSave} style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save Project</button>
+                  <button onClick={handleSave} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save Project</button>
                 </div>
               </div>
             </div>
@@ -1942,7 +2044,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
-              <tbody>{projects.map(p => (
+              <tbody>{activeProjects.map(p => (
                 <tr key={p.id} style={{ borderTop: `1px solid ${T.border}` }}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 700, color: T.muted }}>{p.id}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary }}>{p.code}</td>
@@ -1971,8 +2073,66 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
         </div>
       )}
 
+      {adminTab === "Archived" && (
+        <div>
+          {/* Banner */}
+          <div style={{ background: "#1a0800", border: `1px solid #7c2d12`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 22 }}>🗄️</span>
+            <div>
+              <div style={{ fontWeight: 700, color: "#fed7aa", fontSize: 14 }}>Archived Projects — {archivedProjects.length} projects</div>
+              <div style={{ fontSize: 12, color: "#9a5c38" }}>Archived projects are hidden from all dashboards and reports. You can restore them anytime or delete permanently.</div>
+            </div>
+          </div>
+
+          {archivedProjects.length === 0 ? (
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 48, textAlign: "center" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>No Archived Projects</div>
+              <div style={{ fontSize: 13, color: T.muted }}>When you archive a project it will appear here</div>
+            </div>
+          ) : (
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr style={{ background: T.bg }}>
+                  {["Code", "Project Name", "Department", "PM", "Status", "Archived Date", "Actions"].map(h => (
+                    <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{archivedProjects.map((p, i) => (
+                  <tr key={p.id} style={{ borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? "transparent" : T.bg, opacity: 0.85 }}>
+                    <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.muted }}>{p.code}</td>
+                    <td style={{ padding: "12px 14px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: T.muted }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: T.muted, opacity: 0.7 }}>{p.id}</div>
+                    </td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{departments.find(d => d.id === p.deptId)?.name}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.pm}</td>
+                    <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.archivedDate || "—"}</td>
+                    <td style={{ padding: "12px 14px" }}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {/* Restore */}
+                        <button onClick={() => { restoreProject(p.id); showToast(`"${p.name}" restored successfully`); }}
+                          style={{ background: "#dcfce7", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", color: "#15803d", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                          ↩ Restore
+                        </button>
+                        {/* Delete Forever */}
+                        <button onClick={() => { if (window.confirm(`Delete "${p.name}" permanently? This cannot be undone.`)) { deleteForever(p.id); showToast(`"${p.name}" deleted permanently`, "error"); }}}
+                          style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                          🗑 Delete Forever
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {adminTab === "Departments" && (
-        <DeptCRUD projects={projects} />
+        <DeptCRUD projects={activeProjects} />
       )}
 
     </div>
@@ -1982,12 +2142,14 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
 // ─── DEPARTMENTS OVERVIEW PAGE ───────────────────────────────────
 const DepartmentsOverview = ({ projects, setRoute }) => {
   const { departments } = useDepts();
+  const T = useT();
   const [sort, setSort] = useState("ipi-desc");
+  const activeProjects = projects.filter(p => !p.archived);
 
   const deptData = useMemo(() => departments.map(d => {
-    const dp = projects.filter(p => p.deptId === d.id);
-    const stats = getDeptStats(d.id, projects);
-    const deptIPI = calcDeptIPI(d.id, projects);
+    const dp = activeProjects.filter(p => p.deptId === d.id);
+    const stats = getDeptStats(d.id, activeProjects);
+    const deptIPI = calcDeptIPI(d.id, activeProjects);
     const ipiC = ipiColor(deptIPI);
 
     // avg SPI / CPI across dept projects
@@ -2004,7 +2166,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
     const escalated = dp.flatMap(p => p.issues ?? []).filter(i => i.escalated).length;
 
     return { ...d, dp, stats, deptIPI, ipiC, avgSPI, avgCPI, docsCompliance, openRisks, openIssues, escalated };
-  }), [projects]);
+  }), [activeProjects, departments]);
 
   const sorted = useMemo(() => {
     const arr = [...deptData];
@@ -2041,26 +2203,26 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
       </div>
 
       {/* Portfolio IPI banner */}
-      <div style={{ background: T.primary, borderRadius: 16, padding: "20px 28px", marginBottom: 28, display: "flex", alignItems: "center", gap: 24 }}>
+      <div style={{ background: T.headerBg, borderRadius: 16, padding: "20px 28px", marginBottom: 28, display: "flex", alignItems: "center", gap: 24 }}>
         <div style={{ background: portfolioIpiC.bg, borderRadius: 14, padding: "14px 28px", textAlign: "center" }}>
           <div style={{ fontSize: 36, fontWeight: 900, color: portfolioIpiC.color, lineHeight: 1 }}>{portfolioIPI}</div>
           <div style={{ fontSize: 11, color: portfolioIpiC.color, fontWeight: 700, marginTop: 2 }}>Portfolio IPI</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
+          <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>
             Weighted average of all department IPIs — Formula: SPI×50% + CPI×25% + Docs Compliance×25%
           </div>
           <div style={{ display: "flex", gap: 20 }}>
             {[
-              { label: "Excellent (85–100)", color: "#15803d", bg: "#dcfce7" },
-              { label: "Good (70–84)", color: T.primary, bg: "#e8f5f0" },
-              { label: "Fair (55–69)", color: "#854d0e", bg: "#fef9c3" },
-              { label: "Poor (<55)", color: "#991b1b", bg: "#fee2e2" },
+              { label: "Excellent (85–100)", color: "#15803d" },
+              { label: "Good (70–84)",       color: "#0891b2" },
+              { label: "Fair (55–69)",       color: "#854d0e" },
+              { label: "Poor (<55)",         color: "#991b1b" },
             ].map(b => (
               <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: b.color }} />
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.65)" }}>{b.label}</span>
+                <span style={{ fontSize: 11, color: T.muted }}>{b.label}</span>
               </div>
             ))}
           </div>
@@ -2072,9 +2234,9 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
               name: d.name.replace("Strategy & PMO","Strategy").replace("Operations","Ops").replace("Performance","Perf").split(" ")[0],
               ipi: d.deptIPI
             }))} barSize={20} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 8, fill: T.muted }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} hide />
-              <Tooltip formatter={v => [`IPI: ${v}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+              <Tooltip formatter={v => [`IPI: ${v}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8, background: T.surface, border: `1px solid ${T.border}`, color: T.text }} />
               <Bar dataKey="ipi" radius={[3, 3, 0, 0]}>
                 {deptData.map((d, i) => (
                   <Cell key={i} fill={ipiColor(d.deptIPI).color} />
@@ -2094,12 +2256,12 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}>
 
             {/* Card header */}
-            <div style={{ background: T.primary, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ background: T.headerBg, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 22 }}>{d.icon}</span>
                 <div>
-                  <div style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>{d.name}</div>
-                  <div style={{ color: T.secondary, fontSize: 11 }}>{d.stats.total} projects</div>
+                  <div style={{ color: T.text, fontWeight: 800, fontSize: 14 }}>{d.name}</div>
+                  <div style={{ color: T.muted, fontSize: 11 }}>{d.stats.total} projects</div>
                 </div>
               </div>
               {/* IPI score */}
@@ -2184,7 +2346,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 
             {/* Footer actions */}
             <div style={{ padding: "12px 20px", display: "flex", gap: 8 }}>
-              <button onClick={() => setRoute({ view: "department", deptId: d.id })} style={{ flex: 1, background: T.primary, color: T.accent, border: "none", borderRadius: 8, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => setRoute({ view: "department", deptId: d.id })} style={{ flex: 1, background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                 View Projects →
               </button>
               <div style={{ background: d.ipiC.bg, color: d.ipiC.color, borderRadius: 8, padding: "8px 12px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center" }}>
@@ -2201,29 +2363,31 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 // ─── ALL PROJECTS VIEW ────────────────────────────────────────────
 const AllProjectsView = ({ projects, setRoute }) => {
   const { departments } = useDepts();
+  const T = useT();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterDept, setFilterDept] = useState("All");
 
-  const filtered = useMemo(() => projects.filter(p => {
+  const active = projects.filter(p => !p.archived);
+  const filtered = useMemo(() => active.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.pm.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "All" || p.status === filterStatus;
     const matchDept = filterDept === "All" || p.deptId === filterDept;
     return matchSearch && matchStatus && matchDept;
-  }), [projects, search, filterStatus, filterDept]);
+  }), [active, search, filterStatus, filterDept]);
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: T.text }}>All Projects</h1>
-        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {projects.length} projects across all departments</p>
+        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
       </div>
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", gap: 12 }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, codes, or PMs..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1 }} />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, codes, or PMs..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, background: T.inputBg, color: T.inputText }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
           {["All", "On Track", "At Risk", "Delayed", "Completed", "Not Started"].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}>
+        <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
           <option value="All">All Departments</option>
           {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
@@ -2276,6 +2440,11 @@ const AllProjectsView = ({ projects, setRoute }) => {
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
+  const [dark, setDark] = useState(false);
+  const toggleDark = () => setDark(d => !d);
+  const activeT = dark ? THEMES.dark : THEMES.light;
+  // update module-level T so helper functions still work
+  Object.assign(T, activeT);
   const [projects, setProjects] = useState(PROJECTS);
 
   // ── Departments live state ─────────────────────────────────────
@@ -2307,6 +2476,15 @@ export default function App() {
   }, []);
 
   const archiveProject = useCallback((id) => {
+    const today = new Date().toISOString().split("T")[0];
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: true, archivedDate: today } : p));
+  }, []);
+
+  const restoreProject = useCallback((id) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: false, archivedDate: null } : p));
+  }, []);
+
+  const deleteForever = useCallback((id) => {
     setProjects(prev => prev.filter(p => p.id !== id));
   }, []);
 
@@ -2330,21 +2508,23 @@ export default function App() {
   const [title, subtitle] = getTitle();
 
   return (
+    <ThemeContext.Provider value={{ T: activeT }}>
     <DeptContext.Provider value={deptCtx}>
-    <div style={{ display: "flex", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: T.bg, color: T.text, overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: activeT.bg, color: activeT.text, overflow: "hidden" }}>
       <Sidebar route={route} setRoute={setRoute} projects={projects} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} />
+        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} />
         <main style={{ flex: 1, overflowY: "auto" }}>
           {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} />}
-          {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} addProject={addProject} updateProject={updateProject} archiveProject={archiveProject} />}
+          {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} addProject={addProject} updateProject={updateProject} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
         </main>
       </div>
     </div>
     </DeptContext.Provider>
+    </ThemeContext.Provider>
   );
 }
