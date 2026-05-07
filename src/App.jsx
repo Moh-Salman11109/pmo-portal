@@ -58,11 +58,12 @@ const THEMES = {
 
 // ─── THEME CONTEXT ────────────────────────────────────────────────
 const ThemeContext = createContext(null);
-const useTheme = () => useContext(ThemeContext);
-const useT = () => useContext(ThemeContext).T;  // shorthand
+const useT = () => {
+  const ctx = useContext(ThemeContext);
+  return ctx ? ctx.T : THEMES.light;
+};
 
-// Global T — components call useTheme() to get live T
-let T = THEMES.light; // fallback for non-component helpers
+let T = THEMES.light;
 
 // ─── DATA LAYER ─────────────────────────────────────────────────
 const DEPARTMENTS = [
@@ -81,19 +82,48 @@ const DEPARTMENTS = [
 const DeptContext = createContext(null);
 const useDepts = () => useContext(DeptContext);
 
+// ─── OPTIONAL DOCUMENTS LIST (يختار منها في Admin) ───────────────
+const OPTIONAL_DOCS = [
+  "Resource Plan", "PO", "Invoice", "Security Approval",
+  "Technical Specification", "Risk Assessment", "Vendor Contract",
+  "Legal Review", "Compliance Certificate", "UAT Sign-off",
+  "Change Request", "Stakeholder Register", "Communication Plan",
+  "Training Plan", "Handover Document",
+];
+
+// ─── GATE DEFINITIONS ────────────────────────────────────────────
+const GATE_DEFS = [
+  { id: "G1", label: "Gate 1", name: "Initiation",  desc: "Project request & classification" },
+  { id: "G2", label: "Gate 2", name: "Planning",    desc: "Charter, Business Case & stakeholder sign-off" },
+  { id: "G3", label: "Gate 3", name: "Plan Submit", desc: "Project plan submitted" },
+  { id: "G4", label: "Gate 4", name: "Execution",   desc: "Execution, IPI tracking & reporting" },
+  { id: "G5", label: "Gate 5", name: "Closure",     desc: "Closure document & stakeholder sign-off" },
+];
+
 const PROJECTS = [
   // STRATEGY & PMO
   {
     id: "P001", code: "STRAT-2025-001", deptId: "strategy",
     name: "Enterprise PMO Transformation",
     pm: "Mohammed", sponsor: "Alhanouf",
-    phase: "Execution", gate: "Gate 3", status: "On Track", priority: "Critical",
+    projectType: "Enterprise Project",
+    phase: "Execution", gate: "Gate 4", status: "On Track", priority: "Critical",
     progress: 72, plannedProgress: 68, startDate: "2025-01-15", plannedEnd: "2025-12-31",
     budget: 4500000, forecast: 4350000, actualCost: 2800000,
     riskLevel: "Medium", budgetStatus: "On Budget", strategic: "Digital Transformation",
     lastUpdate: "2025-05-01", classification: "Strategic Initiative",
     objective: "Transform the enterprise PMO into a world-class governance function",
     businessCase: "Improve project success rate from 62% to 90% within 24 months",
+    // ── Gate Tracker ──────────────────────────────────────────────
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-01-20", approver: "Alhanouf", notes: "Classified as Project — Strategic initiative" },
+      { id: "G2", status: "Approved", date: "2025-02-01", approver: "Nawaf",    notes: "Charter and Business Case approved" },
+      { id: "G3", status: "Approved", date: "2025-02-20", approver: "Alhanouf", notes: "Project plan accepted" },
+      { id: "G4", status: "In Progress", date: null,       approver: "",         notes: "" },
+      { id: "G5", status: "Pending",     date: null,       approver: "",         notes: "" },
+    ],
+    // ── Required Documents ─────────────────────────────────────────
+    requiredDocs: ["Resource Plan", "Vendor Contract", "Training Plan"],
     milestones: [
       { id: "M1", name: "PMO Framework Approved", date: "2025-02-28", status: "Completed", owner: "Mohammed" },
       { id: "M2", name: "Tooling Implementation", date: "2025-06-30", status: "In Progress", owner: "Nawaf" },
@@ -115,21 +145,23 @@ const PROJECTS = [
       { id: "B3", category: "Governance", kpi: "Compliance Score", baseline: "55%", target: "95%", current: "78%", owner: "Abdulrahman", realization: 55, contribution: "High" },
     ],
     approvals: [
-      { id: "A1", gate: "Gate 1", title: "Business Case Approval", status: "Approved", owner: "Alhanouf", date: "2025-02-01", comments: "Approved with conditions on budget" },
-      { id: "A2", gate: "Gate 2", title: "Design Approval", status: "Approved", owner: "Nawaf", date: "2025-03-15", comments: "Full approval granted" },
-      { id: "A3", gate: "Gate 3", title: "Execution Approval", status: "Pending", owner: "Alhanouf", date: null, comments: "" },
+      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Approved", owner: "Alhanouf", date: "2025-01-20", comments: "Classified as Project" },
+      { id: "A2", gate: "Gate 2", title: "Charter & Business Case", status: "Approved", owner: "Nawaf", date: "2025-02-01", comments: "Full approval granted" },
+      { id: "A3", gate: "Gate 3", title: "Plan Submission", status: "Approved", owner: "Alhanouf", date: "2025-02-20", comments: "Plan accepted" },
+      { id: "A4", gate: "Gate 4", title: "Execution Gate", status: "In Progress", owner: "Alhanouf", date: null, comments: "" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v2.1", lastUpdated: "2025-02-01" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.3", lastUpdated: "2025-01-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v8.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
-      { id: "D5", name: "Lessons Learned", type: "Lessons Learned", status: "Draft", version: "v0.1", lastUpdated: "2025-04-15" },
+      { id: "D1", name: "Project Charter",  type: "Charter",       required: true,  required: true,  status: "Approved",  version: "v2.1", lastUpdated: "2025-02-01" },
+      { id: "D2", name: "Business Case",    type: "Business Case", required: true,  required: true,  status: "Approved",  version: "v1.3", lastUpdated: "2025-01-20" },
+      { id: "D3", name: "Resource Plan",    type: "Resource Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-02-15" },
+      { id: "D4", name: "Vendor Contract",  type: "Vendor Contract",required: true, status: "Draft",     version: "v0.2", lastUpdated: "2025-04-10" },
+      { id: "D5", name: "Training Plan",    type: "Training Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-03-20" },
+      { id: "D6", name: "Closure Document", type: "Closure",       required: true,  required: true,  status: "Pending",   version: "",     lastUpdated: "" },
     ],
     updates: [
       { id: "U1", date: "2025-05-01", owner: "Mohammed", note: "Milestone 2 on track. Vendor contract escalated to sponsor for resolution. Q3 resource pipeline confirmed with HR." },
-      { id: "U2", date: "2025-04-15", owner: "Nawaf", note: "Training needs analysis completed. 3 venues shortlisted for programme delivery in September." },
-      { id: "U3", date: "2025-04-01", owner: "Mohammed", note: "Gate 2 approval received. Moving into full execution phase as planned." },
+      { id: "U2", date: "2025-04-15", owner: "Nawaf",    note: "Training needs analysis completed. 3 venues shortlisted for programme delivery in September." },
+      { id: "U3", date: "2025-04-01", owner: "Mohammed", note: "Gate 3 approved. Moving into full execution phase as planned." },
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Amber", benefits: "Green", governance: "Green" },
     spi: 1.06, cpi: 1.03, daysRemaining: 243, daysDelayed: 0, scheduleVariance: "+4 days",
@@ -145,6 +177,15 @@ const PROJECTS = [
     lastUpdate: "2025-04-28", classification: "Strategic",
     objective: "Develop a robust 5-year strategic planning framework",
     businessCase: "Align all departments to Vision 2030 strategic pillars",
+    projectType: "Enterprise Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-02-10", approver: "Bader", notes: "Classified as Project" },
+      { id: "G2", status: "Returned", date: "2025-04-05", approver: "Bader", notes: "Revise scope and timeline" },
+      { id: "G3", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Stakeholder Register", "Communication Plan"],,
     milestones: [
       { id: "M1", name: "Stakeholder Workshops", date: "2025-03-31", status: "Delayed", owner: "Nawaf" },
       { id: "M2", name: "Framework Draft", date: "2025-06-15", status: "Upcoming", owner: "Lujain" },
@@ -164,9 +205,9 @@ const PROJECTS = [
       { id: "A2", gate: "Gate 2", title: "Planning Approval", status: "Returned", owner: "Bader", date: "2025-04-05", comments: "Revise scope and timeline" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-02-05" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2025-01-30" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v3.0", lastUpdated: "2025-04-28" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-02-05" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-30" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v3.0", lastUpdated: "2025-04-28" },
     ],
     updates: [
       { id: "U1", date: "2025-04-28", owner: "Nawaf", note: "Gate 2 returned. Revising scope per sponsor feedback. Workshops rescheduled to May 2025." },
@@ -187,6 +228,15 @@ const PROJECTS = [
     lastUpdate: "2025-05-02", classification: "Strategic Initiative",
     objective: "Launch next-generation customer self-service portal",
     businessCase: "Reduce call centre volume by 40% and increase NPS by 25 points",
+    projectType: "Business Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-01-10", approver: "Haifa", notes: "New enterprise system" },
+      { id: "G2", status: "Approved", date: "2025-02-01", approver: "Haifa", notes: "Charter approved" },
+      { id: "G3", status: "Approved", date: "2025-03-01", approver: "Haifa", notes: "Plan submitted" },
+      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Security Approval", "UAT Sign-off"],,
     milestones: [
       { id: "M1", name: "UX Design Approved", date: "2025-02-28", status: "Completed", owner: "Ali" },
       { id: "M2", name: "Backend API Integration", date: "2025-05-31", status: "In Progress", owner: "Naif" },
@@ -208,10 +258,10 @@ const PROJECTS = [
       { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Haifa", date: "2025-04-01", comments: "Full approval" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v2.0", lastUpdated: "2024-12-15" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v12.0", lastUpdated: "2025-05-02" },
-      { id: "D4", name: "April Status Report", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-05-02" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v2.0", lastUpdated: "2024-12-15" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v12.0", lastUpdated: "2025-05-02" },
+      { id: "D4", name: "April Status Report", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-02" },
     ],
     updates: [
       { id: "U1", date: "2025-05-02", owner: "Ali", note: "Backend integration 75% complete. Security review scheduled for June. UAT plan being finalised with business stakeholders." },
@@ -230,6 +280,15 @@ const PROJECTS = [
     lastUpdate: "2025-04-20", classification: "Transformation",
     objective: "Build enterprise AI analytics and predictive intelligence platform",
     businessCase: "Enable data-driven decision making across all business units",
+    projectType: "Enterprise Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-04-05", approver: "Haifa", notes: "New enterprise AI system" },
+      { id: "G2", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G3", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Technical Specification", "Vendor Contract"],,
     milestones: [
       { id: "M1", name: "Vendor Selection", date: "2025-05-31", status: "In Progress", owner: "Maram" },
       { id: "M2", name: "Architecture Design", date: "2025-07-31", status: "Upcoming", owner: "Naif" },
@@ -245,8 +304,8 @@ const PROJECTS = [
       { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Pending", owner: "Haifa", date: null, comments: "" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Draft", version: "v0.3", lastUpdated: "2025-04-18" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Under Review", version: "v1.0", lastUpdated: "2025-04-15" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Draft", version: "v0.3", lastUpdated: "2025-04-18" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Under Review", version: "v1.0", lastUpdated: "2025-04-15" },
     ],
     updates: [
       { id: "U1", date: "2025-04-20", owner: "Maram", note: "Vendor RFP issued. 4 responses received. Evaluation committee formed with IT and Finance." },
@@ -267,6 +326,15 @@ const PROJECTS = [
     lastUpdate: "2025-04-30", classification: "Operational",
     objective: "Reduce supply chain costs by 20% and improve delivery performance",
     businessCase: "Deliver SAR 8M annual savings through process and supplier optimisation",
+    projectType: "Internal Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2024-10-10", approver: "Munira", notes: "Cost > 100K, Duration > 4 weeks" },
+      { id: "G2", status: "Approved", date: "2024-11-30", approver: "Munira", notes: "Approved" },
+      { id: "G3", status: "Approved", date: "2025-02-01", approver: "Munira", notes: "Plan submitted" },
+      { id: "G4", status: "In Progress", date: null, approver: "", notes: "Delayed — supplier issues" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Vendor Contract", "PO", "Invoice"],,
     milestones: [
       { id: "M1", name: "Process Mapping Complete", date: "2024-12-31", status: "Completed", owner: "Adel" },
       { id: "M2", name: "Supplier Renegotiation", date: "2025-03-31", status: "Delayed", owner: "Naif" },
@@ -290,10 +358,10 @@ const PROJECTS = [
       { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Munira", date: "2025-02-01", comments: "Approved" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2024-10-05" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2024-09-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v15.0", lastUpdated: "2025-04-30" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-10-05" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-09-20" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v15.0", lastUpdated: "2025-04-30" },
+      { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
     ],
     updates: [
       { id: "U1", date: "2025-04-30", owner: "Adel", note: "Critical supplier escalation ongoing. Legal resolution expected by May 15. ERP delays impact schedule by estimated 6 weeks. Recovery plan presented to sponsor." },
@@ -314,6 +382,15 @@ const PROJECTS = [
     lastUpdate: "2025-05-01", classification: "Compliance",
     objective: "Achieve full regulatory compliance across all business lines",
     businessCase: "Mitigate SAR 15M regulatory fine exposure and enhance audit readiness",
+    projectType: "Enterprise Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-01-08", approver: "Bader", notes: "Regulatory initiative" },
+      { id: "G2", status: "Approved", date: "2025-02-15", approver: "Bader", notes: "Approved" },
+      { id: "G3", status: "Approved", date: "2025-03-10", approver: "Bader", notes: "Plan submitted" },
+      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Compliance Certificate", "Legal Review"],,
     milestones: [
       { id: "M1", name: "Gap Assessment Complete", date: "2025-02-28", status: "Completed", owner: "Abdulrahman" },
       { id: "M2", name: "Policy Framework Published", date: "2025-05-31", status: "In Progress", owner: "Lujain" },
@@ -333,11 +410,11 @@ const PROJECTS = [
       { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Bader", date: "2025-03-10", comments: "Approved" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-01-05" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2024-12-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v9.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
-      { id: "D5", name: "Policy Framework v0.8", type: "Governance", status: "Draft", version: "v0.8", lastUpdated: "2025-04-28" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-05" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-12-20" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v9.0", lastUpdated: "2025-05-01" },
+      { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
+      { id: "D5", name: "Policy Framework v0.8", type: "Governance", required: false, status: "Draft", version: "v0.8", lastUpdated: "2025-04-28" },
     ],
     updates: [
       { id: "U1", date: "2025-05-01", owner: "Abdulrahman", note: "Policy framework 80% complete. Legal review underway. Training content development commenced. On track for May 31 milestone." },
@@ -358,6 +435,15 @@ const PROJECTS = [
     lastUpdate: "2025-04-30", classification: "Operational",
     objective: "Deploy end-to-end talent management platform across the organisation",
     businessCase: "Reduce time-to-hire by 35% and improve retention by 20%",
+    projectType: "Internal Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2024-11-05", approver: "Alhanouf", notes: "New enterprise system" },
+      { id: "G2", status: "Approved", date: "2024-12-10", approver: "Alhanouf", notes: "Approved" },
+      { id: "G3", status: "Approved", date: "2025-02-01", approver: "Alhanouf", notes: "Plan submitted" },
+      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Vendor Contract", "UAT Sign-off"],,
     milestones: [
       { id: "M1", name: "System Configuration", date: "2025-01-31", status: "Completed", owner: "Lujain" },
       { id: "M2", name: "Data Migration", date: "2025-04-30", status: "Completed", owner: "Ali" },
@@ -378,11 +464,11 @@ const PROJECTS = [
       { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf", date: "2025-02-01", comments: "Approved" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2024-11-02" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2024-10-25" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v11.0", lastUpdated: "2025-04-30" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", status: "Submitted", version: "v1.0", lastUpdated: "2025-04-30" },
-      { id: "D5", name: "UAT Plan", type: "Governance", status: "Approved", version: "v1.0", lastUpdated: "2025-04-20" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-11-02" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-10-25" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v11.0", lastUpdated: "2025-04-30" },
+      { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-04-30" },
+      { id: "D5", name: "UAT Plan", type: "Governance", required: false, status: "Approved", version: "v1.0", lastUpdated: "2025-04-20" },
     ],
     updates: [
       { id: "U1", date: "2025-04-30", owner: "Lujain", note: "Data migration completed successfully. UAT phase commenced May 1. 45 test users onboarded. Go-live preparation timeline confirmed." },
@@ -403,6 +489,15 @@ const PROJECTS = [
     lastUpdate: "2025-05-01", classification: "Infrastructure",
     objective: "Migrate 95% of on-premise workloads to cloud infrastructure",
     businessCase: "Reduce infrastructure costs by 30% and improve system availability to 99.99%",
+    projectType: "Enterprise Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-01-10", approver: "Nawaf", notes: "New enterprise system — cloud migration" },
+      { id: "G2", status: "Approved", date: "2025-02-15", approver: "Nawaf", notes: "Approved with budget caveat" },
+      { id: "G3", status: "Approved", date: "2025-03-20", approver: "Nawaf", notes: "Plan submitted" },
+      { id: "G4", status: "In Progress", date: null, approver: "", notes: "At risk — legacy issues" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Technical Specification", "Security Approval", "Vendor Contract"],,
     milestones: [
       { id: "M1", name: "Wave 1 Migration (Dev/Test)", date: "2025-03-31", status: "Completed", owner: "Naif" },
       { id: "M2", name: "Wave 2 Migration (Non-Critical)", date: "2025-06-30", status: "In Progress", owner: "Ali" },
@@ -426,10 +521,10 @@ const PROJECTS = [
       { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Nawaf", date: "2025-03-20", comments: "Approved" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2024-12-15" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v14.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Architecture Design", type: "Technical", status: "Approved", version: "v2.0", lastUpdated: "2025-02-10" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-12-15" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v14.0", lastUpdated: "2025-05-01" },
+      { id: "D4", name: "Architecture Design", type: "Technical", required: false, status: "Approved", version: "v2.0", lastUpdated: "2025-02-10" },
     ],
     updates: [
       { id: "U1", date: "2025-05-01", owner: "Naif", note: "Wave 2 migration 60% complete. Legacy app compatibility issue being resolved by vendor. FinOps review identifies SAR 1.2M potential savings if right-sizing implemented by Q3." },
@@ -450,6 +545,15 @@ const PROJECTS = [
     lastUpdate: "2025-04-28", classification: "Transformation",
     objective: "Transform finance function through automation and process standardisation",
     businessCase: "Reduce month-end close from 12 to 5 days and automate 70% of manual processes",
+    projectType: "Internal Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-03-05", approver: "Bader", notes: "Cost > 100K, new enterprise system" },
+      { id: "G2", status: "Pending", date: null, approver: "", notes: "Gate 2 approval pack in preparation" },
+      { id: "G3", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Technical Specification", "Vendor Contract"],,
     milestones: [
       { id: "M1", name: "Current State Assessment", date: "2025-03-31", status: "Completed", owner: "Haifa" },
       { id: "M2", name: "Future State Design", date: "2025-06-30", status: "In Progress", owner: "Adel" },
@@ -467,9 +571,9 @@ const PROJECTS = [
       { id: "A2", gate: "Gate 2", title: "Planning", status: "Pending", owner: "Bader", date: null, comments: "" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-03-03" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2025-02-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v4.0", lastUpdated: "2025-04-28" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-03-03" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-02-20" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v4.0", lastUpdated: "2025-04-28" },
     ],
     updates: [
       { id: "U1", date: "2025-04-28", owner: "Haifa", note: "Current state assessment report completed and distributed. Future state workshops scheduled for May and June. Gate 2 approval pack being prepared." },
@@ -490,6 +594,15 @@ const PROJECTS = [
     lastUpdate: "2025-05-01", classification: "Compliance",
     objective: "Achieve ISO 9001:2025 certification across all business units",
     businessCase: "Required for key client contracts and regulatory requirements",
+    projectType: "Enterprise Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2024-07-05", approver: "Abdulrahman", notes: "Regulatory initiative" },
+      { id: "G2", status: "Approved", date: "2024-08-15", approver: "Abdulrahman", notes: "Approved" },
+      { id: "G3", status: "Approved", date: "2024-10-01", approver: "Abdulrahman", notes: "Plan submitted" },
+      { id: "G4", status: "Approved", date: "2025-04-15", approver: "Abdulrahman", notes: "Certification achieved" },
+      { id: "G5", status: "Approved", date: "2025-05-01", approver: "Abdulrahman", notes: "Closure complete. Excellent delivery." },
+    ],
+    requiredDocs: ["Compliance Certificate"],,
     milestones: [
       { id: "M1", name: "Gap Analysis", date: "2024-09-30", status: "Completed", owner: "Munira" },
       { id: "M2", name: "Process Documentation", date: "2024-12-31", status: "Completed", owner: "Lujain" },
@@ -508,11 +621,11 @@ const PROJECTS = [
       { id: "A4", gate: "Gate 4", title: "Closure", status: "Approved", owner: "Abdulrahman", date: "2025-05-01", comments: "Certified. Outstanding programme delivery." },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2024-07-03" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2024-06-25" },
-      { id: "D3", name: "Closure Report", type: "Closure", status: "Approved", version: "v1.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Lessons Learned", type: "Lessons Learned", status: "Final", version: "v1.0", lastUpdated: "2025-04-30" },
-      { id: "D5", name: "ISO Certificate", type: "Governance", status: "Received", version: "v1.0", lastUpdated: "2025-04-25" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-07-03" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-06-25" },
+      { id: "D3", name: "Closure Report", type: "Closure", required: false, status: "Approved", version: "v1.0", lastUpdated: "2025-05-01" },
+      { id: "D4", name: "Lessons Learned", type: "Lessons Learned", required: false, status: "Final", version: "v1.0", lastUpdated: "2025-04-30" },
+      { id: "D5", name: "ISO Certificate", type: "Governance", required: false, status: "Received", version: "v1.0", lastUpdated: "2025-04-25" },
     ],
     updates: [
       { id: "U1", date: "2025-05-01", owner: "Munira", note: "Certification achieved on April 25, 2025. Excellent audit outcome. Closure report approved. Lessons learned documented." },
@@ -533,6 +646,15 @@ const PROJECTS = [
     lastUpdate: "2025-04-29", classification: "Strategic",
     objective: "Implement enterprise KPI management and performance reporting platform",
     businessCase: "Enable real-time performance visibility for all executives and department heads",
+    projectType: "Internal Project",
+    gates: [
+      { id: "G1", status: "Approved", date: "2025-02-05", approver: "Alhanouf", notes: "New enterprise system — KPI platform" },
+      { id: "G2", status: "Approved", date: "2025-03-15", approver: "Alhanouf", notes: "Approved" },
+      { id: "G3", status: "Approved", date: "2025-04-01", approver: "Alhanouf", notes: "Plan submitted" },
+      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
+      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
+    ],
+    requiredDocs: ["Technical Specification"],,
     milestones: [
       { id: "M1", name: "KPI Library Defined", date: "2025-03-31", status: "Completed", owner: "Mohammed" },
       { id: "M2", name: "Platform Configuration", date: "2025-06-30", status: "In Progress", owner: "Maram" },
@@ -551,9 +673,9 @@ const PROJECTS = [
       { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf", date: "2025-04-01", comments: "Approved" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", status: "Approved", version: "v1.0", lastUpdated: "2025-02-03" },
-      { id: "D2", name: "Business Case", type: "Business Case", status: "Approved", version: "v1.0", lastUpdated: "2025-01-25" },
-      { id: "D3", name: "RAID Log", type: "RAID", status: "Current", version: "v7.0", lastUpdated: "2025-04-29" },
+      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-02-03" },
+      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-25" },
+      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v7.0", lastUpdated: "2025-04-29" },
     ],
     updates: [
       { id: "U1", date: "2025-04-29", owner: "Mohammed", note: "Platform configuration 45% complete. KPI mapping sessions completed with 7 departments. Integration with ERP and BI tools in progress." },
@@ -582,18 +704,19 @@ function getDeptStats(deptId, projects) {
 // IPI per project = SPI×50% + CPI×25% + DocsCompliance×25%
 // Capped at 1.2 to avoid inflated scores; normalised to 0–100
 function calcProjectIPI(project) {
-  const docsTotal = project.documents?.length || 0;
-  const docsReady = project.documents?.filter(d =>
+  // Only count REQUIRED documents in compliance score
+  const allDocs = project.documents ?? [];
+  const reqDocs = allDocs.filter(d => d.required === true);
+  const docsTotal = reqDocs.length;
+  const docsReady = reqDocs.filter(d =>
     ["Approved","Final","Received","Current","Submitted"].includes(d.status)
-  ).length || 0;
+  ).length;
   const docsScore = docsTotal > 0 ? docsReady / docsTotal : 0;
 
   const spi = Math.min(project.spi ?? 1, 1.2);
   const cpi = Math.min(project.cpi ?? 1, 1.2);
 
   const raw = (spi * 0.5) + (cpi * 0.25) + (docsScore * 0.25);
-  // Normalise: max possible raw = 1.2×0.5 + 1.2×0.25 + 1×0.25 = 1.15
-  // We express as a score out of 100, capped at 100
   return Math.min(Math.round((raw / 1.15) * 100), 100);
 }
 
@@ -659,6 +782,121 @@ const riskColor = {
 };
 
 // ─── UI COMPONENTS ───────────────────────────────────────────────
+// ─── GATE TRACKER COMPONENT ──────────────────────────────────────
+const GateTracker = ({ gates }) => {
+  const T = useT();
+  const [expanded, setExpanded] = useState(null);
+
+  const gateStyle = {
+    "Approved":    { bg: "#dcfce7", text: "#15803d", border: "#16a34a", icon: "✓" },
+    "In Progress": { bg: "#fef9c3", text: "#854d0e", border: "#eab308", icon: "◎" },
+    "Pending":     { bg: T.bg,      text: T.muted,   border: T.border,  icon: "○" },
+    "Returned":    { bg: "#fee2e2", text: "#991b1b", border: "#dc2626", icon: "↩" },
+    "Rejected":    { bg: "#fee2e2", text: "#991b1b", border: "#dc2626", icon: "✕" },
+  };
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 16 }}>Gate Progress</div>
+      {/* Track */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 0, marginBottom: 12 }}>
+        {GATE_DEFS.map((def, i) => {
+          const g = gates?.find(x => x.id === def.id) || { status: "Pending" };
+          const s = gateStyle[g.status] || gateStyle["Pending"];
+          const isLast = i === GATE_DEFS.length - 1;
+          return (
+            <div key={def.id} style={{ display: "flex", alignItems: "center", flex: isLast ? 0 : 1 }}>
+              {/* Gate circle */}
+              <div onClick={() => setExpanded(expanded === def.id ? null : def.id)}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", minWidth: 64 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%",
+                  background: s.bg, border: `2px solid ${s.border}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, color: s.text, fontWeight: 900,
+                  transition: "transform 0.15s",
+                  transform: expanded === def.id ? "scale(1.15)" : "scale(1)",
+                }}>
+                  {s.icon}
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: s.text, marginTop: 4, whiteSpace: "nowrap" }}>{def.label}</div>
+                <div style={{ fontSize: 9, color: T.muted, whiteSpace: "nowrap" }}>{def.name}</div>
+              </div>
+              {/* Connector line */}
+              {!isLast && (
+                <div style={{ flex: 1, height: 2, background: g.status === "Approved" ? "#16a34a" : T.border, marginBottom: 22, transition: "background 0.3s" }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Expanded detail */}
+      {expanded && (() => {
+        const def = GATE_DEFS.find(d => d.id === expanded);
+        const g = gates?.find(x => x.id === expanded) || { status: "Pending" };
+        const s = gateStyle[g.status] || gateStyle["Pending"];
+        return (
+          <div style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: "14px 18px", marginTop: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <div>
+                <span style={{ fontWeight: 800, fontSize: 13, color: s.text }}>{def.label} — {def.name}</span>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: s.text, opacity: 0.8 }}>{def.desc}</p>
+              </div>
+              <span style={{ background: s.border, color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, alignSelf: "flex-start" }}>{g.status}</span>
+            </div>
+            <div style={{ display: "flex", gap: 24, fontSize: 12, color: s.text }}>
+              {g.date     && <div>📅 Date: <strong>{g.date}</strong></div>}
+              {g.approver && <div>👤 Approver: <strong>{g.approver}</strong></div>}
+              {g.notes    && <div>💬 Notes: <strong>{g.notes}</strong></div>}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
+// ─── PROJECT TYPE BADGE ───────────────────────────────────────────
+const PROJECT_TYPES = [
+  "Business Project",
+  "Enterprise Project",
+  "Internal Project",
+];
+
+const TypeBadge = ({ type }) => {
+  const styles = {
+    "Business Project":   { bg: "#dbeafe", text: "#1e40af", icon: "🔵" },
+    "Enterprise Project": { bg: "#ede9fe", text: "#6d28d9", icon: "🟣" },
+    "Internal Project":   { bg: "#dcfce7", text: "#15803d", icon: "🟢" },
+  };
+  const s = styles[type] || styles["Internal Project"];
+  return (
+    <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {s.icon} {type}
+    </span>
+  );
+};
+
+// ─── DOCUMENT COMPLIANCE CARD ─────────────────────────────────────
+const DocComplianceBar = ({ project }) => {
+  const T = useT();
+  const allDocs = project.documents ?? [];
+  const reqDocs = allDocs.filter(d => d.required);
+  const ready   = reqDocs.filter(d => ["Approved","Final","Received","Current","Submitted"].includes(d.status));
+  const pct     = reqDocs.length ? Math.round((ready.length / reqDocs.length) * 100) : 0;
+  const color   = pct === 100 ? "#16a34a" : pct >= 60 ? "#eab308" : "#dc2626";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ flex: 1, background: T.border, borderRadius: 6, height: 8, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 6, transition: "width 0.4s" }} />
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 36 }}>{pct}%</span>
+      <span style={{ fontSize: 11, color: T.muted }}>{ready.length}/{reqDocs.length} required</span>
+    </div>
+  );
+};
+
 const Badge = ({ status, size = "sm" }) => {
   const T = useT();
   const c = statusColor[status] || { bg: "#f3f4f6", text: "#374151", dot: "#9ca3af" };
@@ -1109,14 +1347,16 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterRisk, setFilterRisk] = useState("All");
+  const [filterType, setFilterType] = useState("All");
   const [view, setView] = useState("table");
 
   const filtered = useMemo(() => deptProjects.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "All" || p.status === filterStatus;
-    const matchRisk = filterRisk === "All" || p.riskLevel === filterRisk;
-    return matchSearch && matchStatus && matchRisk;
-  }), [deptProjects, search, filterStatus, filterRisk]);
+    const matchRisk   = filterRisk   === "All" || p.riskLevel === filterRisk;
+    const matchType   = filterType   === "All" || p.projectType === filterType;
+    return matchSearch && matchStatus && matchRisk && matchType;
+  }), [deptProjects, search, filterStatus, filterRisk, filterType]);
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
@@ -1148,6 +1388,10 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
         <select value={filterRisk} onChange={e => setFilterRisk(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
           {["All", "Low", "Medium", "High", "Critical"].map(r => <option key={r}>{r}</option>)}
         </select>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
+          <option value="All">All Types</option>
+          {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
+        </select>
         <div style={{ display: "flex", gap: 4 }}>
           {["table", "card"].map(v => (
             <button key={v} onClick={() => setView(v)} style={{
@@ -1166,7 +1410,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: T.bg }}>
-                {["Code", "Project Name", "PM", "Phase", "Progress", "Status", "IPI", "Risk", "Budget Status", "Gate", "Last Update"].map(h => (
+                {["Code", "Project Name", "PM", "Type", "Phase", "Progress", "Status", "IPI", "Risk", "Budget Status", "Gate", "Last Update"].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -1182,6 +1426,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
                     <div style={{ fontSize: 11, color: T.muted }}>{p.sponsor}</div>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{p.pm}</td>
+                  <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12, whiteSpace: "nowrap" }}>{p.phase}</td>
                   <td style={{ padding: "12px 14px", minWidth: 100 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1267,6 +1512,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
               <span style={{ background: T.accent, color: T.accentText, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
               <span style={{ background: "rgba(255,255,255,0.12)", color: T.text, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.gate}</span>
               <span style={{ background: "rgba(255,255,255,0.12)", color: T.text, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
+              <TypeBadge type={project.projectType || "Project"} />
             </div>
             <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
             <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
@@ -1310,6 +1556,9 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
       </div>
 
       <Tab tabs={TABS} active={tab} onSelect={setTab} />
+
+      {/* ── GATE TRACKER — always visible ── */}
+      <GateTracker gates={project.gates} />
 
       {/* OVERVIEW TAB */}
       {tab === "Overview" && (
@@ -1640,48 +1889,98 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
 
       {/* DOCUMENTS TAB */}
       {tab === "Documents" && (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Document Register</h3>
-            <div style={{ fontSize: 13, color: T.muted }}>
-              <span style={{ fontWeight: 700, color: T.primary }}>{project.documents.filter(d => d.status === "Approved" || d.status === "Final" || d.status === "Received" || d.status === "Current" || d.status === "Submitted").length}</span> / {project.documents.length} documents ready
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Compliance Summary */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Document Compliance</h3>
+              <span style={{ fontSize: 12, color: T.muted }}>Required docs affect IPI score</span>
             </div>
+            <DocComplianceBar project={project} />
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr style={{ background: T.bg }}>
-              {["Document Name", "Type", "Version", "Status", "Last Updated"].map(h => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>{project.documents.map(d => {
-              const docStatus = {
-                "Approved": { bg: "#dcfce7", text: "#15803d" },
-                "Final": { bg: "#dcfce7", text: "#15803d" },
-                "Received": { bg: "#dcfce7", text: "#15803d" },
-                "Current": { bg: "#dbeafe", text: "#1e40af" },
-                "Submitted": { bg: "#dbeafe", text: "#1e40af" },
-                "Draft": { bg: "#fef9c3", text: "#854d0e" },
-                "Under Review": { bg: "#fef9c3", text: "#854d0e" },
-              };
-              const ds = docStatus[d.status] || { bg: T.bg, text: T.muted };
-              return (
-                <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
-                  <td style={{ padding: "12px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 18 }}>📄</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{d.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600 }}>{d.version}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <span style={{ background: ds.bg, color: ds.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>{d.status}</span>
-                  </td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.lastUpdated}</td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
+
+          {/* Required Documents */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span style={{ fontSize: 16 }}>⭐</span>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Required Documents</h3>
+              <span style={{ fontSize: 11, background: "#fee2e2", color: "#dc2626", fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>Affects IPI</span>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr style={{ background: T.bg }}>
+                {["Document", "Type", "Version", "Status", "Last Updated"].map(h => (
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>{project.documents.filter(d => d.required).map(d => {
+                const docStatus = {
+                  "Approved":    { bg: "#dcfce7", text: "#15803d" },
+                  "Final":       { bg: "#dcfce7", text: "#15803d" },
+                  "Received":    { bg: "#dcfce7", text: "#15803d" },
+                  "Current":     { bg: "#dbeafe", text: "#1e40af" },
+                  "Submitted":   { bg: "#dbeafe", text: "#1e40af" },
+                  "Draft":       { bg: "#fef9c3", text: "#854d0e" },
+                  "Under Review":{ bg: "#fef9c3", text: "#854d0e" },
+                  "Pending":     { bg: "#fee2e2", text: "#991b1b" },
+                };
+                const ds = docStatus[d.status] || { bg: T.bg, text: T.muted };
+                const isReady = ["Approved","Final","Received","Current","Submitted"].includes(d.status);
+                return (
+                  <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "12px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>{isReady ? "✅" : "⚠️"}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.text }}>{d.version || "—"}</td>
+                    <td style={{ padding: "12px 14px" }}>
+                      <span style={{ background: ds.bg, color: ds.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>{d.status || "Not Submitted"}</span>
+                    </td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.lastUpdated || "—"}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+
+          {/* Optional / Additional Documents */}
+          {project.documents.filter(d => !d.required).length > 0 && (
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 16 }}>📎</span>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Additional Documents</h3>
+                <span style={{ fontSize: 11, background: T.bg, color: T.muted, fontWeight: 600, padding: "2px 8px", borderRadius: 10 }}>Does not affect IPI</span>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr style={{ background: T.bg }}>
+                  {["Document", "Type", "Version", "Status", "Last Updated"].map(h => (
+                    <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{project.documents.filter(d => !d.required).map(d => {
+                  const ds = { "Approved": { bg: "#dcfce7", text: "#15803d" }, "Current": { bg: "#dbeafe", text: "#1e40af" }, "Draft": { bg: "#fef9c3", text: "#854d0e" } }[d.status] || { bg: T.bg, text: T.muted };
+                  return (
+                    <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>📄</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{d.name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: T.text }}>{d.version || "—"}</td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <span style={{ background: ds.bg, color: ds.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>{d.status}</span>
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.lastUpdated || "—"}</td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -2027,6 +2326,37 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                   <Field label="Planned End Date" field="plannedEnd" type="date" />
                   <Field label="Budget Status" field="budgetStatus" options={["On Budget", "Over Budget", "Under Budget"]} />
                   <Field label="Strategic Objective" field="strategic" />
+                  <Field label="Project Type" field="projectType" options={PROJECT_TYPES} />
+                </div>
+                {/* Optional Documents Selector */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 6 }}>
+                    Additional Required Documents <span style={{ fontWeight: 400 }}>(Project Charter, Business Case & Closure always required)</span>
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {OPTIONAL_DOCS.map(doc => {
+                      const selected = (formData.requiredDocs || []).includes(doc);
+                      return (
+                        <button key={doc} type="button"
+                          onClick={() => {
+                            const current = formData.requiredDocs || [];
+                            setFormData(p => ({
+                              ...p,
+                              requiredDocs: selected ? current.filter(d => d !== doc) : [...current, doc]
+                            }));
+                          }}
+                          style={{
+                            padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                            background: selected ? T.primary : T.bg,
+                            color: selected ? T.accent : T.muted,
+                            border: `1px solid ${selected ? T.primary : T.border}`,
+                            transition: "all 0.15s",
+                          }}>
+                          {selected ? "✓ " : ""}{doc}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Project Objective</label>
@@ -2371,14 +2701,16 @@ const AllProjectsView = ({ projects, setRoute }) => {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterDept, setFilterDept] = useState("All");
+  const [filterType, setFilterType] = useState("All");
 
   const active = projects.filter(p => !p.archived);
   const filtered = useMemo(() => active.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.pm.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "All" || p.status === filterStatus;
     const matchDept = filterDept === "All" || p.deptId === filterDept;
-    return matchSearch && matchStatus && matchDept;
-  }), [active, search, filterStatus, filterDept]);
+    const matchType = filterType === "All" || p.projectType === filterType;
+    return matchSearch && matchStatus && matchDept && matchType;
+  }), [active, search, filterStatus, filterDept, filterType]);
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
@@ -2395,12 +2727,16 @@ const AllProjectsView = ({ projects, setRoute }) => {
           <option value="All">All Departments</option>
           {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
+          <option value="All">All Types</option>
+          {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
+        </select>
         <div style={{ display: "flex", alignItems: "center", fontSize: 13, color: T.muted, whiteSpace: "nowrap" }}>{filtered.length} results</div>
       </div>
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
-            {["Code", "Project Name", "Department", "PM", "Sponsor", "Phase", "Progress", "Status", "Risk", "Budget", "Gate"].map(h => (
+            {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Phase", "Progress", "Status", "Risk", "Budget", "Gate"].map(h => (
               <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
@@ -2412,7 +2748,8 @@ const AllProjectsView = ({ projects, setRoute }) => {
                   onMouseEnter={e => e.currentTarget.style.background = "#f0f7f4"}
                   onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : T.bg}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600 }}>{p.name}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</td>
+                  <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <span>{dept?.icon}</span><span style={{ color: T.muted }}>{dept?.name}</span>
@@ -2446,9 +2783,10 @@ export default function App() {
   const [route, setRoute] = useState({ view: "home" });
   const [dark, setDark] = useState(false);
   const toggleDark = () => setDark(d => !d);
+
+  // ── Update T synchronously on every render ────────────────────
   const activeT = dark ? THEMES.dark : THEMES.light;
-  // update module-level T so helper functions still work
-  Object.assign(T, activeT);
+  Object.assign(T, activeT); // keeps T in sync for any code using it directly
   const [projects, setProjects] = useState(PROJECTS);
 
   // ── Departments live state ─────────────────────────────────────
@@ -2487,11 +2825,26 @@ export default function App() {
   const addProject = useCallback((data) => {
     const newId = `P${String(projects.length + 1).padStart(3, "0")}`;
     const today = new Date().toISOString().split("T")[0];
+    // Build required documents list
+    const mandatoryDocs = [
+      { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
+      { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
+      { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
+    ];
+    const optionalDocs = (data.requiredDocs || []).map((name, i) => ({
+      id: `D${i + 4}`, name, type: name, required: true, status: "Pending", version: "", lastUpdated: ""
+    }));
+    const defaultGates = GATE_DEFS.map(g => ({
+      id: g.id, status: "Pending", date: null, approver: "", notes: ""
+    }));
     setProjects(prev => [...prev, {
       ...data,
       id: newId,
+      projectType: data.projectType || "Internal Project",
+      gates: defaultGates,
       milestones: [], risks: [], issues: [], benefits: [],
-      approvals: [], documents: [], updates: [],
+      approvals: [], updates: [],
+      documents: [...mandatoryDocs, ...optionalDocs],
       health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
       spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
       scheduleVariance: "0", actualCost: 0,
@@ -2539,17 +2892,16 @@ export default function App() {
   return (
     <ThemeContext.Provider value={{ T: activeT }}>
     <DeptContext.Provider value={deptCtx}>
-    <div style={{
+    <div key={dark ? "dark" : "light"} style={{
       display: "flex", height: "100vh",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
-      transition: "background 0.3s, color 0.3s",
     }}>
       <Sidebar route={route} setRoute={setRoute} projects={projects} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} />
-        <main key={dark ? "dark" : "light"} style={{ flex: 1, overflowY: "auto" }}>
+        <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
           {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} />}
