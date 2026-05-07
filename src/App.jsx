@@ -129,7 +129,7 @@ const PROJECTS = [
   // STRATEGY & PMO
   {
     id: "P001", code: "STRAT-2025-001", deptId: "strategy",
-    name: "Enterprise PMO Transformation",
+    name: "PMO Transformation",
     pm: "Mohammed", sponsor: "Alhanouf",
     projectType: "Enterprise Project",
     phase: "Execution", gate: "Gate 4", status: "On Track", priority: "Critical",
@@ -193,15 +193,15 @@ const PROJECTS = [
   },
   {
     id: "P002", code: "STRAT-2025-002", deptId: "strategy",
-    name: "Strategic Planning Framework 2030",
-    pm: "Nawaf", sponsor: "Bader",
+    name: "PMO Framework",
+    pm: "Abdulrahman", sponsor: "Bader",
     phase: "Planning", gate: "Gate 2", status: "At Risk", priority: "High",
     progress: 35, plannedProgress: 45, startDate: "2025-02-01", plannedEnd: "2025-10-30",
     budget: 1800000, forecast: 2100000, actualCost: 620000,
     riskLevel: "High", budgetStatus: "Over Budget", strategic: "Corporate Strategy",
     lastUpdate: "2025-04-28", classification: "Strategic",
-    objective: "Develop a robust 5-year strategic planning framework",
-    businessCase: "Align all departments to Vision 2030 strategic pillars",
+    objective: "Develop a strategic PMO framework",
+    businessCase: "Align all Project to 4 strategic pillars",
     projectType: "Enterprise Project",
     gates: [
       { id: "G1", status: "Approved", date: "2025-02-10", approver: "Bader", notes: "Classified as Project" },
