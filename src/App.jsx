@@ -754,7 +754,7 @@ function calcDeptIPI(deptId, projects) {
 
 // IPI colour band
 function ipiColor(score) {
-  if (score >= 85) return { color: "#15803d", bg: "#dcfce7", label: "Excellent" };
+  if (score >= 90) return { color: "#15803d", bg: "#dcfce7", label: "Excellent" };
   if (score >= 70) return { color: T.primary, bg: "#e8f5f0", label: "Good" };
   if (score >= 55) return { color: "#854d0e", bg: "#fef9c3", label: "Fair" };
   return { color: "#991b1b", bg: "#fee2e2", label: "Poor" };
