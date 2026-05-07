@@ -1046,7 +1046,7 @@ const Sidebar = ({ route, setRoute, projects }) => {
       <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)` }}>
         <div style={{ fontSize: 11, color: T.secondary }}>Logged in as</div>
         <div style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>Mohammed</div>
-        <div style={{ fontSize: 11, color: T.secondary }}>PMO Director</div>
+        <div style={{ fontSize: 11, color: T.secondary }}>Senior PMO </div>
       </div>
     </div>
   );
