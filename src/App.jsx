@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useCallback, createContext, useContext } from "react";
+import { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, AreaChart, Area } from "recharts";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -765,7 +765,7 @@ const Sidebar = ({ route, setRoute, projects }) => {
         ))}
         <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
         {departments.map(d => {
-          const stats = getDeptStats(d.id, projects);
+          const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
           return (
             <button key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, border: "none",
@@ -1150,7 +1150,11 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
         </select>
         <div style={{ display: "flex", gap: 4 }}>
           {["table", "card"].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ background: view === v ? T.primary : "transparent", color: view === v ? T.accent : T.muted, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>
+            <button key={v} onClick={() => setView(v)} style={{
+              background: view === v ? T.btnPrimBg : "transparent",
+              color: view === v ? T.btnPrimText : T.muted,
+              border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer"
+            }}>
               {v === "table" ? "≡ Table" : "⊞ Cards"}
             </button>
           ))}
@@ -1896,7 +1900,7 @@ const DeptCRUD = ({ projects }) => {
                 </td>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => openEdit(d)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                    <button onClick={() => openEdit(d)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
                     <button onClick={() => setConfirmDelete(d.id)} disabled={hasProjects}
                       title={hasProjects ? "Archive all projects first" : "Delete department"}
                       style={{ background: hasProjects ? "#f3f4f6" : "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: hasProjects ? "not-allowed" : "pointer", color: hasProjects ? "#9ca3af" : "#dc2626", fontWeight: 600 }}>
@@ -2061,7 +2065,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => openEdit(p)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                      <button onClick={() => openEdit(p)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
                       <button onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ background: "#e8f5f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: T.primary, fontWeight: 600 }}>View</button>
                       <button onClick={() => handleDelete(p.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Archive</button>
                     </div>
@@ -2454,6 +2458,31 @@ export default function App() {
   const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
   const deptCtx = { departments, addDept, updateDept, deleteDept };
 
+  // ── Inject CSS variables → instant theme switch everywhere ───────
+  useEffect(() => {
+    const r = document.documentElement.style;
+    const t = activeT;
+    r.setProperty("--pmo-bg",           t.bg);
+    r.setProperty("--pmo-surface",      t.surface);
+    r.setProperty("--pmo-border",       t.border);
+    r.setProperty("--pmo-text",         t.text);
+    r.setProperty("--pmo-muted",        t.muted);
+    r.setProperty("--pmo-primary",      t.primary);
+    r.setProperty("--pmo-accent",       t.accent);
+    r.setProperty("--pmo-sidebar",      t.sidebarBg);
+    r.setProperty("--pmo-header",       t.headerBg);
+    r.setProperty("--pmo-btn-bg",       t.btnPrimBg);
+    r.setProperty("--pmo-btn-text",     t.btnPrimText);
+    r.setProperty("--pmo-input-bg",     t.inputBg);
+    r.setProperty("--pmo-input-text",   t.inputText);
+    r.setProperty("--pmo-select-bg",    t.selectBg);
+    r.setProperty("--pmo-table-bg",     t.tableBg);
+    r.setProperty("--pmo-hover",        t.cardHover);
+    document.body.style.background = t.bg;
+    document.body.style.color      = t.text;
+    document.body.style.transition = "background 0.25s, color 0.25s";
+  }, [dark]);
+
   // ── CRUD helpers passed down to AdminView ──────────────────────
   const addProject = useCallback((data) => {
     const newId = `P${String(projects.length + 1).padStart(3, "0")}`;
@@ -2510,11 +2539,17 @@ export default function App() {
   return (
     <ThemeContext.Provider value={{ T: activeT }}>
     <DeptContext.Provider value={deptCtx}>
-    <div style={{ display: "flex", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", background: activeT.bg, color: activeT.text, overflow: "hidden" }}>
+    <div style={{
+      display: "flex", height: "100vh",
+      fontFamily: "'Segoe UI', system-ui, sans-serif",
+      background: activeT.bg, color: activeT.text,
+      overflow: "hidden",
+      transition: "background 0.3s, color 0.3s",
+    }}>
       <Sidebar route={route} setRoute={setRoute} projects={projects} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} />
-        <main style={{ flex: 1, overflowY: "auto" }}>
+        <main key={dark ? "dark" : "light"} style={{ flex: 1, overflowY: "auto" }}>
           {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} />}
