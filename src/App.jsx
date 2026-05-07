@@ -187,7 +187,7 @@ const PROJECTS = [
       { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Stakeholder Register", "Communication Plan"],,
+    requiredDocs: ["Stakeholder Register", "Communication Plan"],
     milestones: [
       { id: "M1", name: "Stakeholder Workshops", date: "2025-03-31", status: "Delayed", owner: "Nawaf" },
       { id: "M2", name: "Framework Draft", date: "2025-06-15", status: "Upcoming", owner: "Lujain" },
@@ -238,7 +238,7 @@ const PROJECTS = [
       { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Security Approval", "UAT Sign-off"],,
+    requiredDocs: ["Security Approval", "UAT Sign-off"],
     milestones: [
       { id: "M1", name: "UX Design Approved", date: "2025-02-28", status: "Completed", owner: "Ali" },
       { id: "M2", name: "Backend API Integration", date: "2025-05-31", status: "In Progress", owner: "Naif" },
@@ -290,7 +290,7 @@ const PROJECTS = [
       { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Technical Specification", "Vendor Contract"],,
+    requiredDocs: ["Technical Specification", "Vendor Contract"],
     milestones: [
       { id: "M1", name: "Vendor Selection", date: "2025-05-31", status: "In Progress", owner: "Maram" },
       { id: "M2", name: "Architecture Design", date: "2025-07-31", status: "Upcoming", owner: "Naif" },
@@ -336,7 +336,7 @@ const PROJECTS = [
       { id: "G4", status: "In Progress", date: null, approver: "", notes: "Delayed — supplier issues" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Vendor Contract", "PO", "Invoice"],,
+    requiredDocs: ["Vendor Contract", "PO", "Invoice"],
     milestones: [
       { id: "M1", name: "Process Mapping Complete", date: "2024-12-31", status: "Completed", owner: "Adel" },
       { id: "M2", name: "Supplier Renegotiation", date: "2025-03-31", status: "Delayed", owner: "Naif" },
@@ -392,7 +392,7 @@ const PROJECTS = [
       { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Compliance Certificate", "Legal Review"],,
+    requiredDocs: ["Compliance Certificate", "Legal Review"],
     milestones: [
       { id: "M1", name: "Gap Assessment Complete", date: "2025-02-28", status: "Completed", owner: "Abdulrahman" },
       { id: "M2", name: "Policy Framework Published", date: "2025-05-31", status: "In Progress", owner: "Lujain" },
@@ -445,7 +445,7 @@ const PROJECTS = [
       { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Vendor Contract", "UAT Sign-off"],,
+    requiredDocs: ["Vendor Contract", "UAT Sign-off"],
     milestones: [
       { id: "M1", name: "System Configuration", date: "2025-01-31", status: "Completed", owner: "Lujain" },
       { id: "M2", name: "Data Migration", date: "2025-04-30", status: "Completed", owner: "Ali" },
@@ -499,7 +499,7 @@ const PROJECTS = [
       { id: "G4", status: "In Progress", date: null, approver: "", notes: "At risk — legacy issues" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Technical Specification", "Security Approval", "Vendor Contract"],,
+    requiredDocs: ["Technical Specification", "Security Approval", "Vendor Contract"],
     milestones: [
       { id: "M1", name: "Wave 1 Migration (Dev/Test)", date: "2025-03-31", status: "Completed", owner: "Naif" },
       { id: "M2", name: "Wave 2 Migration (Non-Critical)", date: "2025-06-30", status: "In Progress", owner: "Ali" },
@@ -555,7 +555,7 @@ const PROJECTS = [
       { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Technical Specification", "Vendor Contract"],,
+    requiredDocs: ["Technical Specification", "Vendor Contract"],
     milestones: [
       { id: "M1", name: "Current State Assessment", date: "2025-03-31", status: "Completed", owner: "Haifa" },
       { id: "M2", name: "Future State Design", date: "2025-06-30", status: "In Progress", owner: "Adel" },
@@ -604,7 +604,7 @@ const PROJECTS = [
       { id: "G4", status: "Approved", date: "2025-04-15", approver: "Abdulrahman", notes: "Certification achieved" },
       { id: "G5", status: "Approved", date: "2025-05-01", approver: "Abdulrahman", notes: "Closure complete. Excellent delivery." },
     ],
-    requiredDocs: ["Compliance Certificate"],,
+    requiredDocs: ["Compliance Certificate"],
     milestones: [
       { id: "M1", name: "Gap Analysis", date: "2024-09-30", status: "Completed", owner: "Munira" },
       { id: "M2", name: "Process Documentation", date: "2024-12-31", status: "Completed", owner: "Lujain" },
@@ -656,7 +656,7 @@ const PROJECTS = [
       { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
       { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
     ],
-    requiredDocs: ["Technical Specification"],,
+    requiredDocs: ["Technical Specification"],
     milestones: [
       { id: "M1", name: "KPI Library Defined", date: "2025-03-31", status: "Completed", owner: "Mohammed" },
       { id: "M2", name: "Platform Configuration", date: "2025-06-30", status: "In Progress", owner: "Maram" },
