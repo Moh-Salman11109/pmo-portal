@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
+import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, AreaChart, Area } from "recharts";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -63,6 +63,10 @@ const ThemeContext = createContext(null);
 const useT = () => {
   const ctx = useContext(ThemeContext);
   return ctx ? ctx.T : THEMES.light;
+};
+const useDark = () => {
+  const ctx = useContext(ThemeContext);
+  return ctx ? ctx.dark : false;
 };
 
 let T = THEMES.light;
@@ -1139,87 +1143,72 @@ const HomeView = ({ projects, setRoute }) => {
         <KPICard label="Portfolio Budget"  value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
       </div>
 
-      {/* ── ROW 1: Department Health (wide) + Status Pie ── */}
+      {/* ── ROW 1: Department Health (wide) + Budget Summary ── */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 20 }}>
 
-        {/* Department Health Score — full width bar chart */}
+        {/* Department Health Score — bigger */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Department Health Score</h3>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Department Health Score</h3>
               <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>Portfolio progress % across all {departments.length} departments</p>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={deptPerf} barSize={28} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11, fill: T.muted, fontWeight: 600 }}
-                axisLine={false} tickLine={false}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 11, fill: T.muted }}
-                axisLine={false} tickLine={false}
-                tickFormatter={v => `${v}%`}
-                width={38}
-              />
-              <Tooltip
-                formatter={v => [`${v}%`, "Health"]}
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }}
-              />
-              <Bar dataKey="health" radius={[6, 6, 0, 0]}>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={38} />
+              <Tooltip formatter={v => [`${v}%`, "Health"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }} />
+              <Bar dataKey="health" radius={[6, 6, 0, 0]} minPointSize={4}>
                 {deptPerf.map((entry, i) => (
-                  <Cell key={i} fill={entry.health >= 70 ? T.accent : entry.health >= 50 ? "#eab308" : "#dc2626"} />
+                  <Cell key={i} fill={entry.health === 0 ? T.border : entry.health >= 70 ? T.accent : entry.health >= 50 ? "#eab308" : "#dc2626"} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Status Distribution Pie */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Status Distribution</h3>
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: T.muted }}>{allProjects.length} total projects</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={statusPie} dataKey="value" nameKey="name"
-                cx="50%" cy="50%" outerRadius={80} innerRadius={40}
-              >
-                {statusPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-              </Pie>
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: T.surface, color: T.text }} />
-            </PieChart>
-          </ResponsiveContainer>
-          {/* Legend */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {statusPie.map((s, i) => (
-              <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: PIE_COLORS[i] }} />
-                  <span style={{ fontSize: 12, color: T.text }}>{s.name}</span>
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>{s.value}</span>
+        {/* Budget Summary */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", display: "flex", flexDirection: "column" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Budget Summary</h3>
+          <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Portfolio level</p>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            {[
+              { label: "Total Approved", value: fmtSAR(budgetTotal),              color: T.text },
+              { label: "Total Spent",    value: fmtSAR(costTotal),                color: T.text },
+              { label: "Remaining",      value: fmtSAR(budgetTotal - costTotal),  color: (budgetTotal - costTotal) >= 0 ? "#16a34a" : "#dc2626" },
+              { label: "Utilisation",    value: `${budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0}%`, color: T.primary },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ fontSize: 13, color: T.muted }}>{label}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color }}>{value}</span>
               </div>
             ))}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: T.muted }}>Overall Utilisation</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0}%</span>
+              </div>
+              <Progress value={budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0} height={10}
+                color={budgetTotal && costTotal / budgetTotal > 0.9 ? "#dc2626" : T.accent} />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── ROW 2: IPI per Dept + Risk + Budget ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+      {/* ── ROW 2: IPI (wide) + Risk Profile ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 24 }}>
 
-        {/* Department IPI Chart */}
+        {/* Department IPI Scores — bigger, all departments visible */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
           <div style={{ marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Department IPI Scores</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Department IPI Scores</h3>
             <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + Docs×25% — all {departments.length} departments</p>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={deptPerf} barSize={28} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} width={38} tickFormatter={v => v} />
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} width={38} />
               <Tooltip formatter={v => [v, "IPI Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }} />
               <Bar dataKey="ipi" radius={[6, 6, 0, 0]}>
                 {deptPerf.map((entry, i) => {
@@ -1229,64 +1218,43 @@ const HomeView = ({ projects, setRoute }) => {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          {/* IPI legend */}
-          <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
-            {[{ label: "Excellent 85+", color: "#15803d" }, { label: "Good 70+", color: T.primary }, { label: "Fair 55+", color: "#854d0e" }, { label: "Poor <55", color: "#991b1b" }].map(b => (
-              <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: b.color }} />
-                <span style={{ fontSize: 10, color: T.muted }}>{b.label}</span>
+          <div style={{ display: "flex", gap: 20, marginTop: 12, flexWrap: "wrap" }}>
+            {[
+              { label: "Excellent 85+", color: "#15803d" },
+              { label: "Good 70+",      color: "#003932" },
+              { label: "Fair 55+",      color: "#854d0e" },
+              { label: "Poor <55",      color: "#991b1b" },
+            ].map(b => (
+              <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: b.color }} />
+                <span style={{ fontSize: 11, color: T.muted }}>{b.label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Risk Distribution */}
+        {/* Risk Profile */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Risk Profile</h3>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Risk Profile</h3>
           <p style={{ margin: "0 0 10px", fontSize: 12, color: T.muted }}>By risk level</p>
-          <ResponsiveContainer width="100%" height={160}>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35}>
+              <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={42}>
                 {riskDist.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: T.surface, color: T.text }} />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
             {riskDist.map(r => (
               <div key={r.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: r.fill }} />
-                  <span style={{ fontSize: 11, color: T.text }}>{r.name}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: r.fill }} />
+                  <span style={{ fontSize: 12, color: T.text }}>{r.name}</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700 }}>{r.value}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{r.value}</span>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Budget Utilisation */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Budget Summary</h3>
-          <p style={{ margin: "0 0 16px", fontSize: 12, color: T.muted }}>Portfolio level</p>
-          {[
-            { label: "Total Approved", value: fmtSAR(budgetTotal), color: T.text },
-            { label: "Total Spent",    value: fmtSAR(costTotal),   color: T.text },
-            { label: "Remaining",      value: fmtSAR(budgetTotal - costTotal), color: (budgetTotal - costTotal) >= 0 ? "#16a34a" : "#dc2626" },
-            { label: "Utilisation",    value: `${budgetTotal ? Math.round((costTotal/budgetTotal)*100) : 0}%`, color: T.primary },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-              <span style={{ fontSize: 12, color: T.muted }}>{label}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}</span>
-            </div>
-          ))}
-          <div style={{ marginTop: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: T.muted }}>Overall Utilisation</span>
-              <span style={{ fontSize: 11, fontWeight: 700 }}>{budgetTotal ? Math.round((costTotal/budgetTotal)*100) : 0}%</span>
-            </div>
-            <Progress value={budgetTotal ? Math.round((costTotal/budgetTotal)*100) : 0} height={8}
-              color={budgetTotal && costTotal/budgetTotal > 0.9 ? "#dc2626" : T.accent} />
           </div>
         </div>
       </div>
@@ -2167,7 +2135,7 @@ const DeptCRUD = ({ projects }) => {
       </div>
 
       {/* Table */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
             {["Icon", "Department Name", "ID", "Total Projects", "On Track", "Delayed", "Completed", "Health", "IPI", "Actions"].map(h => (
@@ -2349,9 +2317,9 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                           }}
                           style={{
                             padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                            background: selected ? T.primary : T.bg,
-                            color: selected ? T.accent : T.muted,
-                            border: `1px solid ${selected ? T.primary : T.border}`,
+                            background: selected ? T.btnPrimBg : T.surface,
+                            color: selected ? T.btnPrimText : T.text,
+                            border: `1px solid ${selected ? T.accent : T.border}`,
                             transition: "all 0.15s",
                           }}>
                           {selected ? "✓ " : ""}{doc}
@@ -2784,7 +2752,11 @@ const AllProjectsView = ({ projects, setRoute }) => {
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
   const [dark, setDark] = useState(false);
-  const toggleDark = () => setDark(d => !d);
+  const [themeVersion, setThemeVersion] = useState(0);
+  const toggleDark = () => {
+    setDark(d => !d);
+    setThemeVersion(v => v + 1); // force all useT() consumers to re-render
+  };
 
   // ── Update T synchronously on every render ────────────────────
   const activeT = dark ? THEMES.dark : THEMES.light;
@@ -2891,10 +2863,12 @@ export default function App() {
 
   const [title, subtitle] = getTitle();
 
+  // Wrap everything in a key div OUTSIDE providers so remount forces fresh context
   return (
-    <ThemeContext.Provider value={{ T: activeT }}>
+    <React.Fragment key={themeVersion}>
+    <ThemeContext.Provider value={{ T: activeT, dark }}>
     <DeptContext.Provider value={deptCtx}>
-    <div key={dark ? "dark" : "light"} style={{
+    <div style={{
       display: "flex", height: "100vh",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       background: activeT.bg, color: activeT.text,
@@ -2915,5 +2889,6 @@ export default function App() {
     </div>
     </DeptContext.Provider>
     </ThemeContext.Provider>
+    </React.Fragment>
   );
 }
