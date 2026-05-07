@@ -1177,7 +1177,7 @@ const HomeView = ({ projects, setRoute }) => {
             <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={38} />
-              <Tooltip formatter={v => [`${v}%`, "Health"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }} />
+              <Tooltip formatter={v => [`${v}%`, "Health"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${themeStore.T.border}`, background: themeStore.T.surface, color: themeStore.T.text }} />
               <Bar dataKey="health" radius={[6, 6, 0, 0]} minPointSize={4}>
                 {deptPerf.map((entry, i) => (
                   <Cell key={i} fill={entry.health === 0 ? T.border : entry.health >= 70 ? T.accent : entry.health >= 50 ? "#eab308" : "#dc2626"} />
@@ -1228,7 +1228,7 @@ const HomeView = ({ projects, setRoute }) => {
             <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} width={38} />
-              <Tooltip formatter={v => [v, "IPI Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.text }} />
+              <Tooltip formatter={v => [v, "IPI Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${themeStore.T.border}`, background: themeStore.T.surface, color: themeStore.T.text }} />
               <Bar dataKey="ipi" radius={[6, 6, 0, 0]}>
                 {deptPerf.map((entry, i) => {
                   const c = ipiColor(entry.ipi);
@@ -1261,7 +1261,7 @@ const HomeView = ({ projects, setRoute }) => {
               <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={42}>
                 {riskDist.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: T.surface, color: T.text }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: themeStore.T.surface, color: themeStore.T.text }} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
@@ -1407,11 +1407,11 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
             <tbody>
               {filtered.map((p, i) => (
                 <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg, transition: "background 0.1s" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#f0f7f4"}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : T.bg}>
+                  onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : themeStore.T.bg}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>{p.code}</td>
                   <td style={{ padding: "12px 14px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</div>
                     <div style={{ fontSize: 11, color: T.muted }}>{p.sponsor}</div>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{p.pm}</td>
@@ -2559,7 +2559,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             }))} barSize={20} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 8, fill: T.muted }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} hide />
-              <Tooltip formatter={v => [`IPI: ${v}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8, background: T.surface, border: `1px solid ${T.border}`, color: T.text }} />
+              <Tooltip formatter={v => [`IPI: ${v}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8, background: themeStore.T.surface, border: `1px solid ${themeStore.T.border}`, color: themeStore.T.text }} />
               <Bar dataKey="ipi" radius={[3, 3, 0, 0]}>
                 {deptData.map((d, i) => (
                   <Cell key={i} fill={ipiColor(d.deptIPI).color} />
@@ -2734,10 +2734,10 @@ const AllProjectsView = ({ projects, setRoute }) => {
               const dept = departments.find(d => d.id === p.deptId);
               return (
                 <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#f0f7f4"}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : T.bg}>
+                  onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : themeStore.T.bg}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
