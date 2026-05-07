@@ -180,8 +180,8 @@ const PROJECTS = [
       { id: "D2", name: "Business Case",    type: "Business Case", required: true,  required: true,  status: "Approved",  version: "v1.3", lastUpdated: "2025-01-20" },
       { id: "D3", name: "Resource Plan",    type: "Resource Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-02-15" },
       { id: "D4", name: "Vendor Contract",  type: "Vendor Contract",required: true, status: "Draft",     version: "v0.2", lastUpdated: "2025-04-10" },
-      { id: "D5", name: "Training Plan",    type: "Training Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-03-20" },
-      { id: "D6", name: "Closure Document", type: "Closure",       required: true,  required: true,  status: "Pending",   version: "",     lastUpdated: "" },
+      { id: "D5", name: "Project Plan",    type: "Project Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-03-20" },
+      { id: "D6", name: "Closure E-Document", type: "Closure",       required: true,  required: true,  status: "Pending",   version: "",     lastUpdated: "" },
     ],
     updates: [
       { id: "U1", date: "2025-05-01", owner: "Mohammed", note: "Milestone 2 on track. Vendor contract escalated to sponsor for resolution. Q3 resource pipeline confirmed with HR." },
@@ -385,7 +385,7 @@ const PROJECTS = [
     documents: [
       { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-10-05" },
       { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-09-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v15.0", lastUpdated: "2025-04-30" },
+      { id: "D3", name: "Project Plan", type: "Plan", required: false, status: "Current", version: "v15.0", lastUpdated: "2025-04-30" },
       { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
     ],
     updates: [
