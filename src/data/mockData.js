@@ -234,7 +234,7 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Amber", schedule: "Amber", budget: "Green", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
     spi: 0.53, cpi: 1.00, daysRemaining: 335, daysDelayed: 0, scheduleVariance: "-7 days",
-    updateCadence: "Monthly", nextUpdateDue: "2025-06-01", dataReliabilityFlag: "Pending",
+    updateCadence: "Monthly", nextUpdateDue: "2025-06-01", dataReliabilityFlag: "Stale",
     lastValidatedUpdate: null,
     pmoStatus: "Draft", pmoValidationNote: "", pmoValidatedBy: "", pmoValidatedDate: null,
     lastSubmittedBy: "", lastSubmittedDate: null,
