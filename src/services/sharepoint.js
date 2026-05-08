@@ -1,4 +1,5 @@
 import { MOCK_PROJECTS, MOCK_DEPARTMENTS } from "../data/mockData.js";
+import { acquireSpToken } from "./auth.js";
 
 // ─── CONFIGURATION ───────────────────────────────────────────────
 // Set VITE_USE_MOCK=false in .env to connect to SharePoint.
@@ -167,21 +168,24 @@ export function mapSPItemToDepartment(item) {
 }
 
 // ─── PAGINATION HELPER ───────────────────────────────────────────
+// Uses Bearer token (MSAL) — no cookies, works from any origin.
 async function fetchAllItems(listName, selectFields = "") {
   const { siteUrl, pageSize } = SP_CONFIG;
+  const token = await acquireSpToken();
   const selectParam = selectFields ? `&$select=${selectFields}` : "";
   let url = `${siteUrl}/_api/web/lists/getbytitle('${listName}')/items?$top=${pageSize}${selectParam}`;
   const allItems = [];
 
   while (url) {
     const res = await fetch(url, {
-      headers: { Accept: "application/json;odata=nometadata" },
-      credentials: "include",
+      headers: {
+        Accept: "application/json;odata=nometadata",
+        Authorization: `Bearer ${token}`,
+      },
     });
     if (!res.ok) throw new Error(`SP fetch failed: ${res.status} ${res.statusText}`);
     const data = await res.json();
     allItems.push(...(data.value || []));
-    // SharePoint pagination: follow odata.nextLink
     url = data["odata.nextLink"] || null;
   }
 
