@@ -1,6 +1,8 @@
-
+﻿
 import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, AreaChart, Area } from "recharts";
+import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
+import { SPService, isUsingMock } from "./services/sharepoint.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
 const THEMES = {
@@ -88,625 +90,10 @@ const useT = () => {
 const ThemeContext = createContext(null);
 const useDark = () => themeStore.dark;
 
-// ─── DATA LAYER ─────────────────────────────────────────────────
-const DEPARTMENTS = [
-  { id: "strategy", name: "Strategy & PMO", icon: "⚡", color: "#003932" },
-  { id: "digital", name: "Digital", icon: "💻", color: "#0066cc" },
-  { id: "operations", name: "Operations", icon: "⚙️", color: "#7c3aed" },
-  { id: "grc", name: "GRC", icon: "🛡️", color: "#dc2626" },
-  { id: "hr", name: "HR", icon: "👥", color: "#d97706" },
-  { id: "it", name: "IT", icon: "🖥️", color: "#059669" },
-  { id: "finance", name: "Finance", icon: "💰", color: "#0891b2" },
-  { id: "quality", name: "Quality", icon: "✅", color: "#7c3aed" },
-  { id: "performance", name: "Performance", icon: "📈", color: "#db2777" },
-];
-
 // ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────
 const DeptContext = createContext(null);
 const useDepts = () => useContext(DeptContext);
 
-// ─── OPTIONAL DOCUMENTS LIST (يختار منها في Admin) ───────────────
-const OPTIONAL_DOCS = [
-  "Resource Plan", "PO", "Invoice", "Security Approval",
-  "Technical Specification", "Risk Assessment", "Vendor Contract",
-  "Legal Review", "Compliance Certificate", "UAT Sign-off",
-  "Change Request", "Stakeholder Register", "Communication Plan",
-  "Training Plan", "Handover Document",
-];
-
-// ─── GATE DEFINITIONS ────────────────────────────────────────────
-const GATE_DEFS = [
-  { id: "G1", label: "Gate 1", name: "Initiation",  desc: "Project request & classification" },
-  { id: "G2", label: "Gate 2", name: "Planning",    desc: "Charter, Business Case & stakeholder sign-off" },
-  { id: "G3", label: "Gate 3", name: "Plan Submit", desc: "Project plan submitted" },
-  { id: "G4", label: "Gate 4", name: "Execution",   desc: "Execution, IPI tracking & reporting" },
-  { id: "G5", label: "Gate 5", name: "Closure",     desc: "Closure document & stakeholder sign-off" },
-];
-
-const PROJECTS = [
-  // STRATEGY & PMO
-  {
-    id: "P001", code: "STRAT-2025-001", deptId: "strategy",
-    name: "PMO Transformation",
-    pm: "Mohammed", sponsor: "Alhanouf",
-    projectType: "Enterprise Project",
-    phase: "Execution", gate: "Gate 4", status: "On Track", priority: "Critical",
-    progress: 72, plannedProgress: 68, startDate: "2025-01-15", plannedEnd: "2025-12-31",
-    budget: 4500000, forecast: 4350000, actualCost: 2800000,
-    riskLevel: "Medium", budgetStatus: "On Budget", strategic: "Digital Transformation",
-    lastUpdate: "2025-05-01", classification: "Strategic Initiative",
-    objective: "Transform the enterprise PMO into a world-class governance function",
-    businessCase: "Improve project success rate from 62% to 90% within 24 months",
-    // ── Gate Tracker ──────────────────────────────────────────────
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-01-20", approver: "Alhanouf", notes: "Classified as Project — Strategic initiative" },
-      { id: "G2", status: "Approved", date: "2025-02-01", approver: "Nawaf",    notes: "Charter and Business Case approved" },
-      { id: "G3", status: "Approved", date: "2025-02-20", approver: "Alhanouf", notes: "Project plan accepted" },
-      { id: "G4", status: "In Progress", date: null,       approver: "",         notes: "" },
-      { id: "G5", status: "Pending",     date: null,       approver: "",         notes: "" },
-    ],
-    // ── Required Documents ─────────────────────────────────────────
-    requiredDocs: ["Resource Plan", "Vendor Contract", "Training Plan"],
-    milestones: [
-      { id: "M1", name: "PMO Framework Approved", date: "2025-02-28", status: "Completed", owner: "Mohammed" },
-      { id: "M2", name: "Tooling Implementation", date: "2025-06-30", status: "In Progress", owner: "Nawaf" },
-      { id: "M3", name: "Training Programme Launch", date: "2025-09-15", status: "Upcoming", owner: "Munira" },
-      { id: "M4", name: "Go-Live", date: "2025-12-15", status: "Upcoming", owner: "Mohammed" },
-    ],
-    risks: [
-      { id: "R1", title: "Resource availability constraints", probability: "High", impact: "High", level: "Critical", owner: "Abdulrahman", status: "Open", mitigation: "Pre-book resource pipeline Q3-Q4", dueDate: "2025-06-01" },
-      { id: "R2", title: "Stakeholder adoption resistance", probability: "Medium", impact: "High", level: "High", owner: "Nawaf", status: "Open", mitigation: "Change management programme initiated", dueDate: "2025-07-01" },
-      { id: "R3", title: "Tooling integration complexity", probability: "Low", impact: "Medium", level: "Medium", owner: "Ali", status: "Mitigated", mitigation: "POC completed successfully", dueDate: "2025-05-15" },
-    ],
-    issues: [
-      { id: "I1", title: "Delayed vendor contract sign-off", severity: "High", status: "Open", owner: "Alhanouf", raised: "2025-04-10", escalated: true },
-      { id: "I2", title: "Training venue booking conflict", severity: "Medium", status: "In Progress", owner: "Munira", raised: "2025-04-22", escalated: false },
-    ],
-    benefits: [
-      { id: "B1", category: "Efficiency", kpi: "Project Success Rate", baseline: "62%", target: "90%", current: "71%", owner: "Mohammed", realization: 38, contribution: "High" },
-      { id: "B2", category: "Cost", kpi: "Portfolio Cost Savings", baseline: "0", target: "SAR 2M", current: "SAR 650K", owner: "Alhanouf", realization: 33, contribution: "Medium" },
-      { id: "B3", category: "Governance", kpi: "Compliance Score", baseline: "55%", target: "95%", current: "78%", owner: "Abdulrahman", realization: 55, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Approved", owner: "Alhanouf", date: "2025-01-20", comments: "Classified as Project" },
-      { id: "A2", gate: "Gate 2", title: "Charter & Business Case", status: "Approved", owner: "Nawaf", date: "2025-02-01", comments: "Full approval granted" },
-      { id: "A3", gate: "Gate 3", title: "Plan Submission", status: "Approved", owner: "Alhanouf", date: "2025-02-20", comments: "Plan accepted" },
-      { id: "A4", gate: "Gate 4", title: "Execution Gate", status: "In Progress", owner: "Alhanouf", date: null, comments: "" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter",     type: "Charter",        required: true, status: "Approved", version: "v2.1", lastUpdated: "2025-02-01" },
-      { id: "D2", name: "Business Case",       type: "Business Case",  required: true, status: "Approved", version: "v1.3", lastUpdated: "2025-01-20" },
-      { id: "D3", name: "Resource Plan",       type: "Resource Plan",  required: true, status: "Approved", version: "v1.0", lastUpdated: "2025-02-15" },
-      { id: "D4", name: "Vendor Contract",     type: "Vendor Contract",required: true, status: "Draft",    version: "v0.2", lastUpdated: "2025-04-10" },
-      { id: "D5", name: "Project Plan",        type: "Project Plan",   required: true, status: "Approved", version: "v1.0", lastUpdated: "2025-03-20" },
-      { id: "D6", name: "Closure E-Document",  type: "Closure",        required: true, status: "Pending",  version: "",     lastUpdated: "" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-05-01", owner: "Mohammed", note: "Milestone 2 on track. Vendor contract escalated to sponsor for resolution. Q3 resource pipeline confirmed with HR." },
-      { id: "U2", date: "2025-04-15", owner: "Nawaf",    note: "Training needs analysis completed. 3 venues shortlisted for programme delivery in September." },
-      { id: "U3", date: "2025-04-01", owner: "Mohammed", note: "Gate 3 approved. Moving into full execution phase as planned." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Amber", benefits: "Green", governance: "Green" },
-    spi: 1.06, cpi: 1.03, daysRemaining: 243, daysDelayed: 0, scheduleVariance: "+4 days",
-  },
-  {
-    id: "P002", code: "STRAT-2025-002", deptId: "strategy",
-    name: "PMO Framework",
-    pm: "Abdulrahman", sponsor: "Bader",
-    phase: "Planning", gate: "Gate 2", status: "At Risk", priority: "High",
-    progress: 35, plannedProgress: 45, startDate: "2025-02-01", plannedEnd: "2025-10-30",
-    budget: 1800000, forecast: 2100000, actualCost: 620000,
-    riskLevel: "High", budgetStatus: "Over Budget", strategic: "Corporate Strategy",
-    lastUpdate: "2025-04-28", classification: "Strategic",
-    objective: "Develop a strategic PMO framework",
-    businessCase: "Align all Project to 4 strategic pillars",
-    projectType: "Enterprise Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-02-10", approver: "Bader", notes: "Classified as Project" },
-      { id: "G2", status: "Returned", date: "2025-04-05", approver: "Bader", notes: "Revise scope and timeline" },
-      { id: "G3", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Stakeholder Register", "Communication Plan"],
-    milestones: [
-      { id: "M1", name: "Stakeholder Workshops", date: "2025-03-31", status: "Delayed", owner: "Nawaf" },
-      { id: "M2", name: "Framework Draft", date: "2025-06-15", status: "Upcoming", owner: "Lujain" },
-      { id: "M3", name: "Board Approval", date: "2025-09-01", status: "Upcoming", owner: "Bader" },
-    ],
-    risks: [
-      { id: "R1", title: "Key stakeholder unavailability", probability: "High", impact: "High", level: "Critical", owner: "Nawaf", status: "Open", mitigation: "Rescheduling with exec assistants", dueDate: "2025-05-30" },
-    ],
-    issues: [
-      { id: "I1", title: "Workshop facilitator contract delay", severity: "High", status: "Escalated", owner: "Bader", raised: "2025-03-20", escalated: true },
-    ],
-    benefits: [
-      { id: "B1", category: "Strategic", kpi: "Strategy Alignment Score", baseline: "45%", target: "85%", current: "52%", owner: "Nawaf", realization: 18, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Approved", owner: "Bader", date: "2025-02-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning Approval", status: "Returned", owner: "Bader", date: "2025-04-05", comments: "Revise scope and timeline" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-02-05" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-30" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v3.0", lastUpdated: "2025-04-28" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-04-28", owner: "Nawaf", note: "Gate 2 returned. Revising scope per sponsor feedback. Workshops rescheduled to May 2025." },
-    ],
-    health: { scope: "Amber", schedule: "Red", budget: "Red", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
-    spi: 0.78, cpi: 0.88, daysRemaining: 185, daysDelayed: 18, scheduleVariance: "-18 days",
-  },
-
-  // DIGITAL
-  {
-    id: "P003", code: "DIGI-2025-001", deptId: "digital",
-    name: "Digital Customer Portal Phase 2",
-    pm: "Ali", sponsor: "Haifa",
-    phase: "Execution", gate: "Gate 3", status: "On Track", priority: "Critical",
-    progress: 61, plannedProgress: 58, startDate: "2025-01-01", plannedEnd: "2025-11-30",
-    budget: 8200000, forecast: 8000000, actualCost: 4500000,
-    riskLevel: "Medium", budgetStatus: "On Budget", strategic: "Digital Transformation",
-    lastUpdate: "2025-05-02", classification: "Strategic Initiative",
-    objective: "Launch next-generation customer self-service portal",
-    businessCase: "Reduce call centre volume by 40% and increase NPS by 25 points",
-    projectType: "Business Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-01-10", approver: "Haifa", notes: "New enterprise system" },
-      { id: "G2", status: "Approved", date: "2025-02-01", approver: "Haifa", notes: "Charter approved" },
-      { id: "G3", status: "Approved", date: "2025-03-01", approver: "Haifa", notes: "Plan submitted" },
-      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Security Approval", "UAT Sign-off"],
-    milestones: [
-      { id: "M1", name: "UX Design Approved", date: "2025-02-28", status: "Completed", owner: "Ali" },
-      { id: "M2", name: "Backend API Integration", date: "2025-05-31", status: "In Progress", owner: "Naif" },
-      { id: "M3", name: "UAT Sign-off", date: "2025-09-30", status: "Upcoming", owner: "Haifa" },
-      { id: "M4", name: "Production Launch", date: "2025-11-15", status: "Upcoming", owner: "Ali" },
-    ],
-    risks: [
-      { id: "R1", title: "Third-party API latency issues", probability: "Medium", impact: "High", level: "High", owner: "Naif", status: "Open", mitigation: "Caching layer implementation", dueDate: "2025-05-31" },
-      { id: "R2", title: "Security penetration test findings", probability: "Medium", impact: "Critical", level: "High", owner: "Ali", status: "Open", mitigation: "VAPT scheduled for June", dueDate: "2025-06-30" },
-    ],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "Customer", kpi: "NPS Score", baseline: "42", target: "67", current: "51", owner: "Haifa", realization: 36, contribution: "High" },
-      { id: "B2", category: "Cost", kpi: "Call Centre Volume Reduction", baseline: "0%", target: "40%", current: "12%", owner: "Ali", realization: 30, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Haifa", date: "2025-01-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Design", status: "Approved", owner: "Haifa", date: "2025-03-01", comments: "Approved with UX revisions" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Haifa", date: "2025-04-01", comments: "Full approval" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v2.0", lastUpdated: "2024-12-15" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v12.0", lastUpdated: "2025-05-02" },
-      { id: "D4", name: "April Status Report", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-02" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-05-02", owner: "Ali", note: "Backend integration 75% complete. Security review scheduled for June. UAT plan being finalised with business stakeholders." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-    spi: 1.05, cpi: 1.04, daysRemaining: 212, daysDelayed: 0, scheduleVariance: "+3 days",
-  },
-  {
-    id: "P004", code: "DIGI-2025-002", deptId: "digital",
-    name: "AI Analytics Platform",
-    pm: "Maram", sponsor: "Haifa",
-    phase: "Initiation", gate: "Gate 1", status: "Not Started", priority: "High",
-    progress: 8, plannedProgress: 15, startDate: "2025-04-01", plannedEnd: "2026-03-31",
-    budget: 12000000, forecast: 12000000, actualCost: 320000,
-    riskLevel: "High", budgetStatus: "On Budget", strategic: "Innovation & Technology",
-    lastUpdate: "2025-04-20", classification: "Transformation",
-    objective: "Build enterprise AI analytics and predictive intelligence platform",
-    businessCase: "Enable data-driven decision making across all business units",
-    projectType: "Enterprise Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-04-05", approver: "Haifa", notes: "New enterprise AI system" },
-      { id: "G2", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G3", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Technical Specification", "Vendor Contract"],
-    milestones: [
-      { id: "M1", name: "Vendor Selection", date: "2025-05-31", status: "In Progress", owner: "Maram" },
-      { id: "M2", name: "Architecture Design", date: "2025-07-31", status: "Upcoming", owner: "Naif" },
-    ],
-    risks: [
-      { id: "R1", title: "AI talent scarcity in market", probability: "High", impact: "High", level: "Critical", owner: "Maram", status: "Open", mitigation: "Partner with specialist vendor", dueDate: "2025-06-01" },
-    ],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "Innovation", kpi: "Predictive Accuracy", baseline: "N/A", target: "85%", current: "N/A", owner: "Maram", realization: 0, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation Approval", status: "Pending", owner: "Haifa", date: null, comments: "" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Draft", version: "v0.3", lastUpdated: "2025-04-18" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Under Review", version: "v1.0", lastUpdated: "2025-04-15" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-04-20", owner: "Maram", note: "Vendor RFP issued. 4 responses received. Evaluation committee formed with IT and Finance." },
-    ],
-    health: { scope: "Amber", schedule: "Amber", budget: "Green", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
-    spi: 0.53, cpi: 1.00, daysRemaining: 335, daysDelayed: 0, scheduleVariance: "-7 days",
-  },
-
-  // OPERATIONS
-  {
-    id: "P005", code: "OPS-2025-001", deptId: "operations",
-    name: "Supply Chain Optimisation",
-    pm: "Adel", sponsor: "Munira",
-    phase: "Execution", gate: "Gate 3", status: "Delayed", priority: "High",
-    progress: 42, plannedProgress: 58, startDate: "2024-10-01", plannedEnd: "2025-09-30",
-    budget: 6500000, forecast: 7200000, actualCost: 3800000,
-    riskLevel: "High", budgetStatus: "Over Budget", strategic: "Operational Excellence",
-    lastUpdate: "2025-04-30", classification: "Operational",
-    objective: "Reduce supply chain costs by 20% and improve delivery performance",
-    businessCase: "Deliver SAR 8M annual savings through process and supplier optimisation",
-    projectType: "Internal Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2024-10-10", approver: "Munira", notes: "Cost > 100K, Duration > 4 weeks" },
-      { id: "G2", status: "Approved", date: "2024-11-30", approver: "Munira", notes: "Approved" },
-      { id: "G3", status: "Approved", date: "2025-02-01", approver: "Munira", notes: "Plan submitted" },
-      { id: "G4", status: "In Progress", date: null, approver: "", notes: "Delayed — supplier issues" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Vendor Contract", "PO", "Invoice"],
-    milestones: [
-      { id: "M1", name: "Process Mapping Complete", date: "2024-12-31", status: "Completed", owner: "Adel" },
-      { id: "M2", name: "Supplier Renegotiation", date: "2025-03-31", status: "Delayed", owner: "Naif" },
-      { id: "M3", name: "System Integration", date: "2025-07-31", status: "Upcoming", owner: "Ali" },
-    ],
-    risks: [
-      { id: "R1", title: "Supplier contract disputes", probability: "High", impact: "Critical", level: "Critical", owner: "Adel", status: "Open", mitigation: "Legal team engaged. Escalated to CFO.", dueDate: "2025-05-15" },
-      { id: "R2", title: "ERP system integration delays", probability: "High", impact: "High", level: "High", owner: "Ali", status: "Open", mitigation: "Dedicated integration sprint team formed", dueDate: "2025-06-30" },
-    ],
-    issues: [
-      { id: "I1", title: "Key supplier refusing contract terms", severity: "Critical", status: "Escalated", owner: "Munira", raised: "2025-03-15", escalated: true },
-      { id: "I2", title: "ERP module delivery 6 weeks late", severity: "High", status: "Open", owner: "Adel", raised: "2025-04-01", escalated: false },
-    ],
-    benefits: [
-      { id: "B1", category: "Cost", kpi: "Annual Savings", baseline: "0", target: "SAR 8M", current: "SAR 1.2M", owner: "Munira", realization: 15, contribution: "High" },
-      { id: "B2", category: "Operations", kpi: "On-Time Delivery Rate", baseline: "72%", target: "92%", current: "76%", owner: "Adel", realization: 20, contribution: "Medium" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Munira", date: "2024-10-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Munira", date: "2024-11-30", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Munira", date: "2025-02-01", comments: "Approved" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-10-05" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-09-20" },
-      { id: "D3", name: "Project Plan", type: "Plan", required: false, status: "Current", version: "v15.0", lastUpdated: "2025-04-30" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-04-30", owner: "Adel", note: "Critical supplier escalation ongoing. Legal resolution expected by May 15. ERP delays impact schedule by estimated 6 weeks. Recovery plan presented to sponsor." },
-    ],
-    health: { scope: "Amber", schedule: "Red", budget: "Red", risk: "Red", quality: "Amber", resource: "Amber", benefits: "Red", governance: "Amber" },
-    spi: 0.72, cpi: 0.81, daysRemaining: 153, daysDelayed: 28, scheduleVariance: "-28 days",
-  },
-
-  // GRC
-  {
-    id: "P006", code: "GRC-2025-001", deptId: "grc",
-    name: "Regulatory Compliance Framework",
-    pm: "Abdulrahman", sponsor: "Bader",
-    phase: "Execution", gate: "Gate 3", status: "On Track", priority: "Critical",
-    progress: 55, plannedProgress: 52, startDate: "2025-01-01", plannedEnd: "2025-12-31",
-    budget: 3200000, forecast: 3100000, actualCost: 1600000,
-    riskLevel: "Medium", budgetStatus: "On Budget", strategic: "Governance & Compliance",
-    lastUpdate: "2025-05-01", classification: "Compliance",
-    objective: "Achieve full regulatory compliance across all business lines",
-    businessCase: "Mitigate SAR 15M regulatory fine exposure and enhance audit readiness",
-    projectType: "Enterprise Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-01-08", approver: "Bader", notes: "Regulatory initiative" },
-      { id: "G2", status: "Approved", date: "2025-02-15", approver: "Bader", notes: "Approved" },
-      { id: "G3", status: "Approved", date: "2025-03-10", approver: "Bader", notes: "Plan submitted" },
-      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Compliance Certificate", "Legal Review"],
-    milestones: [
-      { id: "M1", name: "Gap Assessment Complete", date: "2025-02-28", status: "Completed", owner: "Abdulrahman" },
-      { id: "M2", name: "Policy Framework Published", date: "2025-05-31", status: "In Progress", owner: "Lujain" },
-      { id: "M3", name: "Training Rollout", date: "2025-08-31", status: "Upcoming", owner: "Munira" },
-      { id: "M4", name: "Audit Readiness Sign-off", date: "2025-11-30", status: "Upcoming", owner: "Bader" },
-    ],
-    risks: [
-      { id: "R1", title: "Regulatory changes post-publication", probability: "Medium", impact: "High", level: "High", owner: "Abdulrahman", status: "Open", mitigation: "Monthly regulatory watch process established", dueDate: "Ongoing" },
-    ],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "Compliance", kpi: "Regulatory Compliance Score", baseline: "61%", target: "98%", current: "74%", owner: "Abdulrahman", realization: 35, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Bader", date: "2025-01-08", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Bader", date: "2025-02-15", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Bader", date: "2025-03-10", comments: "Approved" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-05" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-12-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v9.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-05-01" },
-      { id: "D5", name: "Policy Framework v0.8", type: "Governance", required: false, status: "Draft", version: "v0.8", lastUpdated: "2025-04-28" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-05-01", owner: "Abdulrahman", note: "Policy framework 80% complete. Legal review underway. Training content development commenced. On track for May 31 milestone." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-    spi: 1.06, cpi: 1.03, daysRemaining: 244, daysDelayed: 0, scheduleVariance: "+3 days",
-  },
-
-  // HR
-  {
-    id: "P007", code: "HR-2025-001", deptId: "hr",
-    name: "Talent Management System Implementation",
-    pm: "Lujain", sponsor: "Alhanouf",
-    phase: "Execution", gate: "Gate 3", status: "On Track", priority: "High",
-    progress: 68, plannedProgress: 65, startDate: "2024-11-01", plannedEnd: "2025-08-31",
-    budget: 5500000, forecast: 5400000, actualCost: 3500000,
-    riskLevel: "Low", budgetStatus: "On Budget", strategic: "People & Culture",
-    lastUpdate: "2025-04-30", classification: "Operational",
-    objective: "Deploy end-to-end talent management platform across the organisation",
-    businessCase: "Reduce time-to-hire by 35% and improve retention by 20%",
-    projectType: "Internal Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2024-11-05", approver: "Alhanouf", notes: "New enterprise system" },
-      { id: "G2", status: "Approved", date: "2024-12-10", approver: "Alhanouf", notes: "Approved" },
-      { id: "G3", status: "Approved", date: "2025-02-01", approver: "Alhanouf", notes: "Plan submitted" },
-      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Vendor Contract", "UAT Sign-off"],
-    milestones: [
-      { id: "M1", name: "System Configuration", date: "2025-01-31", status: "Completed", owner: "Lujain" },
-      { id: "M2", name: "Data Migration", date: "2025-04-30", status: "Completed", owner: "Ali" },
-      { id: "M3", name: "User Acceptance Testing", date: "2025-06-30", status: "In Progress", owner: "Munira" },
-      { id: "M4", name: "Go-Live", date: "2025-08-15", status: "Upcoming", owner: "Lujain" },
-    ],
-    risks: [
-      { id: "R1", title: "Data quality issues during migration", probability: "Low", impact: "Medium", level: "Medium", owner: "Ali", status: "Mitigated", mitigation: "Data cleansing completed successfully", dueDate: "2025-04-30" },
-    ],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "HR", kpi: "Time-to-Hire (days)", baseline: "45", target: "29", current: "38", owner: "Lujain", realization: 44, contribution: "High" },
-      { id: "B2", category: "HR", kpi: "Employee Retention Rate", baseline: "78%", target: "93%", current: "82%", owner: "Alhanouf", realization: 27, contribution: "Medium" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Alhanouf", date: "2024-11-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Alhanouf", date: "2024-12-10", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf", date: "2025-02-01", comments: "Approved" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-11-02" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-10-25" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v11.0", lastUpdated: "2025-04-30" },
-      { id: "D4", name: "Status Report - April", type: "Status Report", required: false, status: "Submitted", version: "v1.0", lastUpdated: "2025-04-30" },
-      { id: "D5", name: "UAT Plan", type: "Governance", required: false, status: "Approved", version: "v1.0", lastUpdated: "2025-04-20" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-04-30", owner: "Lujain", note: "Data migration completed successfully. UAT phase commenced May 1. 45 test users onboarded. Go-live preparation timeline confirmed." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-    spi: 1.05, cpi: 1.02, daysRemaining: 118, daysDelayed: 0, scheduleVariance: "+3 days",
-  },
-
-  // IT
-  {
-    id: "P008", code: "IT-2025-001", deptId: "it",
-    name: "Cloud Infrastructure Migration",
-    pm: "Naif", sponsor: "Nawaf",
-    phase: "Execution", gate: "Gate 3", status: "At Risk", priority: "Critical",
-    progress: 48, plannedProgress: 55, startDate: "2025-01-01", plannedEnd: "2025-12-31",
-    budget: 15000000, forecast: 16500000, actualCost: 7200000,
-    riskLevel: "High", budgetStatus: "Over Budget", strategic: "Digital Transformation",
-    lastUpdate: "2025-05-01", classification: "Infrastructure",
-    objective: "Migrate 95% of on-premise workloads to cloud infrastructure",
-    businessCase: "Reduce infrastructure costs by 30% and improve system availability to 99.99%",
-    projectType: "Enterprise Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-01-10", approver: "Nawaf", notes: "New enterprise system — cloud migration" },
-      { id: "G2", status: "Approved", date: "2025-02-15", approver: "Nawaf", notes: "Approved with budget caveat" },
-      { id: "G3", status: "Approved", date: "2025-03-20", approver: "Nawaf", notes: "Plan submitted" },
-      { id: "G4", status: "In Progress", date: null, approver: "", notes: "At risk — legacy issues" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Technical Specification", "Security Approval", "Vendor Contract"],
-    milestones: [
-      { id: "M1", name: "Wave 1 Migration (Dev/Test)", date: "2025-03-31", status: "Completed", owner: "Naif" },
-      { id: "M2", name: "Wave 2 Migration (Non-Critical)", date: "2025-06-30", status: "In Progress", owner: "Ali" },
-      { id: "M3", name: "Wave 3 Migration (Critical)", date: "2025-10-31", status: "Upcoming", owner: "Naif" },
-      { id: "M4", name: "Legacy Decommission", date: "2025-12-15", status: "Upcoming", owner: "Nawaf" },
-    ],
-    risks: [
-      { id: "R1", title: "Critical system downtime during migration", probability: "Medium", impact: "Critical", level: "Critical", owner: "Naif", status: "Open", mitigation: "Blue-green deployment strategy implemented", dueDate: "2025-10-31" },
-      { id: "R2", title: "Cloud costs exceeding estimates", probability: "High", impact: "High", level: "High", owner: "Nawaf", status: "Open", mitigation: "FinOps team engaged. Cost governance process established", dueDate: "Ongoing" },
-    ],
-    issues: [
-      { id: "I1", title: "Legacy application incompatibility discovered", severity: "High", status: "In Progress", owner: "Naif", raised: "2025-04-15", escalated: false },
-    ],
-    benefits: [
-      { id: "B1", category: "Cost", kpi: "Infrastructure Cost Reduction", baseline: "0%", target: "30%", current: "8%", owner: "Nawaf", realization: 27, contribution: "High" },
-      { id: "B2", category: "Availability", kpi: "System Uptime", baseline: "99.2%", target: "99.99%", current: "99.7%", owner: "Naif", realization: 54, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Nawaf", date: "2025-01-10", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Nawaf", date: "2025-02-15", comments: "Approved with budget caveat" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Nawaf", date: "2025-03-20", comments: "Approved" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-08" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-12-15" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v14.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Architecture Design", type: "Technical", required: false, status: "Approved", version: "v2.0", lastUpdated: "2025-02-10" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-05-01", owner: "Naif", note: "Wave 2 migration 60% complete. Legacy app compatibility issue being resolved by vendor. FinOps review identifies SAR 1.2M potential savings if right-sizing implemented by Q3." },
-    ],
-    health: { scope: "Green", schedule: "Amber", budget: "Red", risk: "Red", quality: "Green", resource: "Amber", benefits: "Amber", governance: "Green" },
-    spi: 0.87, cpi: 0.86, daysRemaining: 244, daysDelayed: 12, scheduleVariance: "-12 days",
-  },
-
-  // FINANCE
-  {
-    id: "P009", code: "FIN-2025-001", deptId: "finance",
-    name: "Finance Transformation Programme",
-    pm: "Haifa", sponsor: "Bader",
-    phase: "Planning", gate: "Gate 2", status: "On Track", priority: "High",
-    progress: 28, plannedProgress: 25, startDate: "2025-03-01", plannedEnd: "2026-06-30",
-    budget: 9800000, forecast: 9800000, actualCost: 1100000,
-    riskLevel: "Medium", budgetStatus: "On Budget", strategic: "Operational Excellence",
-    lastUpdate: "2025-04-28", classification: "Transformation",
-    objective: "Transform finance function through automation and process standardisation",
-    businessCase: "Reduce month-end close from 12 to 5 days and automate 70% of manual processes",
-    projectType: "Internal Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-03-05", approver: "Bader", notes: "Cost > 100K, new enterprise system" },
-      { id: "G2", status: "Pending", date: null, approver: "", notes: "Gate 2 approval pack in preparation" },
-      { id: "G3", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G4", status: "Pending", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Technical Specification", "Vendor Contract"],
-    milestones: [
-      { id: "M1", name: "Current State Assessment", date: "2025-03-31", status: "Completed", owner: "Haifa" },
-      { id: "M2", name: "Future State Design", date: "2025-06-30", status: "In Progress", owner: "Adel" },
-      { id: "M3", name: "Technology Selection", date: "2025-09-30", status: "Upcoming", owner: "Naif" },
-    ],
-    risks: [
-      { id: "R1", title: "Complexity of ERP integration", probability: "Medium", impact: "High", level: "High", owner: "Haifa", status: "Open", mitigation: "Specialist ERP consultant engaged", dueDate: "2025-09-30" },
-    ],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "Efficiency", kpi: "Month-End Close Duration (days)", baseline: "12", target: "5", current: "12", owner: "Haifa", realization: 0, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Bader", date: "2025-03-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Pending", owner: "Bader", date: null, comments: "" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-03-03" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-02-20" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v4.0", lastUpdated: "2025-04-28" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-04-28", owner: "Haifa", note: "Current state assessment report completed and distributed. Future state workshops scheduled for May and June. Gate 2 approval pack being prepared." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Amber", governance: "Green" },
-    spi: 1.12, cpi: 1.00, daysRemaining: 425, daysDelayed: 0, scheduleVariance: "+8 days",
-  },
-
-  // QUALITY
-  {
-    id: "P010", code: "QUAL-2025-001", deptId: "quality",
-    name: "ISO 9001:2025 Certification",
-    pm: "Munira", sponsor: "Abdulrahman",
-    phase: "Execution", gate: "Gate 3", status: "Completed", priority: "Critical",
-    progress: 100, plannedProgress: 100, startDate: "2024-07-01", plannedEnd: "2025-04-30",
-    budget: 2200000, forecast: 2100000, actualCost: 2050000,
-    riskLevel: "Low", budgetStatus: "On Budget", strategic: "Quality & Excellence",
-    lastUpdate: "2025-05-01", classification: "Compliance",
-    objective: "Achieve ISO 9001:2025 certification across all business units",
-    businessCase: "Required for key client contracts and regulatory requirements",
-    projectType: "Enterprise Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2024-07-05", approver: "Abdulrahman", notes: "Regulatory initiative" },
-      { id: "G2", status: "Approved", date: "2024-08-15", approver: "Abdulrahman", notes: "Approved" },
-      { id: "G3", status: "Approved", date: "2024-10-01", approver: "Abdulrahman", notes: "Plan submitted" },
-      { id: "G4", status: "Approved", date: "2025-04-15", approver: "Abdulrahman", notes: "Certification achieved" },
-      { id: "G5", status: "Approved", date: "2025-05-01", approver: "Abdulrahman", notes: "Closure complete. Excellent delivery." },
-    ],
-    requiredDocs: ["Compliance Certificate"],
-    milestones: [
-      { id: "M1", name: "Gap Analysis", date: "2024-09-30", status: "Completed", owner: "Munira" },
-      { id: "M2", name: "Process Documentation", date: "2024-12-31", status: "Completed", owner: "Lujain" },
-      { id: "M3", name: "Internal Audit", date: "2025-02-28", status: "Completed", owner: "Munira" },
-      { id: "M4", name: "Certification Audit", date: "2025-04-15", status: "Completed", owner: "Abdulrahman" },
-    ],
-    risks: [],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "Quality", kpi: "Certification Achievement", baseline: "Not Certified", target: "Certified", current: "Certified", owner: "Munira", realization: 100, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Abdulrahman", date: "2024-07-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Abdulrahman", date: "2024-08-15", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Abdulrahman", date: "2024-10-01", comments: "Approved" },
-      { id: "A4", gate: "Gate 4", title: "Closure", status: "Approved", owner: "Abdulrahman", date: "2025-05-01", comments: "Certified. Outstanding programme delivery." },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-07-03" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2024-06-25" },
-      { id: "D3", name: "Closure Report", type: "Closure", required: false, status: "Approved", version: "v1.0", lastUpdated: "2025-05-01" },
-      { id: "D4", name: "Lessons Learned", type: "Lessons Learned", required: false, status: "Final", version: "v1.0", lastUpdated: "2025-04-30" },
-      { id: "D5", name: "ISO Certificate", type: "Governance", required: false, status: "Received", version: "v1.0", lastUpdated: "2025-04-25" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-05-01", owner: "Munira", note: "Certification achieved on April 25, 2025. Excellent audit outcome. Closure report approved. Lessons learned documented." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-    spi: 1.00, cpi: 1.02, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "On Time",
-  },
-
-  // PERFORMANCE
-  {
-    id: "P011", code: "PERF-2025-001", deptId: "performance",
-    name: "KPI Management Platform",
-    pm: "Mohammed", sponsor: "Alhanouf",
-    phase: "Execution", gate: "Gate 3", status: "On Track", priority: "High",
-    progress: 58, plannedProgress: 55, startDate: "2025-02-01", plannedEnd: "2025-10-31",
-    budget: 3800000, forecast: 3700000, actualCost: 1900000,
-    riskLevel: "Low", budgetStatus: "On Budget", strategic: "Performance Excellence",
-    lastUpdate: "2025-04-29", classification: "Strategic",
-    objective: "Implement enterprise KPI management and performance reporting platform",
-    businessCase: "Enable real-time performance visibility for all executives and department heads",
-    projectType: "Internal Project",
-    gates: [
-      { id: "G1", status: "Approved", date: "2025-02-05", approver: "Alhanouf", notes: "New enterprise system — KPI platform" },
-      { id: "G2", status: "Approved", date: "2025-03-15", approver: "Alhanouf", notes: "Approved" },
-      { id: "G3", status: "Approved", date: "2025-04-01", approver: "Alhanouf", notes: "Plan submitted" },
-      { id: "G4", status: "In Progress", date: null, approver: "", notes: "" },
-      { id: "G5", status: "Pending", date: null, approver: "", notes: "" },
-    ],
-    requiredDocs: ["Technical Specification"],
-    milestones: [
-      { id: "M1", name: "KPI Library Defined", date: "2025-03-31", status: "Completed", owner: "Mohammed" },
-      { id: "M2", name: "Platform Configuration", date: "2025-06-30", status: "In Progress", owner: "Maram" },
-      { id: "M3", name: "Executive Dashboard Launch", date: "2025-09-15", status: "Upcoming", owner: "Alhanouf" },
-    ],
-    risks: [
-      { id: "R1", title: "Data source integration complexity", probability: "Low", impact: "Medium", level: "Low", owner: "Mohammed", status: "Open", mitigation: "API integration plan reviewed and approved", dueDate: "2025-06-30" },
-    ],
-    issues: [],
-    benefits: [
-      { id: "B1", category: "Performance", kpi: "Executive Reporting Automation", baseline: "20%", target: "90%", current: "35%", owner: "Mohammed", realization: 17, contribution: "High" },
-    ],
-    approvals: [
-      { id: "A1", gate: "Gate 1", title: "Initiation", status: "Approved", owner: "Alhanouf", date: "2025-02-05", comments: "Approved" },
-      { id: "A2", gate: "Gate 2", title: "Planning", status: "Approved", owner: "Alhanouf", date: "2025-03-15", comments: "Approved" },
-      { id: "A3", gate: "Gate 3", title: "Execution", status: "Approved", owner: "Alhanouf", date: "2025-04-01", comments: "Approved" },
-    ],
-    documents: [
-      { id: "D1", name: "Project Charter", type: "Charter", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-02-03" },
-      { id: "D2", name: "Business Case", type: "Business Case", required: true,  status: "Approved", version: "v1.0", lastUpdated: "2025-01-25" },
-      { id: "D3", name: "RAID Log", type: "RAID", required: false, status: "Current", version: "v7.0", lastUpdated: "2025-04-29" },
-    ],
-    updates: [
-      { id: "U1", date: "2025-04-29", owner: "Mohammed", note: "Platform configuration 45% complete. KPI mapping sessions completed with 7 departments. Integration with ERP and BI tools in progress." },
-    ],
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-    spi: 1.05, cpi: 1.03, daysRemaining: 185, daysDelayed: 0, scheduleVariance: "+3 days",
-  },
-];
 
 // ─── COMPUTED METRICS ─────────────────────────────────────────────
 function getDeptStats(deptId, projects) {
@@ -758,26 +145,7 @@ function ipiColor(score) {
   return { color: "#991b1b", bg: "#fee2e2", label: "Poor" };
 }
 
-// ─── SHAREPOINT SERVICE LAYER (swap mock → Graph API here) ─────────
-// Replace these functions with real API calls when connecting SharePoint.
-// Each function signature stays identical so the UI never changes.
-const SPService = {
-  // GET
-  getProjects: async (mockProjects) => mockProjects,
-  // UPSERT
-  saveProject: async (project) => project,
-  // DELETE / ARCHIVE
-  archiveProject: async (id) => id,
-  // Example Graph API call (uncomment when ready):
-  // getProjects: async () => {
-  //   const res = await fetch(
-  //     `https://graph.microsoft.com/v1.0/sites/{siteId}/lists/Projects/items?$expand=fields`,
-  //     { headers: { Authorization: `Bearer ${token}` } }
-  //   );
-  //   const data = await res.json();
-  //   return data.value.map(item => item.fields);
-  // },
-};
+// SPService and isUsingMock imported from ./services/sharepoint.js
 
 // ─── HELPERS ──────────────────────────────────────────────────────
 const fmt = (n) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}K` : n;
@@ -881,12 +249,6 @@ const GateTracker = ({ gates }) => {
 };
 
 // ─── PROJECT TYPE BADGE ───────────────────────────────────────────
-const PROJECT_TYPES = [
-  "Business Project",
-  "Enterprise Project",
-  "Internal Project",
-];
-
 const TypeBadge = ({ type }) => {
   const styles = {
     "Business Project":   { bg: "#dbeafe", text: "#1e40af", icon: "🔵" },
@@ -1066,6 +428,16 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark }) => {
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <span style={{ fontSize: 12, color: T.muted }}>{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
+
+        {/* ── Data Source Badge ── */}
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+          background: isUsingMock() ? "#fef9c3" : "#dcfce7",
+          color:      isUsingMock() ? "#854d0e" : "#15803d",
+          border:     `1px solid ${isUsingMock() ? "#fde68a" : "#86efac"}`,
+        }}>
+          {isUsingMock() ? "MOCK" : "SharePoint"}
+        </span>
 
         {/* ── Dark Mode Toggle ── */}
         <button onClick={toggleDark} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -2001,8 +1373,6 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
 };
 
 // ─── DEPARTMENT CRUD COMPONENT ────────────────────────────────────
-const ICON_OPTIONS = ["⚡","💻","⚙️","🛡️","👥","🖥️","💰","✅","📈","🏗️","📊","🔬","📣","🤝","🌐","🔒","📦","🧪","🏆","💡"];
-
 const DeptCRUD = ({ projects }) => {
   const { departments, addDept, updateDept, deleteDept } = useDepts();
   const T = useT();
@@ -2792,10 +2162,33 @@ export default function App() {
     setDark(themeStore.dark);      // keep local state in sync for Header prop
   };
   const activeT = themeStore.T;
-  const [projects, setProjects] = useState(PROJECTS);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  // ── Bootstrap: load projects + departments from SP (or mock) ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [projs, depts] = await Promise.all([
+          SPService.getProjects(),
+          SPService.getDepartments(),
+        ]);
+        if (cancelled) return;
+        setProjects(projs);
+        setDepartments(depts);
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message || "Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Departments live state ─────────────────────────────────────
-  const [departments, setDepartments] = useState(DEPARTMENTS);
+  const [departments, setDepartments] = useState([]);
   const addDept    = useCallback((d) => setDepartments(prev => [...prev, d]), []);
   const updateDept = useCallback((id, data) => setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...data } : d)), []);
   const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
@@ -2875,6 +2268,27 @@ export default function App() {
   };
 
   const [title, subtitle] = getTitle();
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: activeT.bg, flexDirection: "column", gap: 16 }}>
+        <div style={{ width: 48, height: 48, border: `4px solid ${activeT.border}`, borderTop: `4px solid ${activeT.primary}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <p style={{ color: activeT.muted, fontSize: 14, margin: 0 }}>{isUsingMock() ? "Loading mock data…" : "Connecting to SharePoint…"}</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: activeT.bg, flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 40 }}>⚠️</div>
+        <h2 style={{ color: activeT.text, margin: 0 }}>Failed to load data</h2>
+        <p style={{ color: activeT.muted, fontSize: 13, margin: 0 }}>{loadError}</p>
+        <button onClick={() => window.location.reload()} style={{ marginTop: 8, padding: "8px 20px", background: activeT.primary, color: activeT.btnPrimText || "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Retry</button>
+      </div>
+    );
+  }
 
   return (
     <ThemeContext.Provider value={{ T: activeT, dark }}>
