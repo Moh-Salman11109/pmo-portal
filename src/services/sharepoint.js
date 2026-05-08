@@ -6,10 +6,10 @@ import { MOCK_PROJECTS, MOCK_DEPARTMENTS } from "../data/mockData.js";
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 
 export const SP_CONFIG = {
-  siteUrl:          import.meta.env.VITE_SP_SITE_URL || "",
-  projectsListName: "PMO_Projects",
-  deptsListName:    "PMO_Departments",
-  pageSize:         500,
+  siteUrl:          import.meta.env.VITE_SP_SITE_URL          || "",
+  projectsListName: import.meta.env.VITE_SP_PROJECTS_LIST     || "PMO_Projects",
+  deptsListName:    import.meta.env.VITE_SP_DEPARTMENTS_LIST   || "PMO_Departments",
+  pageSize:         Number(import.meta.env.VITE_SP_PAGE_SIZE)  || 500,
 };
 
 // ─── FIELD MAP ───────────────────────────────────────────────────

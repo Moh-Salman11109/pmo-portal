@@ -2163,6 +2163,7 @@ export default function App() {
   };
   const activeT = themeStore.T;
   const [projects, setProjects] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
@@ -2186,9 +2187,6 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, []);
-
-  // ── Departments live state ─────────────────────────────────────
-  const [departments, setDepartments] = useState([]);
   const addDept    = useCallback((d) => setDepartments(prev => [...prev, d]), []);
   const updateDept = useCallback((id, data) => setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...data } : d)), []);
   const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
