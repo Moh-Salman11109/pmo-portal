@@ -75,6 +75,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Amber", benefits: "Green", governance: "Green" },
     spi: 1.06, cpi: 1.03, daysRemaining: 243, daysDelayed: 0, scheduleVariance: "+4 days",
+    updateCadence: "Biweekly", nextUpdateDue: "2025-05-15", dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-05-01",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-05-01",
+    lastSubmittedBy: "Mohammed", lastSubmittedDate: "2025-05-01",
   },
   {
     id: "P002", code: "STRAT-2025-002", deptId: "strategy",
@@ -124,6 +128,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Amber", schedule: "Red", budget: "Red", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
     spi: 0.78, cpi: 0.88, daysRemaining: 185, daysDelayed: 18, scheduleVariance: "-18 days",
+    updateCadence: "Weekly", nextUpdateDue: "2025-05-07", dataReliabilityFlag: "Pending",
+    lastValidatedUpdate: null,
+    pmoStatus: "Returned", pmoValidationNote: "Gate 2 returned by sponsor. Revise scope and budget estimates before resubmission. Risk register must be updated.", pmoValidatedBy: "", pmoValidatedDate: null,
+    lastSubmittedBy: "Abdulrahman", lastSubmittedDate: "2025-04-28",
   },
 
   // DIGITAL
@@ -178,6 +186,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.05, cpi: 1.04, daysRemaining: 212, daysDelayed: 0, scheduleVariance: "+3 days",
+    updateCadence: "Biweekly", nextUpdateDue: "2025-05-16", dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-05-02",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-05-02",
+    lastSubmittedBy: "Ali", lastSubmittedDate: "2025-05-02",
   },
   {
     id: "P004", code: "DIGI-2025-002", deptId: "digital",
@@ -222,6 +234,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Amber", schedule: "Amber", budget: "Green", risk: "Red", quality: "Amber", resource: "Red", benefits: "Amber", governance: "Amber" },
     spi: 0.53, cpi: 1.00, daysRemaining: 335, daysDelayed: 0, scheduleVariance: "-7 days",
+    updateCadence: "Monthly", nextUpdateDue: "2025-06-01", dataReliabilityFlag: "Pending",
+    lastValidatedUpdate: null,
+    pmoStatus: "Draft", pmoValidationNote: "", pmoValidatedBy: "", pmoValidatedDate: null,
+    lastSubmittedBy: "", lastSubmittedDate: null,
   },
 
   // OPERATIONS
@@ -278,6 +294,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Amber", schedule: "Red", budget: "Red", risk: "Red", quality: "Amber", resource: "Amber", benefits: "Red", governance: "Amber" },
     spi: 0.72, cpi: 0.81, daysRemaining: 153, daysDelayed: 28, scheduleVariance: "-28 days",
+    updateCadence: "Weekly", nextUpdateDue: "2025-05-07", dataReliabilityFlag: "Pending",
+    lastValidatedUpdate: null,
+    pmoStatus: "Returned", pmoValidationNote: "Update does not address the supplier contract escalation. Provide resolution timeline and recovery plan before PMO can validate.", pmoValidatedBy: "", pmoValidatedDate: null,
+    lastSubmittedBy: "Adel", lastSubmittedDate: "2025-04-30",
   },
 
   // GRC
@@ -331,6 +351,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.06, cpi: 1.03, daysRemaining: 244, daysDelayed: 0, scheduleVariance: "+3 days",
+    updateCadence: "Biweekly", nextUpdateDue: "2025-05-15", dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-05-01",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-05-01",
+    lastSubmittedBy: "Abdulrahman", lastSubmittedDate: "2025-05-01",
   },
 
   // HR
@@ -385,6 +409,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.05, cpi: 1.02, daysRemaining: 118, daysDelayed: 0, scheduleVariance: "+3 days",
+    updateCadence: "Biweekly", nextUpdateDue: "2025-05-14", dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-04-30",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-04-30",
+    lastSubmittedBy: "Lujain", lastSubmittedDate: "2025-04-30",
   },
 
   // IT
@@ -441,6 +469,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Amber", budget: "Red", risk: "Red", quality: "Green", resource: "Amber", benefits: "Amber", governance: "Green" },
     spi: 0.87, cpi: 0.86, daysRemaining: 244, daysDelayed: 12, scheduleVariance: "-12 days",
+    updateCadence: "Weekly", nextUpdateDue: "2025-05-08", dataReliabilityFlag: "Pending",
+    lastValidatedUpdate: null,
+    pmoStatus: "Submitted", pmoValidationNote: "", pmoValidatedBy: "", pmoValidatedDate: null,
+    lastSubmittedBy: "Naif", lastSubmittedDate: "2025-05-01",
   },
 
   // FINANCE
@@ -490,6 +522,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Green", benefits: "Amber", governance: "Green" },
     spi: 1.12, cpi: 1.00, daysRemaining: 425, daysDelayed: 0, scheduleVariance: "+8 days",
+    updateCadence: "Biweekly", nextUpdateDue: "2025-05-12", dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-04-28",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-04-28",
+    lastSubmittedBy: "Haifa", lastSubmittedDate: "2025-04-28",
   },
 
   // QUALITY
@@ -542,6 +578,10 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.00, cpi: 1.02, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "On Time",
+    updateCadence: "Monthly", nextUpdateDue: null, dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-05-01",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-05-01",
+    lastSubmittedBy: "Munira", lastSubmittedDate: "2025-05-01",
   },
 
   // PERFORMANCE
@@ -592,5 +632,9 @@ export const MOCK_PROJECTS = [
     ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     spi: 1.05, cpi: 1.03, daysRemaining: 185, daysDelayed: 0, scheduleVariance: "+3 days",
+    updateCadence: "Biweekly", nextUpdateDue: "2025-05-13", dataReliabilityFlag: "Trusted",
+    lastValidatedUpdate: "2025-04-29",
+    pmoStatus: "Validated", pmoValidationNote: "", pmoValidatedBy: "PMO Team", pmoValidatedDate: "2025-04-29",
+    lastSubmittedBy: "Mohammed", lastSubmittedDate: "2025-04-29",
   },
 ];

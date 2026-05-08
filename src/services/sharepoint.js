@@ -53,6 +53,13 @@ export const SP_FIELD_MAP = {
   nextUpdateDue:       "NextUpdateDue",
   lastValidatedUpdate: "LastValidatedUpdate",
   dataReliabilityFlag: "DataReliabilityFlag",
+  // PMO Validation Layer — SP column names configurable here, no UI changes needed
+  pmoStatus:           "PMOStatus",
+  pmoValidationNote:   "PMOValidationNote",
+  pmoValidatedBy:      "PMOValidatedBy",
+  pmoValidatedDate:    "PMOValidatedDate",
+  lastSubmittedBy:     "LastSubmittedBy",
+  lastSubmittedDate:   "LastSubmittedDate",
   // JSON columns — stored as multi-line text in SP, parsed with safeJSON()
   gates:               "GatesJSON",
   milestones:          "MilestonesJSON",
@@ -125,10 +132,17 @@ export function mapSPItemToProject(item) {
     businessCase:        item[f.businessCase]       || "",
     // Lifecycle
     archived:            Boolean(item[f.archived]),
-    updateCadence:       item[f.updateCadence]      || "Biweekly",
+    updateCadence:       item[f.updateCadence]        || "Biweekly",
     nextUpdateDue:       safeDate(item[f.nextUpdateDue]),
     lastValidatedUpdate: safeDate(item[f.lastValidatedUpdate]),
-    dataReliabilityFlag: item[f.dataReliabilityFlag] || "Pending",
+    dataReliabilityFlag: item[f.dataReliabilityFlag]  || "Pending",
+    // PMO Validation Layer
+    pmoStatus:           item[f.pmoStatus]            || "Draft",
+    pmoValidationNote:   item[f.pmoValidationNote]    || "",
+    pmoValidatedBy:      item[f.pmoValidatedBy]       || "",
+    pmoValidatedDate:    safeDate(item[f.pmoValidatedDate]),
+    lastSubmittedBy:     item[f.lastSubmittedBy]      || "",
+    lastSubmittedDate:   safeDate(item[f.lastSubmittedDate]),
     // JSON sub-objects
     gates:               safeJSON(item[f.gates],       []),
     milestones:          safeJSON(item[f.milestones],  []),
