@@ -501,8 +501,30 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
 const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick }) => {
   const T = useT();
   const bp = useBp();
+  const { departments } = useDepts();
   const isMobile = bp === "mobile";
   const isDesktop = bp === "desktop";
+
+  const handleBack = () => {
+    if (route.view === "project") {
+      if (route.from === "department") return setRoute({ view: "department", deptId: route.deptId });
+      if (route.from === "projects")   return setRoute({ view: "projects" });
+      if (route.from === "admin")      return setRoute({ view: "admin" });
+    }
+    setRoute({ view: "home" });
+  };
+
+  const backLabel = () => {
+    if (route.view === "project") {
+      if (route.from === "department") {
+        const dept = departments.find(d => d.id === route.deptId);
+        return `← Back to ${dept?.name || "Department"}`;
+      }
+      if (route.from === "projects") return "← Back to All Projects";
+      if (route.from === "admin")    return "← Back to Admin";
+    }
+    return "← Back";
+  };
 
   return (
     <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: isMobile ? "12px 16px" : "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
@@ -512,7 +534,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
           <button onClick={onMenuClick} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 10px", fontSize: 18, cursor: "pointer", color: T.text, lineHeight: 1, flexShrink: 0 }}>☰</button>
         )}
         {route.view !== "home" && (
-          <button onClick={() => setRoute({ view: "home" })} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.muted, flexShrink: 0 }}>← Back</button>
+          <button onClick={handleBack} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.muted, flexShrink: 0, whiteSpace: "nowrap" }}>{backLabel()}</button>
         )}
         <div style={{ minWidth: 0 }}>
           <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 800, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</h1>
@@ -872,7 +894,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
             </thead>
             <tbody>
               {filtered.map((p, i) => (
-                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg, transition: "background 0.1s" }}
+                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "department", deptId })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg, transition: "background 0.1s" }}
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
                   onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : themeStore.T.bg}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>{p.code}</td>
@@ -908,7 +930,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
           {filtered.map(p => (
-            <div key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s" }}
+            <div key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "department", deptId })} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s" }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,57,50,0.1)"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
@@ -1872,7 +1894,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => openEdit(p)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
-                      <button onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ background: "#e8f5f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: T.primary, fontWeight: 600 }}>View</button>
+                      <button onClick={() => setRoute({ view: "project", projectId: p.id, from: "admin" })} style={{ background: "#e8f5f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: T.primary, fontWeight: 600 }}>View</button>
                       <button onClick={() => handleDelete(p.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Archive</button>
                     </div>
                   </td>
@@ -2245,7 +2267,7 @@ const AllProjectsView = ({ projects, setRoute }) => {
             {filtered.map((p, i) => {
               const dept = departments.find(d => d.id === p.deptId);
               return (
-                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg }}
+                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "projects" })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg }}
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
                   onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : themeStore.T.bg}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
