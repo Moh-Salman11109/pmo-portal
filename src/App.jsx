@@ -88,8 +88,6 @@ const useT = () => {
 const ThemeContext = createContext(null);
 const useDark = () => themeStore.dark;
 
-let T = THEMES.light;
-
 // ─── DATA LAYER ─────────────────────────────────────────────────
 const DEPARTMENTS = [
   { id: "strategy", name: "Strategy & PMO", icon: "⚡", color: "#003932" },
@@ -176,12 +174,12 @@ const PROJECTS = [
       { id: "A4", gate: "Gate 4", title: "Execution Gate", status: "In Progress", owner: "Alhanouf", date: null, comments: "" },
     ],
     documents: [
-      { id: "D1", name: "Project Charter",  type: "Charter",       required: true,  required: true,  status: "Approved",  version: "v2.1", lastUpdated: "2025-02-01" },
-      { id: "D2", name: "Business Case",    type: "Business Case", required: true,  required: true,  status: "Approved",  version: "v1.3", lastUpdated: "2025-01-20" },
-      { id: "D3", name: "Resource Plan",    type: "Resource Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-02-15" },
-      { id: "D4", name: "Vendor Contract",  type: "Vendor Contract",required: true, status: "Draft",     version: "v0.2", lastUpdated: "2025-04-10" },
-      { id: "D5", name: "Project Plan",    type: "Project Plan", required: true,  status: "Approved",  version: "v1.0", lastUpdated: "2025-03-20" },
-      { id: "D6", name: "Closure E-Document", type: "Closure",       required: true,  required: true,  status: "Pending",   version: "",     lastUpdated: "" },
+      { id: "D1", name: "Project Charter",     type: "Charter",        required: true, status: "Approved", version: "v2.1", lastUpdated: "2025-02-01" },
+      { id: "D2", name: "Business Case",       type: "Business Case",  required: true, status: "Approved", version: "v1.3", lastUpdated: "2025-01-20" },
+      { id: "D3", name: "Resource Plan",       type: "Resource Plan",  required: true, status: "Approved", version: "v1.0", lastUpdated: "2025-02-15" },
+      { id: "D4", name: "Vendor Contract",     type: "Vendor Contract",required: true, status: "Draft",    version: "v0.2", lastUpdated: "2025-04-10" },
+      { id: "D5", name: "Project Plan",        type: "Project Plan",   required: true, status: "Approved", version: "v1.0", lastUpdated: "2025-03-20" },
+      { id: "D6", name: "Closure E-Document",  type: "Closure",        required: true, status: "Pending",  version: "",     lastUpdated: "" },
     ],
     updates: [
       { id: "U1", date: "2025-05-01", owner: "Mohammed", note: "Milestone 2 on track. Vendor contract escalated to sponsor for resolution. Q3 resource pipeline confirmed with HR." },
@@ -755,7 +753,7 @@ function calcDeptIPI(deptId, projects) {
 // IPI colour band
 function ipiColor(score) {
   if (score >= 90) return { color: "#15803d", bg: "#dcfce7", label: "Excellent" };
-  if (score >= 70) return { color: T.primary, bg: "#e8f5f0", label: "Good" };
+  if (score >= 70) return { color: themeStore.T.primary, bg: "#e8f5f0", label: "Good" };
   if (score >= 55) return { color: "#854d0e", bg: "#fef9c3", label: "Fair" };
   return { color: "#991b1b", bg: "#fee2e2", label: "Poor" };
 }
@@ -1067,7 +1065,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark }) => {
         </div>
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: T.muted }}>May 2025</span>
+        <span style={{ fontSize: 12, color: T.muted }}>{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
 
         {/* ── Dark Mode Toggle ── */}
         <button onClick={toggleDark} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -1149,7 +1147,7 @@ const HomeView = ({ projects, setRoute }) => {
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}> Hello World 😒</h1>
-        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Real-time portfolio overview across all departments · May 2025</p>
+        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Real-time portfolio overview across all departments · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
       </div>
 
       {/* KPIs */}
@@ -1425,7 +1423,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}>
-                    {(() => { const sc = ipiColor(calcProjectIPI(p)); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{calcProjectIPI(p)}</span>; })()}
+                    {(() => { const ipiVal = calcProjectIPI(p); const sc = ipiColor(ipiVal); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipiVal}</span>; })()}
                   </td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={p.riskLevel} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
@@ -1485,11 +1483,11 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   // ── IPI ──────────────────────────────────────────────────────────
   const ipi = calcProjectIPI(project);
   const ipiC = ipiColor(ipi);
-  const docsTotal = project.documents?.length || 0;
-  const docsReady = project.documents?.filter(d =>
+  const reqDocs = project.documents?.filter(d => d.required === true) ?? [];
+  const docsReady = reqDocs.filter(d =>
     ["Approved","Final","Received","Current","Submitted"].includes(d.status)
-  ).length || 0;
-  const docsCompliance = docsTotal > 0 ? Math.round((docsReady / docsTotal) * 100) : 0;
+  ).length;
+  const docsCompliance = reqDocs.length > 0 ? Math.round((docsReady / reqDocs.length) * 100) : 0;
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
@@ -2216,6 +2214,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({});
   const [toast, setToast] = useState(null);
+  const [confirmDeleteForever, setConfirmDeleteForever] = useState(null);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -2271,6 +2270,23 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
       {toast && (
         <div style={{ position: "fixed", top: 20, right: 20, zIndex: 1000, background: toast.type === "error" ? "#dc2626" : T.primary, color: "#fff", padding: "12px 20px", borderRadius: 12, fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
           {toast.type === "error" ? "⚠ " : "✓ "}{toast.msg}
+        </div>
+      )}
+
+      {confirmDeleteForever && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: T.surface, borderRadius: 16, padding: 32, width: 420, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: T.text }}>Delete Permanently?</h3>
+            <p style={{ margin: "0 0 24px", color: T.muted, fontSize: 13 }}>
+              This will permanently delete <strong>{projects.find(p => p.id === confirmDeleteForever)?.name}</strong>. This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button onClick={() => setConfirmDeleteForever(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 24px", fontSize: 13, cursor: "pointer", fontWeight: 600, color: T.text }}>Cancel</button>
+              <button onClick={() => { deleteForever(confirmDeleteForever); showToast(`Project deleted permanently`, "error"); setConfirmDeleteForever(null); }}
+                style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Delete Forever</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2440,7 +2456,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
                           ↩ Restore
                         </button>
                         {/* Delete Forever */}
-                        <button onClick={() => { if (window.confirm(`Delete "${p.name}" permanently? This cannot be undone.`)) { deleteForever(p.id); showToast(`"${p.name}" deleted permanently`, "error"); }}}
+                        <button onClick={() => setConfirmDeleteForever(p.id)}
                           style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
                           🗑 Delete Forever
                         </button>
@@ -2789,9 +2805,7 @@ export default function App() {
 
   // ── CRUD helpers passed down to AdminView ──────────────────────
   const addProject = useCallback((data) => {
-    const newId = `P${String(projects.length + 1).padStart(3, "0")}`;
     const today = new Date().toISOString().split("T")[0];
-    // Build required documents list
     const mandatoryDocs = [
       { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
       { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
@@ -2803,21 +2817,28 @@ export default function App() {
     const defaultGates = GATE_DEFS.map(g => ({
       id: g.id, status: "Pending", date: null, approver: "", notes: ""
     }));
-    setProjects(prev => [...prev, {
-      ...data,
-      id: newId,
-      projectType: data.projectType || "Internal Project",
-      gates: defaultGates,
-      milestones: [], risks: [], issues: [], benefits: [],
-      approvals: [], updates: [],
-      documents: [...mandatoryDocs, ...optionalDocs],
-      health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-      spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
-      scheduleVariance: "0", actualCost: 0,
-      forecast: Number(data.budget),
-      lastUpdate: today,
-    }]);
-  }, [projects.length]);
+    setProjects(prev => {
+      const maxNum = prev.reduce((max, p) => {
+        const n = parseInt(p.id.replace(/\D/g, ""), 10);
+        return isNaN(n) ? max : Math.max(max, n);
+      }, 0);
+      const newId = `P${String(maxNum + 1).padStart(3, "0")}`;
+      return [...prev, {
+        ...data,
+        id: newId,
+        projectType: data.projectType || "Internal Project",
+        gates: defaultGates,
+        milestones: [], risks: [], issues: [], benefits: [],
+        approvals: [], updates: [],
+        documents: [...mandatoryDocs, ...optionalDocs],
+        health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
+        spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
+        scheduleVariance: "0", actualCost: 0,
+        forecast: Number(data.budget),
+        lastUpdate: today,
+      }];
+    });
+  }, []);
 
   const updateProject = useCallback((id, data) => {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data, lastUpdate: new Date().toISOString().split("T")[0] } : p));
