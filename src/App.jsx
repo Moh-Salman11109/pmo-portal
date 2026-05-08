@@ -1,6 +1,6 @@
 ﻿
 import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, AreaChart, Area } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
 import { SPService, isUsingMock } from "./services/sharepoint.js";
 
@@ -224,7 +224,93 @@ const riskColor = {
   "Low": { bg: "#dcfce7", text: "#15803d" },
 };
 
+const TODAY = new Date().toISOString().split("T")[0];
+
+const exportCSV = (rows, filename, deptMap = {}) => {
+  const hdrs = ["Code","Project Name","Department","PM","Sponsor","Phase","Status","Progress %","Risk Level","Budget (SAR)","Actual Cost (SAR)","Budget Status","Gate","Start Date","Planned End"];
+  const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [
+    hdrs.join(","),
+    ...rows.map(p => [
+      p.code, esc(p.name), esc(deptMap[p.deptId] || p.deptId), esc(p.pm), esc(p.sponsor),
+      p.phase, p.status, p.progress, p.riskLevel, p.budget, p.actualCost,
+      p.budgetStatus, p.gate, p.startDate || "", p.plannedEnd || "",
+    ].join(",")),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  Object.assign(document.createElement("a"), { href: url, download: filename }).click();
+  URL.revokeObjectURL(url);
+};
+
 // ─── UI COMPONENTS ───────────────────────────────────────────────
+// ─── RISK MATRIX COMPONENT ───────────────────────────────────────
+const RiskMatrix = ({ risks }) => {
+  const T = useT();
+  const PROBS = ["High", "Medium", "Low"];
+  const IMPACTS = ["Low", "Medium", "High"];
+
+  const normLevel = v => {
+    const s = String(v || "").toLowerCase();
+    if (s.includes("critical") || s.includes("very") || s.includes("high")) return "High";
+    if (s.includes("medium") || s.includes("mod")) return "Medium";
+    return "Low";
+  };
+
+  const cellMeta = (prob, impact) => {
+    const score = (PROBS.length - 1 - PROBS.indexOf(prob)) + IMPACTS.indexOf(impact);
+    if (score >= 3) return { bg: "#fee2e2", border: "#dc2626" };
+    if (score === 2) return { bg: "#fef3c7", border: "#f59e0b" };
+    if (score === 1) return { bg: "#fef9c3", border: "#eab308" };
+    return { bg: "#dcfce7", border: "#16a34a" };
+  };
+
+  const inCell = (prob, impact) =>
+    risks.filter(r => normLevel(r.probability) === prob && normLevel(r.impact) === impact);
+
+  const items = [];
+  items.push(<div key="c0" />);
+  IMPACTS.forEach(impact => items.push(
+    <div key={`hi-${impact}`} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: T.muted, padding: "4px 0", textTransform: "uppercase", letterSpacing: "0.05em" }}>{impact}</div>
+  ));
+  PROBS.forEach(prob => {
+    items.push(
+      <div key={`lbl-${prob}`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{prob}</div>
+    );
+    IMPACTS.forEach(impact => {
+      const meta = cellMeta(prob, impact);
+      const cellRisks = inCell(prob, impact);
+      items.push(
+        <div key={`${prob}-${impact}`} style={{ background: meta.bg, border: `2px solid ${meta.border}`, borderRadius: 8, minHeight: 60, padding: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+          {cellRisks.map(r => (
+            <span key={r.id} title={r.title} style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 6, background: "rgba(255,255,255,0.75)", color: "#1f2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+              {r.title.length > 22 ? r.title.slice(0, 20) + "…" : r.title}
+            </span>
+          ))}
+        </div>
+      );
+    });
+  });
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Risk Matrix</h3>
+        <span style={{ fontSize: 11, color: T.muted }}>Probability × Impact</span>
+      </div>
+      <div style={{ display: "flex", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>PROBABILITY</span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 1fr 1fr", gap: 6 }}>{items}</div>
+          <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 6 }}>IMPACT</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── GATE TRACKER COMPONENT ──────────────────────────────────────
 const GateTracker = ({ gates }) => {
   const T = useT();
@@ -435,6 +521,11 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
     if (!isDesktop) onClose();
   };
 
+  const attnCount = useMemo(
+    () => projects.filter(p => !p.archived && (p.status === "Delayed" || p.riskLevel === "Critical")).length,
+    [projects]
+  );
+
   const sidebarStyle = isDesktop
     ? { width: 220, minWidth: 220, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, flexShrink: 0 }
     : { width: 260, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "fixed", top: 0, left: 0, zIndex: 100, transform: open ? "translateX(0)" : "translateX(-100%)" };
@@ -466,7 +557,11 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
               color: route.view === item.route ? T.accent : T.secondary, cursor: "pointer", fontSize: 13, fontWeight: route.view === item.route ? 600 : 400,
               marginBottom: 2, transition: "all 0.15s", textAlign: "left"
             }}>
-              <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
+              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.route === "projects" && attnCount > 0 && (
+                <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 10, lineHeight: "18px" }}>{attnCount}</span>
+              )}
             </button>
           ))}
           <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
@@ -481,7 +576,14 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
               }}>
                 <span style={{ fontSize: 14 }}>{d.icon}</span>
                 <span style={{ flex: 1 }}>{d.name}</span>
-                <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>{stats.total}</span>
+                {(() => {
+                  const del = projects.filter(p => !p.archived && p.deptId === d.id && p.status === "Delayed").length;
+                  return (
+                    <span style={{ background: del > 0 ? "#dc2626" : "rgba(255,255,255,0.1)", color: del > 0 ? "#fff" : T.light, fontSize: 10, fontWeight: del > 0 ? 700 : 400, padding: "1px 6px", borderRadius: 10 }}>
+                      {del > 0 ? `${del}⚠` : stats.total}
+                    </span>
+                  );
+                })()}
               </button>
             );
           })}
@@ -498,18 +600,43 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
 };
 
 // ─── HEADER ──────────────────────────────────────────────────────
-const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick }) => {
+const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick, projects }) => {
   const T = useT();
   const bp = useBp();
   const { departments } = useDepts();
   const isMobile = bp === "mobile";
   const isDesktop = bp === "desktop";
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 2) return [];
+    const q = searchQuery.toLowerCase();
+    return (projects || [])
+      .filter(p => !p.archived)
+      .filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q) ||
+        (p.pm || "").toLowerCase().includes(q) ||
+        (departments.find(d => d.id === p.deptId)?.name || "").toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [searchQuery, projects, departments]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handler = (e) => { if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); } };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [searchOpen]);
+
   const handleBack = () => {
     if (route.view === "project") {
       if (route.from === "department") return setRoute({ view: "department", deptId: route.deptId });
       if (route.from === "projects")   return setRoute({ view: "projects" });
       if (route.from === "admin")      return setRoute({ view: "admin" });
+      if (route.from === "search")     return setRoute({ view: "projects" });
     }
     setRoute({ view: "home" });
   };
@@ -522,6 +649,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
       }
       if (route.from === "projects") return "← Back to All Projects";
       if (route.from === "admin")    return "← Back to Admin";
+      if (route.from === "search")   return "← Back to All Projects";
     }
     return "← Back";
   };
@@ -542,11 +670,64 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
         </div>
       </div>
 
+      {/* ── Global Search Modal ── */}
+      {searchOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80 }}
+          onClick={() => { setSearchOpen(false); setSearchQuery(""); }}>
+          <div style={{ width: "min(600px, 90vw)", background: T.surface, borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", overflow: "hidden" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", padding: "14px 20px", borderBottom: `1px solid ${T.border}`, gap: 10 }}>
+              <span style={{ fontSize: 18, color: T.muted }}>🔍</span>
+              <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search projects by name, code, PM, or department…"
+                style={{ flex: 1, border: "none", outline: "none", fontSize: 15, background: "transparent", color: T.text }} />
+              <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ maxHeight: 420, overflowY: "auto" }}>
+              {searchResults.length > 0 ? searchResults.map(p => {
+                const dept = departments.find(d => d.id === p.deptId);
+                return (
+                  <div key={p.id} onClick={() => { setRoute({ view: "project", projectId: p.id, from: "search" }); setSearchOpen(false); setSearchQuery(""); }}
+                    style={{ padding: "12px 20px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", transition: "background 0.1s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.cardHover}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{p.name}</div>
+                      <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                        <span style={{ color: T.primary, fontWeight: 700 }}>{p.code}</span>
+                        {dept && <> · {dept.icon} {dept.name}</>}
+                        {p.pm && <> · {p.pm}</>}
+                      </div>
+                    </div>
+                    <Badge status={p.status} />
+                  </div>
+                );
+              }) : (
+                <div style={{ padding: "32px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>
+                  {searchQuery.length >= 2 ? "No projects found" : "Type at least 2 characters to search"}
+                </div>
+              )}
+            </div>
+            {searchResults.length > 0 && (
+              <div style={{ padding: "10px 20px", borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.muted }}>
+                {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} · Press Esc to close
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: isMobile ? 6 : 10, alignItems: "center", flexShrink: 0 }}>
         {/* Date — hidden on mobile */}
         {isDesktop && (
           <span style={{ fontSize: 12, color: T.muted }}>{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
         )}
+
+        {/* Search Button */}
+        <button onClick={() => setSearchOpen(true)} title="Search projects (Ctrl+K)"
+          style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: isMobile ? "6px 10px" : "6px 12px", fontSize: 16, cursor: "pointer", color: T.muted, lineHeight: 1, display: "flex", alignItems: "center", gap: 4 }}>
+          🔍{!isMobile && <span style={{ fontSize: 12, color: T.muted }}>Search</span>}
+        </button>
 
         {/* Data Source Badge */}
         <span style={{
@@ -585,7 +766,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
 };
 
 // ─── HOME / PORTFOLIO OVERVIEW ────────────────────────────────────
-const HomeView = ({ projects, setRoute }) => {
+const HomeView = ({ projects, setRoute, loadedAt }) => {
   const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
@@ -633,7 +814,10 @@ const HomeView = ({ projects, setRoute }) => {
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 26, fontWeight: 900, color: T.text }}>Enterprise Portfolio Dashboard</h1>
-        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Real-time portfolio overview across all departments · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>
+          Real-time portfolio overview across all departments · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+          {loadedAt && <span style={{ color: T.accent, fontWeight: 600 }}> · Synced {loadedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>}
+        </p>
       </div>
 
       {/* KPIs */}
@@ -869,6 +1053,10 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
           <option value="All">All Types</option>
           {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
+        <button onClick={() => { const dm = Object.fromEntries([...(departments || [])].map(d => [d.id, d.name])); exportCSV(filtered, `${dept?.name?.replace(/\s+/g,"-") || "dept"}-${TODAY}.csv`, dm); }}
+          style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>
+          ↓ Export CSV
+        </button>
         <div style={{ display: "flex", gap: 4 }}>
           {["table", "card"].map(v => (
             <button key={v} onClick={() => setView(v)} style={{
@@ -1164,7 +1352,10 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
                 "Upcoming": { bg: "#f3f4f6", text: "#6b7280", icon: "○", lineColor: "#d1d5db" },
                 "Delayed": { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" },
               };
-              const s = statusStyles[m.status] || statusStyles["Upcoming"];
+              const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
+              const s = isOverdue
+                ? { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" }
+                : (statusStyles[m.status] || statusStyles["Upcoming"]);
               return (
                 <div key={m.id} style={{ display: "flex", gap: 16, position: "relative" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
@@ -1173,9 +1364,12 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
                   </div>
                   <div style={{ flex: 1, paddingBottom: 20 }}>
                     <div style={{ background: T.bg, borderRadius: 12, padding: "14px 18px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 4 }}>
                         <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.name}</span>
-                        <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>{m.status}</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {isOverdue && <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20, letterSpacing: "0.04em" }}>OVERDUE</span>}
+                          <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>{m.status}</span>
+                        </div>
                       </div>
                       <div style={{ fontSize: 12, color: T.muted }}>Target: {m.date} · Owner: {m.owner}</div>
                     </div>
@@ -1237,6 +1431,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
       {/* RISKS & ISSUES TAB */}
       {tab === "Risks & Issues" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {project.risks.length > 0 && <RiskMatrix risks={project.risks} />}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Risk Register</h3>
@@ -2223,15 +2418,20 @@ const AllProjectsView = ({ projects, setRoute }) => {
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterDept, setFilterDept] = useState("All");
   const [filterType, setFilterType] = useState("All");
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const active = projects.filter(p => !p.archived);
+  const completedCount = active.filter(p => p.status === "Completed").length;
+
   const filtered = useMemo(() => active.filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.pm.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "All" || p.status === filterStatus;
+    const matchStatus = filterStatus === "All"
+      ? (showCompleted || p.status !== "Completed")
+      : p.status === filterStatus;
     const matchDept = filterDept === "All" || p.deptId === filterDept;
     const matchType = filterType === "All" || p.projectType === filterType;
     return matchSearch && matchStatus && matchDept && matchType;
-  }), [active, search, filterStatus, filterDept, filterType]);
+  }), [active, search, filterStatus, filterDept, filterType, showCompleted]);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
 
@@ -2254,6 +2454,13 @@ const AllProjectsView = ({ projects, setRoute }) => {
           <option value="All">All Types</option>
           {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
+        <button onClick={() => setShowCompleted(v => !v)} style={{ background: showCompleted ? T.btnPrimBg : T.surface, color: showCompleted ? T.btnPrimText : T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+          {showCompleted ? "Hide Completed" : `+ ${completedCount} Completed`}
+        </button>
+        <button onClick={() => { const dm = Object.fromEntries(departments.map(d => [d.id, d.name])); exportCSV(filtered, `all-projects-${TODAY}.csv`, dm); }}
+          style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", color: T.text, whiteSpace: "nowrap", fontWeight: 600 }}>
+          ↓ Export CSV
+        </button>
         <div style={{ display: "flex", alignItems: "center", fontSize: 13, color: T.muted, whiteSpace: "nowrap" }}>{filtered.length} results</div>
       </div>
       <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
@@ -2315,6 +2522,7 @@ export default function App() {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [loadedAt, setLoadedAt] = useState(null);
 
   // ── Bootstrap: load projects + departments from SP (or mock) ──
   useEffect(() => {
@@ -2328,6 +2536,7 @@ export default function App() {
         if (cancelled) return;
         setProjects(projs);
         setDepartments(depts);
+        setLoadedAt(new Date());
       } catch (err) {
         if (!cancelled) setLoadError(err.message || "Failed to load data");
       } finally {
@@ -2448,9 +2657,9 @@ export default function App() {
     }}>
       <Sidebar route={route} setRoute={setRoute} projects={projects} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} />
+        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
-          {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} />}
+          {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} loadedAt={loadedAt} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
