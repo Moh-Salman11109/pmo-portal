@@ -90,6 +90,29 @@ const useT = () => {
 const ThemeContext = createContext(null);
 const useDark = () => themeStore.dark;
 
+// ─── BREAKPOINT STORE ─────────────────────────────────────────────
+// Mirrors the themeStore pattern — any component can call useBp()
+// and will re-render on window resize. No prop drilling needed.
+const getBp = () => {
+  if (typeof window === "undefined") return "desktop";
+  if (window.innerWidth < 640)  return "mobile";
+  if (window.innerWidth < 1024) return "tablet";
+  return "desktop";
+};
+const bpStore = { listeners: new Set() };
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => bpStore.listeners.forEach(fn => fn()), { passive: true });
+}
+const useBp = () => {
+  const [, rerender] = useState(0);
+  useEffect(() => {
+    const fn = () => rerender(n => n + 1);
+    bpStore.listeners.add(fn);
+    return () => bpStore.listeners.delete(fn);
+  }, []);
+  return getBp();
+};
+
 // ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────
 const DeptContext = createContext(null);
 const useDepts = () => useContext(DeptContext);
@@ -346,130 +369,165 @@ const SectionHeader = ({ title, subtitle, action, onAction }) => {
 const Tab = ({ tabs, active, onSelect }) => {
   const T = useT();
   return (
-    <div style={{ display: "flex", gap: 4, borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
+    <div className="pmo-tabs" style={{ display: "flex", gap: 4, borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
       {tabs.map(t => (
-        <button key={t} onClick={() => onSelect(t)} style={{ background: "none", border: "none", borderBottom: active === t ? `2px solid ${T.primary}` : "2px solid transparent", marginBottom: -2, padding: "10px 16px", fontSize: 13, fontWeight: active === t ? 700 : 500, color: active === t ? T.primary : T.muted, cursor: "pointer", transition: "all 0.15s" }}>{t}</button>
+        <button key={t} onClick={() => onSelect(t)} style={{ background: "none", border: "none", borderBottom: active === t ? `2px solid ${T.primary}` : "2px solid transparent", marginBottom: -2, padding: "10px 16px", fontSize: 13, fontWeight: active === t ? 700 : 500, color: active === t ? T.primary : T.muted, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>{t}</button>
       ))}
     </div>
   );
 };
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
-const Sidebar = ({ route, setRoute, projects }) => {
+const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
   const { departments } = useDepts();
   const T = useT();
+  const bp = useBp();
+  const isDesktop = bp === "desktop";
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (!isDesktop && open) {
+      document.body.classList.add("pmo-sidebar-open");
+    } else {
+      document.body.classList.remove("pmo-sidebar-open");
+    }
+    return () => document.body.classList.remove("pmo-sidebar-open");
+  }, [open, isDesktop]);
+
   const navItems = [
     { icon: "🏠", label: "Portfolio Overview", route: "home" },
     { icon: "📁", label: "Departments", route: "departments" },
     { icon: "📋", label: "All Projects", route: "projects" },
     { icon: "⚙️", label: "Admin Panel", route: "admin" },
   ];
+
+  const navigate = (routeObj) => {
+    setRoute(routeObj);
+    if (!isDesktop) onClose();
+  };
+
+  const sidebarStyle = isDesktop
+    ? { width: 220, minWidth: 220, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, flexShrink: 0 }
+    : { width: 260, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "fixed", top: 0, left: 0, zIndex: 100, transform: open ? "translateX(0)" : "translateX(-100%)" };
+
   return (
-    <div style={{ width: 220, minWidth: 220, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
-      <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid rgba(255,255,255,0.1)` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, background: T.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
-          <div>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>PMO Portal</div>
-            <div style={{ color: T.secondary, fontSize: 10, lineHeight: 1.2 }}>Enterprise Governance</div>
+    <>
+      {/* Backdrop overlay — mobile/tablet only */}
+      {!isDesktop && open && <div className="pmo-overlay" onClick={onClose} />}
+
+      <div className="pmo-sidebar" style={sidebarStyle}>
+        <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid rgba(255,255,255,0.1)`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, background: T.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+            <div>
+              <div style={{ color: "#fff", fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>PMO Portal</div>
+              <div style={{ color: T.secondary, fontSize: 10, lineHeight: 1.2 }}>Enterprise Governance</div>
+            </div>
           </div>
+          {!isDesktop && (
+            <button onClick={onClose} style={{ background: "none", border: "none", color: T.secondary, fontSize: 20, cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>✕</button>
+          )}
+        </div>
+
+        <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
+          {navItems.map(item => (
+            <button key={item.route} onClick={() => navigate({ view: item.route })} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "none",
+              background: route.view === item.route ? "rgba(0,255,179,0.12)" : "transparent",
+              color: route.view === item.route ? T.accent : T.secondary, cursor: "pointer", fontSize: 13, fontWeight: route.view === item.route ? 600 : 400,
+              marginBottom: 2, transition: "all 0.15s", textAlign: "left"
+            }}>
+              <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
+            </button>
+          ))}
+          <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
+          {departments.map(d => {
+            const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
+            return (
+              <button key={d.id} onClick={() => navigate({ view: "department", deptId: d.id })} style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, border: "none",
+                background: route.deptId === d.id ? "rgba(0,255,179,0.12)" : "transparent",
+                color: route.deptId === d.id ? T.accent : T.secondary, cursor: "pointer", fontSize: 12, fontWeight: 400,
+                marginBottom: 1, transition: "all 0.15s", textAlign: "left"
+              }}>
+                <span style={{ fontSize: 14 }}>{d.icon}</span>
+                <span style={{ flex: 1 }}>{d.name}</span>
+                <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>{stats.total}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)` }}>
+          <div style={{ fontSize: 11, color: T.secondary }}>Logged in as</div>
+          <div style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>Mohammed</div>
+          <div style={{ fontSize: 11, color: T.secondary }}>Senior PMO</div>
         </div>
       </div>
-      <nav style={{ flex: 1, padding: "12px 10px" }}>
-        {navItems.map(item => (
-          <button key={item.route} onClick={() => setRoute({ view: item.route })} style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "none",
-            background: route.view === item.route ? "rgba(0,255,179,0.12)" : "transparent",
-            color: route.view === item.route ? T.accent : T.secondary, cursor: "pointer", fontSize: 13, fontWeight: route.view === item.route ? 600 : 400,
-            marginBottom: 2, transition: "all 0.15s", textAlign: "left"
-          }}>
-            <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
-          </button>
-        ))}
-        <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
-        {departments.map(d => {
-          const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
-          return (
-            <button key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, border: "none",
-              background: route.deptId === d.id ? "rgba(0,255,179,0.12)" : "transparent",
-              color: route.deptId === d.id ? T.accent : T.secondary, cursor: "pointer", fontSize: 12, fontWeight: 400,
-              marginBottom: 1, transition: "all 0.15s", textAlign: "left"
-            }}>
-              <span style={{ fontSize: 14 }}>{d.icon}</span>
-              <span style={{ flex: 1 }}>{d.name}</span>
-              <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>{stats.total}</span>
-            </button>
-          );
-        })}
-      </nav>
-      <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)` }}>
-        <div style={{ fontSize: 11, color: T.secondary }}>Logged in as</div>
-        <div style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>Mohammed</div>
-        <div style={{ fontSize: 11, color: T.secondary }}>Senior PMO </div>
-      </div>
-    </div>
+    </>
   );
 };
 
 // ─── HEADER ──────────────────────────────────────────────────────
-const Header = ({ title, subtitle, route, setRoute, dark, toggleDark }) => {
+const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick }) => {
   const T = useT();
+  const bp = useBp();
+  const isMobile = bp === "mobile";
+  const isDesktop = bp === "desktop";
+
   return (
-    <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {route.view !== "home" && (
-          <button onClick={() => setRoute({ view: "home" })} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.muted }}>← Back</button>
+    <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: isMobile ? "12px 16px" : "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flex: 1, minWidth: 0 }}>
+        {/* Hamburger — tablet and mobile only */}
+        {!isDesktop && (
+          <button onClick={onMenuClick} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 10px", fontSize: 18, cursor: "pointer", color: T.text, lineHeight: 1, flexShrink: 0 }}>☰</button>
         )}
-        <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: T.text }}>{title}</h1>
-          {subtitle && <p style={{ margin: 0, fontSize: 12, color: T.muted }}>{subtitle}</p>}
+        {route.view !== "home" && (
+          <button onClick={() => setRoute({ view: "home" })} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.muted, flexShrink: 0 }}>← Back</button>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 800, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</h1>
+          {subtitle && !isMobile && <p style={{ margin: 0, fontSize: 12, color: T.muted }}>{subtitle}</p>}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: T.muted }}>{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
 
-        {/* ── Data Source Badge ── */}
+      <div style={{ display: "flex", gap: isMobile ? 6 : 10, alignItems: "center", flexShrink: 0 }}>
+        {/* Date — hidden on mobile */}
+        {isDesktop && (
+          <span style={{ fontSize: 12, color: T.muted }}>{new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
+        )}
+
+        {/* Data Source Badge */}
         <span style={{
           fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
           background: isUsingMock() ? "#fef9c3" : "#dcfce7",
           color:      isUsingMock() ? "#854d0e" : "#15803d",
           border:     `1px solid ${isUsingMock() ? "#fde68a" : "#86efac"}`,
+          whiteSpace: "nowrap",
         }}>
-          {isUsingMock() ? "MOCK" : "SharePoint"}
+          {isUsingMock() ? "MOCK" : "SP"}
         </span>
 
-        {/* ── Dark Mode Toggle ── */}
+        {/* Dark Mode Toggle */}
         <button onClick={toggleDark} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
           style={{
-            display: "flex", alignItems: "center", gap: 7,
+            display: "flex", alignItems: "center", gap: isMobile ? 0 : 7,
             background: dark ? "#0f2a22" : T.bg,
             border: `1px solid ${T.border}`,
-            borderRadius: 20, padding: "6px 14px",
+            borderRadius: 20, padding: isMobile ? "6px 10px" : "6px 14px",
             cursor: "pointer", transition: "all 0.2s",
-            fontSize: 12, fontWeight: 600,
-            color: T.text,
+            fontSize: 12, fontWeight: 600, color: T.text,
           }}>
           <span style={{ fontSize: 15 }}>{dark ? "☀️" : "🌙"}</span>
-          <span style={{ color: T.text }}>{dark ? "Light" : "Dark"}</span>
-          {/* pill toggle */}
-          <div style={{
-            width: 32, height: 18, borderRadius: 10,
-            background: dark ? T.accent : "#cbd5e1",
-            position: "relative", transition: "background 0.3s", flexShrink: 0,
-          }}>
-            <div style={{
-              position: "absolute", top: 2,
-              left: dark ? 16 : 2,
-              width: 14, height: 14, borderRadius: "50%",
-              background: dark ? "#061210" : "#fff",
-              transition: "left 0.3s",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-            }} />
-          </div>
+          {!isMobile && <span style={{ color: T.text }}>{dark ? "Light" : "Dark"}</span>}
+          {!isMobile && (
+            <div style={{ width: 32, height: 18, borderRadius: 10, background: dark ? T.accent : "#cbd5e1", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
+              <div style={{ position: "absolute", top: 2, left: dark ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: dark ? "#061210" : "#fff", transition: "left 0.3s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+            </div>
+          )}
         </button>
 
-        <div style={{ width: 34, height: 34, background: dark ? T.accent : "#003932", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: dark ? "#061210" : T.accent, fontWeight: 700, fontSize: 14 }}>M</div>
+        <div style={{ width: 34, height: 34, background: dark ? T.accent : "#003932", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: dark ? "#061210" : T.accent, fontWeight: 700, fontSize: 14, flexShrink: 0 }}>M</div>
       </div>
     </div>
   );
@@ -477,6 +535,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark }) => {
 
 // ─── HOME / PORTFOLIO OVERVIEW ────────────────────────────────────
 const HomeView = ({ projects, setRoute }) => {
+  const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
   const allProjects = projects.filter(p => !p.archived);
@@ -514,16 +573,20 @@ const HomeView = ({ projects, setRoute }) => {
     return { name: short, budget: +(s.totalBudget/1000000).toFixed(1), spent: +(s.actualCost/1000000).toFixed(1) };
   });
 
+  const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
+  const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
+  const chartCols = bp === "mobile" || bp === "tablet" ? "1fr" : "2fr 1fr";
+
   return (
-    <div style={{ padding: "32px", maxWidth: 1500 }}>
+    <div style={{ padding: pad, maxWidth: 1500 }}>
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}> Hello World 😒</h1>
+        <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 26, fontWeight: 900, color: T.text }}>Enterprise Portfolio Dashboard</h1>
         <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Real-time portfolio overview across all departments · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
         <KPICard label="Total Projects"    value={allProjects.length}          icon="📋" />
         <KPICard label="On Track"          value={byStatus["On Track"] || 0}   color="#16a34a" icon="✅" />
         <KPICard label="At Risk"           value={byStatus["At Risk"] || 0}    color="#eab308" icon="⚠️" />
@@ -533,7 +596,7 @@ const HomeView = ({ projects, setRoute }) => {
       </div>
 
       {/* ── ROW 1: Department Health (wide) + Budget Summary ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 20 }}>
 
         {/* Department Health Score — bigger */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
@@ -586,7 +649,7 @@ const HomeView = ({ projects, setRoute }) => {
       </div>
 
       {/* ── ROW 2: IPI (wide) + Risk Profile ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 24 }}>
 
         {/* Department IPI Scores — bigger, all departments visible */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
@@ -700,6 +763,7 @@ const HomeView = ({ projects, setRoute }) => {
 const DepartmentView = ({ projects, deptId, setRoute }) => {
   const { departments } = useDepts();
   const T = useT();
+  const bp = useBp();
   const dept = departments.find(d => d.id === deptId);
   const deptProjects = projects.filter(p => p.deptId === deptId && !p.archived);
   const stats = getDeptStats(deptId, projects.filter(p => !p.archived));
@@ -719,17 +783,20 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
+  const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
+  const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
+
   return (
-    <div style={{ padding: 32, maxWidth: 1400 }}>
+    <div style={{ padding: pad, maxWidth: 1400 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
-        <div style={{ width: 52, height: 52, background: T.primary, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{dept.icon}</div>
+        <div style={{ width: bp === "mobile" ? 40 : 52, height: bp === "mobile" ? 40 : 52, background: T.primary, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: bp === "mobile" ? 20 : 26, flexShrink: 0 }}>{dept.icon}</div>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: T.text }}>{dept.name}</h1>
+          <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 18 : 24, fontWeight: 900, color: T.text }}>{dept.name}</h1>
           <p style={{ margin: 0, color: T.muted, fontSize: 13 }}>Department Project Portfolio · {deptProjects.length} projects</p>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
         <KPICard label="Total Projects" value={stats.total} icon="📋" />
         <KPICard label="On Track" value={stats.active} color="#16a34a" icon="✅" />
         <KPICard label="Delayed" value={stats.delayed} color="#dc2626" icon="🔴" />
@@ -765,7 +832,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
       </div>
 
       {view === "table" ? (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: T.bg }}>
@@ -842,6 +909,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   const { departments } = useDepts();
   const T = useT();
+  const bp = useBp();
   const project = projects.find(p => p.id === projectId);
   const [tab, setTab] = useState("Overview");
   const TABS = ["Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
@@ -861,10 +929,14 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   ).length;
   const docsCompliance = reqDocs.length > 0 ? Math.round((docsReady / reqDocs.length) * 100) : 0;
 
+  const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
+  const infoCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
+  const overviewCols = bp === "mobile" || bp === "tablet" ? "1fr" : "2fr 1fr";
+
   return (
-    <div style={{ padding: 32, maxWidth: 1400 }}>
+    <div style={{ padding: pad, maxWidth: 1400 }}>
       {/* Project Header */}
-      <div style={{ background: T.headerBg, borderRadius: 16, padding: "24px 28px", marginBottom: 24, color: T.headerText }}>
+      <div style={{ background: T.headerBg, borderRadius: 16, padding: bp === "mobile" ? "16px 18px" : "24px 28px", marginBottom: 24, color: T.headerText }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -897,7 +969,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
           </div>
           <div style={{ background: ipiC.bg, color: ipiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{ipiC.label}</div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ display: "grid", gridTemplateColumns: infoCols, gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
           {[
             { label: "PM", value: project.pm },
             { label: "Sponsor", value: project.sponsor },
@@ -921,7 +993,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
 
       {/* OVERVIEW TAB */}
       {tab === "Overview" && (
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: overviewCols, gap: 20 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
               <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Project Details</h3>
@@ -1852,6 +1924,7 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
 const DepartmentsOverview = ({ projects, setRoute }) => {
   const { departments } = useDepts();
   const T = useT();
+  const bp = useBp();
   const [sort, setSort] = useState("ipi-desc");
   const activeProjects = projects.filter(p => !p.archived);
 
@@ -1892,12 +1965,14 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
     : 0;
   const portfolioIpiC = ipiColor(portfolioIPI);
 
+  const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
+
   return (
-    <div style={{ padding: 32, maxWidth: 1400 }}>
+    <div style={{ padding: pad, maxWidth: 1400 }}>
       {/* Page header */}
-      <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.text }}>Departments Overview</h1>
+          <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 26, fontWeight: 900, color: T.text }}>Departments Overview</h1>
           <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>IPI-driven comparison across all {departments.length} departments · {projects.length} total projects</p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1957,7 +2032,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
       </div>
 
       {/* Department Cards Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : bp === "tablet" ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 18 }}>
         {sorted.map((d, rank) => (
           <div key={d.id}
             style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", transition: "all 0.2s", cursor: "pointer" }}
@@ -2073,6 +2148,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 const AllProjectsView = ({ projects, setRoute }) => {
   const { departments } = useDepts();
   const T = useT();
+  const bp = useBp();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterDept, setFilterDept] = useState("All");
@@ -2087,14 +2163,16 @@ const AllProjectsView = ({ projects, setRoute }) => {
     return matchSearch && matchStatus && matchDept && matchType;
   }), [active, search, filterStatus, filterDept, filterType]);
 
+  const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
+
   return (
-    <div style={{ padding: 32, maxWidth: 1400 }}>
+    <div style={{ padding: pad, maxWidth: 1400 }}>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: T.text }}>All Projects</h1>
+        <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>All Projects</h1>
         <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
       </div>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", gap: 12 }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, codes, or PMs..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, background: T.inputBg, color: T.inputText }} />
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, codes, or PMs..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, minWidth: 160, background: T.inputBg, color: T.inputText }} />
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText }}>
           {["All", "On Track", "At Risk", "Delayed", "Completed", "Not Started"].map(s => <option key={s}>{s}</option>)}
         </select>
@@ -2108,7 +2186,7 @@ const AllProjectsView = ({ projects, setRoute }) => {
         </select>
         <div style={{ display: "flex", alignItems: "center", fontSize: 13, color: T.muted, whiteSpace: "nowrap" }}>{filtered.length} results</div>
       </div>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+      <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
             {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Phase", "Progress", "Status", "Risk", "Budget", "Gate"].map(h => (
@@ -2157,6 +2235,7 @@ const AllProjectsView = ({ projects, setRoute }) => {
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
   const [dark, setDark] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleDark = () => {
     themeStore.toggle();           // notifies ALL useT() subscribers instantly
     setDark(themeStore.dark);      // keep local state in sync for Header prop
@@ -2297,9 +2376,9 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={projects} />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} />
+      <Sidebar route={route} setRoute={setRoute} projects={projects} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
           {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}

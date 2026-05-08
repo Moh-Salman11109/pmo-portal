@@ -1,0 +1,56 @@
+/* ── Global responsive utilities for PMO Portal ─────────────────────────── */
+
+/* Smooth sidebar drawer transition */
+.pmo-sidebar {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Horizontal-scroll wrapper for data tables on mobile */
+.pmo-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.pmo-table-wrap table {
+  min-width: 700px;
+}
+
+/* Scrollable tab bar on mobile */
+.pmo-tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pmo-tabs::-webkit-scrollbar { display: none; }
+.pmo-tabs > div {
+  flex-shrink: 0;
+}
+
+/* Ensure charts never shrink below a readable height */
+.pmo-chart-wrap {
+  min-height: 160px;
+}
+
+/* Touch-friendly minimum tap target */
+@media (max-width: 1023px) {
+  button, select, input[type="text"] {
+    min-height: 40px;
+  }
+}
+
+/* Sidebar overlay backdrop */
+.pmo-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+  animation: pmo-fade-in 0.2s ease;
+}
+@keyframes pmo-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Prevent body scroll when mobile drawer is open */
+body.pmo-sidebar-open {
+  overflow: hidden;
+}
