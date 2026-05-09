@@ -567,27 +567,26 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
           <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
           {departments.map(d => {
             const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
+            const del = projects.filter(p => !p.archived && p.deptId === d.id && p.status === "Delayed").length;
             return (
               <button key={d.id} onClick={() => navigate({ view: "department", deptId: d.id })} style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, border: "none",
+                width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8,
+                border: del > 0 ? "1px solid rgba(220,38,38,0.4)" : "1px solid transparent",
                 background: route.deptId === d.id ? "rgba(0,255,179,0.12)" : "transparent",
+                boxShadow: del > 0 ? "0 0 10px rgba(220,38,38,0.22), inset 0 0 8px rgba(220,38,38,0.06)" : "none",
                 color: route.deptId === d.id ? T.accent : T.secondary, cursor: "pointer", fontSize: 12, fontWeight: 400,
                 marginBottom: 1, transition: "all 0.15s", textAlign: "left"
               }}>
                 <span style={{ fontSize: 14 }}>{d.icon}</span>
                 <span style={{ flex: 1 }}>{d.name}</span>
-                {(() => {
-                  const del = projects.filter(p => !p.archived && p.deptId === d.id && p.status === "Delayed").length;
-                  return del > 0 ? (
-                    <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, minWidth: 20, padding: "2px 7px", borderRadius: 10, textAlign: "center", letterSpacing: "0.02em", boxShadow: "0 1px 8px rgba(220,38,38,0.55)" }}>
-                      {del}
-                    </span>
-                  ) : (
-                    <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>
-                      {stats.total}
-                    </span>
-                  );
-                })()}
+                <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                  <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>
+                    {stats.total}
+                  </span>
+                  {del > 0 && (
+                    <span className="pmo-pulse-dot" style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: "#dc2626" }} />
+                  )}
+                </span>
               </button>
             );
           })}
@@ -1086,9 +1085,12 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
             </thead>
             <tbody>
               {filtered.map((p, i) => (
-                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "department", deptId })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg, transition: "background 0.1s" }}
+                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "department", deptId })}
+                  className={p.status === "Delayed" ? "pmo-row-delayed" : ""}
+                  style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", transition: "background 0.1s",
+                    background: p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? "transparent" : T.bg) }}
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : themeStore.T.bg}>
+                  onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : themeStore.T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>{p.code}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</div>
@@ -1122,9 +1124,12 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
           {filtered.map(p => (
-            <div key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "department", deptId })} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,57,50,0.1)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}>
+            <div key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "department", deptId })}
+              style={{ background: T.surface, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s",
+                border: p.status === "Delayed" ? "1px solid rgba(220,38,38,0.55)" : `1px solid ${T.border}`,
+                boxShadow: p.status === "Delayed" ? "0 0 14px rgba(220,38,38,0.22)" : "none" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = p.status === "Delayed" ? "#dc2626" : T.accent; e.currentTarget.style.boxShadow = p.status === "Delayed" ? "0 0 22px rgba(220,38,38,0.38)" : "0 4px 20px rgba(0,57,50,0.1)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = p.status === "Delayed" ? "rgba(220,38,38,0.55)" : T.border; e.currentTarget.style.boxShadow = p.status === "Delayed" ? "0 0 14px rgba(220,38,38,0.22)" : "none"; }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: T.primary, background: "#e8f5f0", padding: "3px 8px", borderRadius: 6 }}>{p.code}</span>
                 <Badge status={p.status} />
@@ -2478,9 +2483,12 @@ const AllProjectsView = ({ projects, setRoute }) => {
             {filtered.map((p, i) => {
               const dept = departments.find(d => d.id === p.deptId);
               return (
-                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "projects" })} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: i % 2 === 0 ? "transparent" : T.bg }}
+                <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "projects" })}
+                  className={p.status === "Delayed" ? "pmo-row-delayed" : ""}
+                  style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", transition: "background 0.1s",
+                    background: p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? "transparent" : T.bg) }}
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : themeStore.T.bg}>
+                  onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : themeStore.T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
                   <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>

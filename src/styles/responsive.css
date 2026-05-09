@@ -54,3 +54,17 @@
 body.pmo-sidebar-open {
   overflow: hidden;
 }
+
+/* Glowing red dot for delayed-department badges */
+.pmo-pulse-dot {
+  animation: pmo-pulse-red 1.8s ease-in-out infinite;
+}
+@keyframes pmo-pulse-red {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(220,38,38,0.7); }
+  50%       { box-shadow: 0 0 10px 4px rgba(220,38,38,1); }
+}
+
+/* Delayed project row — red left accent */
+tr.pmo-row-delayed {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
