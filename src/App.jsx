@@ -250,7 +250,7 @@ const exportExcel = (rows, filename, deptMap = {}) => {
   const COL_COUNT = HEADERS.length;
 
   const titleRow = `<tr><td colspan="${COL_COUNT}" style="background:#003932;color:#00ffb3;font-size:16px;font-weight:900;padding:14px 18px;font-family:'Segoe UI',sans-serif;border:none;letter-spacing:0.02em;">PMO Portal — Project Export</td></tr>`;
-  const dateRow  = `<tr><td colspan="${COL_COUNT}" style="background:#003932;color:rgba(255,255,255,0.55);font-size:11px;padding:4px 18px 12px;font-family:'Segoe UI',sans-serif;border:none;">Generated ${new Date().toLocaleDateString("en-US",{dateStyle:"full"})} · ${rows.length} project${rows.length!==1?"s":""}</td></tr>`;
+  const dateRow  = `<tr><td colspan="${COL_COUNT}" style="background:#003932;color:#a1c9b8;font-size:11px;padding:4px 18px 12px;font-family:'Segoe UI',sans-serif;border:none;">Generated ${new Date().toLocaleDateString("en-US",{dateStyle:"full"})} · ${rows.length} project${rows.length!==1?"s":""}</td></tr>`;
   const spaceRow = `<tr><td colspan="${COL_COUNT}" style="height:8px;border:none;background:#f4f6f4;"></td></tr>`;
   const headerRow = `<tr>${HEADERS.map(h => th(h)).join("")}</tr>`;
 
