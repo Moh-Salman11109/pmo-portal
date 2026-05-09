@@ -578,9 +578,13 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
                 <span style={{ flex: 1 }}>{d.name}</span>
                 {(() => {
                   const del = projects.filter(p => !p.archived && p.deptId === d.id && p.status === "Delayed").length;
-                  return (
-                    <span style={{ background: del > 0 ? "#dc2626" : "rgba(255,255,255,0.1)", color: del > 0 ? "#fff" : T.light, fontSize: 10, fontWeight: del > 0 ? 700 : 400, padding: "1px 6px", borderRadius: 10 }}>
-                      {del > 0 ? `${del}⚠` : stats.total}
+                  return del > 0 ? (
+                    <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, minWidth: 20, padding: "2px 7px", borderRadius: 10, textAlign: "center", letterSpacing: "0.02em", boxShadow: "0 1px 8px rgba(220,38,38,0.55)" }}>
+                      {del}
+                    </span>
+                  ) : (
+                    <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>
+                      {stats.total}
                     </span>
                   );
                 })()}
