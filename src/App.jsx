@@ -508,10 +508,27 @@ const Progress = ({ value, color, height = 6 }) => {
   );
 };
 
-const KPICard = ({ label, value, sub, color, icon }) => {
+const KPICard = ({ label, value, sub, color, icon, onClick }) => {
   const T = useT();
+  const [hovered, setHovered] = useState(false);
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => onClick && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: T.surface,
+        border: `1px solid ${hovered ? (color || T.accent) : T.border}`,
+        borderRadius: 12,
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        cursor: onClick ? "pointer" : "default",
+        transition: "box-shadow 0.15s, border-color 0.15s",
+        boxShadow: hovered ? `0 4px 18px rgba(0,0,0,0.12)` : "none",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>{label}</span>
         {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
@@ -881,11 +898,11 @@ const HomeView = ({ projects, setRoute, loadedAt }) => {
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
-        <KPICard label="Total Projects"    value={allProjects.length}          icon="📋" />
-        <KPICard label="On Track"          value={byStatus["On Track"] || 0}   color="#16a34a" icon="✅" />
-        <KPICard label="At Risk"           value={byStatus["At Risk"] || 0}    color="#eab308" icon="⚠️" />
-        <KPICard label="Delayed"           value={byStatus["Delayed"] || 0}    color="#dc2626" icon="🔴" />
-        <KPICard label="Completed"         value={byStatus["Completed"] || 0}  color="#3b82f6" icon="🏁" />
+        <KPICard label="Total Projects"    value={allProjects.length}          icon="📋" onClick={() => setRoute({ view: "projects", filterStatus: "All" })} />
+        <KPICard label="On Track"          value={byStatus["On Track"] || 0}   color="#16a34a" icon="✅" onClick={() => setRoute({ view: "projects", filterStatus: "On Track" })} />
+        <KPICard label="At Risk"           value={byStatus["At Risk"] || 0}    color="#eab308" icon="⚠️" onClick={() => setRoute({ view: "projects", filterStatus: "At Risk" })} />
+        <KPICard label="Delayed"           value={byStatus["Delayed"] || 0}    color="#dc2626" icon="🔴" onClick={() => setRoute({ view: "projects", filterStatus: "Delayed" })} />
+        <KPICard label="Completed"         value={byStatus["Completed"] || 0}  color="#3b82f6" icon="🏁" onClick={() => setRoute({ view: "projects", filterStatus: "Completed" })} />
         <KPICard label="Portfolio Budget"  value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
       </div>
 
@@ -2475,15 +2492,15 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 };
 
 // ─── ALL PROJECTS VIEW ────────────────────────────────────────────
-const AllProjectsView = ({ projects, setRoute }) => {
+const AllProjectsView = ({ projects, setRoute, route }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterStatus, setFilterStatus] = useState(route?.filterStatus || "All");
   const [filterDept, setFilterDept] = useState("All");
   const [filterType, setFilterType] = useState("All");
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(route?.filterStatus === "Completed");
 
   const active = projects.filter(p => !p.archived);
   const completedCount = active.filter(p => p.status === "Completed").length;
@@ -2729,7 +2746,7 @@ export default function App() {
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
           {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} loadedAt={loadedAt} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
-          {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} />}
+          {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} route={route} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} />}
           {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} addProject={addProject} updateProject={updateProject} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
