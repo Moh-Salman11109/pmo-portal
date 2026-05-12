@@ -226,6 +226,35 @@ const riskColor = {
 
 const TODAY = new Date().toISOString().split("T")[0];
 
+// Days since a date string — staleness + Gate SLA calculations
+const daysSince = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return Math.floor((new Date() - d) / 86400000);
+};
+
+// How many days has this project been sitting at its current active gate
+const getGateSLA = (project) => {
+  if (!project?.gates) return null;
+  const ordered = GATE_DEFS.map(def => ({
+    def,
+    g: project.gates.find(g => g.id === def.id) || { status: "Pending" }
+  }));
+  const lastApprovedIdx = ordered.reduce((idx, x, i) => x.g.status === "Approved" ? i : idx, -1);
+  const currentIdx = (() => {
+    const ipIdx = ordered.findIndex(x => x.g.status === "In Progress");
+    if (ipIdx !== -1) return ipIdx;
+    return lastApprovedIdx >= 0 && lastApprovedIdx + 1 < ordered.length ? lastApprovedIdx + 1 : 0;
+  })();
+  const current = ordered[currentIdx];
+  if (!current || current.g.status === "Approved") return null;
+  const fromDate = lastApprovedIdx >= 0 ? ordered[lastApprovedIdx]?.g?.date : project.startDate;
+  const days = daysSince(fromDate);
+  if (days == null) return null;
+  return { label: current.def.label, days };
+};
+
 const exportExcel = (rows, filename, deptMap = {}) => {
   const SC = {
     "On Track":    { bg: "#dcfce7", fg: "#15803d" },
@@ -372,6 +401,21 @@ const GateTracker = ({ gates }) => {
   const T = useT();
   const [expanded, setExpanded] = useState(null);
 
+  // Gate SLA — which gate is current and how long has it been there
+  const _ordered = GATE_DEFS.map(def => ({
+    def,
+    g: gates?.find(x => x.id === def.id) || { status: "Pending" }
+  }));
+  const _lastApprovedIdx = _ordered.reduce((idx, x, i) => x.g.status === "Approved" ? i : idx, -1);
+  const _currentIdx = (() => {
+    const ip = _ordered.findIndex(x => x.g.status === "In Progress");
+    if (ip !== -1) return ip;
+    return _lastApprovedIdx >= 0 && _lastApprovedIdx + 1 < _ordered.length ? _lastApprovedIdx + 1 : 0;
+  })();
+  const _currentGateDef = _ordered[_currentIdx]?.def;
+  const _slaFromDate = _lastApprovedIdx >= 0 ? _ordered[_lastApprovedIdx]?.g?.date : null;
+  const _slaDays = daysSince(_slaFromDate);
+
   const gateStyle = {
     "Approved":    { bg: "#dcfce7", text: "#15803d", border: "#16a34a", icon: "✓" },
     "In Progress": { bg: "#fef9c3", text: "#854d0e", border: "#eab308", icon: "◎" },
@@ -406,6 +450,9 @@ const GateTracker = ({ gates }) => {
                 </div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: s.text, marginTop: 4, whiteSpace: "nowrap" }}>{def.label}</div>
                 <div style={{ fontSize: 9, color: T.muted, whiteSpace: "nowrap" }}>{def.name}</div>
+                {def.id === _currentGateDef?.id && _slaDays != null && g.status !== "Approved" && (
+                  <div style={{ fontSize: 9, fontWeight: 800, color: _slaDays > 30 ? "#dc2626" : _slaDays > 14 ? "#92400e" : "#16a34a", marginTop: 2, whiteSpace: "nowrap" }}>Day {_slaDays}</div>
+                )}
               </div>
               {/* Connector line */}
               {!isLast && (
@@ -435,6 +482,13 @@ const GateTracker = ({ gates }) => {
               {g.approver && <div>👤 Approver: <strong>{g.approver}</strong></div>}
               {g.notes    && <div>💬 Notes: <strong>{g.notes}</strong></div>}
             </div>
+            {def.id === _currentGateDef?.id && _slaDays != null && g.status !== "Approved" && (
+              <div style={{ marginTop: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 8, background: _slaDays > 30 ? "#fee2e2" : _slaDays > 14 ? "#fef9c3" : "#dcfce7", color: _slaDays > 30 ? "#991b1b" : _slaDays > 14 ? "#854d0e" : "#15803d" }}>
+                  {_slaDays > 30 ? "⚠ " : ""}Day {_slaDays} at this gate{_slaDays > 30 ? " — Review recommended" : ""}
+                </span>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -805,16 +859,18 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
           🔍{!isMobile && <span style={{ fontSize: 12, color: T.muted }}>Search</span>}
         </button>
 
-        {/* Data Source Badge */}
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-          background: isUsingMock() ? "#fef9c3" : "#dcfce7",
-          color:      isUsingMock() ? "#854d0e" : "#15803d",
-          border:     `1px solid ${isUsingMock() ? "#fde68a" : "#86efac"}`,
-          whiteSpace: "nowrap",
-        }}>
-          {isUsingMock() ? "MOCK" : "SP"}
-        </span>
+        {/* Data Source Badge — visible only in dev or when mock is active; auto-hidden in production + live SP */}
+        {(import.meta.env.DEV || isUsingMock()) && (
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+            background: isUsingMock() ? "#fef9c3" : "#dcfce7",
+            color:      isUsingMock() ? "#854d0e" : "#15803d",
+            border:     `1px solid ${isUsingMock() ? "#fde68a" : "#86efac"}`,
+            whiteSpace: "nowrap",
+          }}>
+            {isUsingMock() ? "MOCK" : "LIVE"}
+          </span>
+        )}
 
         {/* Dark Mode Toggle */}
         <button onClick={toggleDark} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -881,6 +937,9 @@ const HomeView = ({ projects, setRoute, loadedAt }) => {
     return { name: short, budget: +(s.totalBudget/1000000).toFixed(1), spent: +(s.actualCost/1000000).toFixed(1) };
   });
 
+  const criticalRisksOpen = allProjects.reduce((c, p) => c + (p.risks || []).filter(r => r.level === "Critical" && r.status === "Open").length, 0);
+  const overdueCount = allProjects.reduce((c, p) => c + (p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY).length, 0);
+
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
   const chartCols = bp === "mobile" || bp === "tablet" ? "1fr" : "2fr 1fr";
@@ -905,6 +964,36 @@ const HomeView = ({ projects, setRoute, loadedAt }) => {
         <KPICard label="Completed"         value={byStatus["Completed"] || 0}  color="#3b82f6" icon="🏁" onClick={() => setRoute({ view: "projects", filterStatus: "Completed" })} />
         <KPICard label="Portfolio Budget"  value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
       </div>
+
+      {/* PMO Governance Signals — shows only when there's something to act on */}
+      {(criticalRisksOpen > 0 || overdueCount > 0) && (
+        <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+          {criticalRisksOpen > 0 && (
+            <div onClick={() => setRoute({ view: "projects" })}
+              style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff1f2", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 10, padding: "10px 18px", cursor: "pointer", flex: 1, minWidth: 220, transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(220,38,38,0.15)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#dc2626", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#991b1b" }}>{criticalRisksOpen} Critical Risk{criticalRisksOpen !== 1 ? "s" : ""} Open</div>
+                <div style={{ fontSize: 11, color: "#991b1b", opacity: 0.75 }}>Portfolio-wide · Immediate review required</div>
+              </div>
+            </div>
+          )}
+          {overdueCount > 0 && (
+            <div onClick={() => setRoute({ view: "projects" })}
+              style={{ display: "flex", alignItems: "center", gap: 12, background: "#fffbeb", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 10, padding: "10px 18px", cursor: "pointer", flex: 1, minWidth: 220, transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(245,158,11,0.15)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#92400e" }}>{overdueCount} Overdue Milestone{overdueCount !== 1 ? "s" : ""}</div>
+                <div style={{ fontSize: 11, color: "#92400e", opacity: 0.75 }}>Portfolio-wide · PMO review recommended</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── ROW 1: Department Health (wide) + Budget Summary ── */}
       <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 20 }}>
@@ -1187,7 +1276,10 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
                     <span style={{ color: p.budgetStatus === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{p.budgetStatus}</span>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>{p.lastUpdate}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <div style={{ fontSize: 11, color: T.muted }}>{p.lastUpdate || "—"}</div>
+                    {(() => { const d = daysSince(p.lastUpdate); if (!d || d < 14) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: d >= 30 ? "#fee2e2" : "#fef9c3", color: d >= 30 ? "#991b1b" : "#854d0e" }}>{d}d ago</span>; })()}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1232,8 +1324,8 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
   const T = useT();
   const bp = useBp();
   const project = projects.find(p => p.id === projectId);
-  const [tab, setTab] = useState("Overview");
-  const TABS = ["Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
+  const [tab, setTab] = useState("Exec Summary");
+  const TABS = ["Exec Summary", "Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
 
@@ -1262,7 +1354,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <span style={{ background: T.accent, color: T.accentText, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
-              <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.gate}</span>
+              {(() => { const sla = getGateSLA(project); return <span style={{ background: sla && sla.days > 30 ? "rgba(220,38,38,0.35)" : "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>{project.gate}{sla && <span style={{ fontSize: 9, fontWeight: 800, opacity: 0.9 }}>· Day {sla.days}</span>}</span>; })()}
               <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
               <TypeBadge type={project.projectType || "Project"} />
             </div>
@@ -1273,6 +1365,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
             <Badge status={project.status} />
             <div style={{ marginTop: 12, fontSize: 32, fontWeight: 900, color: T.accent }}>{project.progress}%</div>
             <div style={{ fontSize: 12, opacity: 0.6 }}>Overall Progress</div>
+            {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
           </div>
         </div>
         {/* IPI banner row */}
@@ -1311,6 +1404,107 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
 
       {/* ── GATE TRACKER — always visible ── */}
       <GateTracker gates={project.gates} />
+
+      {/* EXEC SUMMARY TAB */}
+      {tab === "Exec Summary" && (() => {
+        const nextMilestone = [...(project.milestones || [])].filter(m => m.status !== "Completed").sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
+        const msOverdue = nextMilestone && nextMilestone.date && nextMilestone.date < TODAY;
+        const riskOrder = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+        const topRisk = [...(project.risks || [])].filter(r => r.status === "Open").sort((a, b) => (riskOrder[b.level] || 0) - (riskOrder[a.level] || 0))[0];
+        const rc = topRisk ? (riskColor[topRisk.level] || riskColor["Medium"]) : null;
+        const latestUpdate = [...(project.updates || [])].sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
+        const gridCols = bp === "mobile" ? "1fr" : "1fr 1fr 1fr";
+        const twoCol = bp === "mobile" ? "1fr" : "1fr 1fr";
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Status strip */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                {[
+                  { label: "Status", node: <Badge status={project.status} /> },
+                  { label: "Progress", node: <span style={{ fontSize: 22, fontWeight: 900, color: T.text }}>{project.progress}%</span> },
+                  { label: "IPI", node: <span style={{ fontSize: 20, fontWeight: 900, color: ipiC.color }}>{ipi} <span style={{ fontSize: 11, fontWeight: 600 }}>{ipiC.label}</span></span> },
+                  { label: "Planned End", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.plannedEnd || "—"}</span> },
+                  { label: "Current Gate", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.gate}</span> },
+                  { label: "PM", node: <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{project.pm}</span> },
+                ].map((item, i) => (
+                  <div key={item.label} style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: i > 0 ? 20 : 0, borderLeft: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                    <div style={{ fontSize: 10, color: T.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{item.label}</div>
+                    {item.node}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Budget | Next Milestone | Top Risk */}
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 16 }}>
+              {/* Budget Health */}
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Budget Health</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: remaining >= 0 ? "#15803d" : "#dc2626" }}>{fmtSAR(project.actualCost)}</div>
+                <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>of {fmtSAR(project.budget)} approved</div>
+                <Progress value={budgetUtil} color={budgetUtil > 90 ? "#dc2626" : budgetUtil > 75 ? "#eab308" : T.accent} height={8} />
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: T.muted }}>{budgetUtil}% utilized</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: remaining >= 0 ? "#15803d" : "#dc2626" }}>{project.budgetStatus}</span>
+                </div>
+                <div style={{ fontSize: 12, color: T.muted }}>CPI: <span style={{ fontWeight: 700, color: project.cpi >= 1 ? "#15803d" : "#dc2626" }}>{project.cpi.toFixed(2)}</span> &nbsp;·&nbsp; SPI: <span style={{ fontWeight: 700, color: project.spi >= 0.9 ? "#15803d" : "#dc2626" }}>{project.spi.toFixed(2)}</span></div>
+              </div>
+
+              {/* Next Milestone */}
+              <div style={{ background: T.surface, border: `1px solid ${msOverdue ? "rgba(220,38,38,0.4)" : T.border}`, borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Next Milestone</div>
+                {nextMilestone ? (
+                  <>
+                    {msOverdue && <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 10, display: "inline-block", marginBottom: 8 }}>OVERDUE</span>}
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 6 }}>{nextMilestone.name}</div>
+                    <div style={{ fontSize: 12, color: T.muted, marginBottom: 4 }}>Due: {nextMilestone.date}</div>
+                    <div style={{ fontSize: 12, color: T.muted }}>Owner: {nextMilestone.owner}</div>
+                    <div style={{ marginTop: 10 }}><span style={{ background: "#fef9c3", color: "#854d0e", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 8 }}>{nextMilestone.status}</span></div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>All milestones complete ✓</div>
+                )}
+              </div>
+
+              {/* Top Risk */}
+              <div style={{ background: T.surface, border: `1px solid ${topRisk && (topRisk.level === "Critical" || topRisk.level === "High") ? "rgba(220,38,38,0.3)" : T.border}`, borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Top Risk</div>
+                {topRisk ? (
+                  <>
+                    <span style={{ background: rc.bg, color: rc.text, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 10, display: "inline-block", marginBottom: 8 }}>{topRisk.level}</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>{topRisk.title}</div>
+                    <div style={{ fontSize: 12, color: T.muted, marginBottom: 4 }}>Owner: {topRisk.owner}</div>
+                    <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Mitigation: {topRisk.mitigation}</div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>No open risks ✓</div>
+                )}
+              </div>
+            </div>
+
+            {/* Decisions Required + Blockers */}
+            <div style={{ display: "grid", gridTemplateColumns: twoCol, gap: 16 }}>
+              <div style={{ background: T.surface, border: `1px solid ${latestUpdate?.decisionsRequired ? "rgba(234,179,8,0.45)" : T.border}`, borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#854d0e", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Decisions Required</div>
+                {latestUpdate?.decisionsRequired ? (
+                  <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{latestUpdate.decisionsRequired}</p>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 13, color: T.muted, fontStyle: "italic" }}>No decisions flagged in latest update</p>
+                )}
+              </div>
+              <div style={{ background: T.surface, border: `1px solid ${latestUpdate?.blockers ? "rgba(220,38,38,0.3)" : T.border}`, borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#991b1b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Blockers</div>
+                {latestUpdate?.blockers ? (
+                  <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{latestUpdate.blockers}</p>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 13, color: T.muted, fontStyle: "italic" }}>No blockers reported</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* OVERVIEW TAB */}
       {tab === "Overview" && (
@@ -1745,27 +1939,59 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
 
       {/* UPDATES TAB */}
       {tab === "Updates" && (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-          <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Project Updates & Activity Feed</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {project.updates.map(u => (
-              <div key={u.id} style={{ padding: "16px 20px", background: T.bg, borderRadius: 12, borderLeft: `4px solid ${T.accent}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 32, height: 32, background: T.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, fontWeight: 700, fontSize: 12 }}>
-                      {u.owner.charAt(0)}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Project Updates</h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>Structured updates include: Progress · Next Plan · Blockers · Decisions</p>
+            </div>
+          </div>
+          {project.updates.map(u => {
+            const isStructured = u.weekProgress || u.nextWeekPlan || u.blockers || u.decisionsRequired;
+            return (
+              <div key={u.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+                {/* Update header */}
+                <div style={{ padding: "12px 20px", background: T.bg, borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, background: T.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                      {(u.owner || "?").charAt(0)}
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13, color: T.text }}>{u.owner}</div>
-                      <div style={{ fontSize: 11, color: T.muted }}>Project Update</div>
+                      <div style={{ fontSize: 11, color: T.muted }}>{isStructured ? "Structured Status Report" : "General Update"}</div>
                     </div>
                   </div>
                   <span style={{ fontSize: 12, color: T.muted }}>{u.date}</span>
                 </div>
-                <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{u.note}</p>
+                {isStructured ? (
+                  <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr" }}>
+                    {[
+                      { key: "weekProgress",      label: "This Week Progress",  color: "#15803d", borderColor: "#86efac" },
+                      { key: "nextWeekPlan",       label: "Next Week Plan",      color: "#1e40af", borderColor: "#93c5fd" },
+                      { key: "blockers",           label: "Blockers",            color: "#991b1b", borderColor: "#fca5a5" },
+                      { key: "decisionsRequired",  label: "Decisions Required",  color: "#854d0e", borderColor: "#fde68a" },
+                    ].map((s, idx) => (
+                      <div key={s.key} style={{ padding: "14px 20px", borderRight: (idx % 2 === 0 && bp !== "mobile") ? `1px solid ${T.border}` : "none", borderBottom: idx < 2 ? `1px solid ${T.border}` : "none" }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: s.color, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
+                        {u[s.key] ? (
+                          <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{u[s.key]}</p>
+                        ) : (
+                          <p style={{ margin: 0, fontSize: 12, color: T.muted, fontStyle: "italic" }}>Not reported</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: "14px 20px", borderLeft: `4px solid ${T.accent}` }}>
+                    {u.note && <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{u.note}</p>}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
+          {project.updates.length === 0 && (
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 40, textAlign: "center", color: T.muted, fontSize: 13 }}>No updates recorded for this project</div>
+          )}
         </div>
       )}
     </div>
@@ -2548,7 +2774,7 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
       <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
-            {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Phase", "Progress", "Status", "Risk", "Budget", "Gate"].map(h => (
+            {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Phase", "Progress", "Status", "Risk", "Budget", "Gate", "Last Update"].map(h => (
               <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
@@ -2583,6 +2809,10 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={p.riskLevel} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: p.budgetStatus === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{p.budgetStatus}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <div style={{ fontSize: 11, color: T.muted }}>{p.lastUpdate || "—"}</div>
+                    {(() => { const d = daysSince(p.lastUpdate); if (!d || d < 14) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: d >= 30 ? "#fee2e2" : "#fef9c3", color: d >= 30 ? "#991b1b" : "#854d0e" }}>{d}d ago</span>; })()}
+                  </td>
                 </tr>
               );
             })}
