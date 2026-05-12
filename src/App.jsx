@@ -965,36 +965,6 @@ const HomeView = ({ projects, setRoute, loadedAt }) => {
         <KPICard label="Portfolio Budget"  value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
       </div>
 
-      {/* PMO Governance Signals — shows only when there's something to act on */}
-      {(criticalRisksOpen > 0 || overdueCount > 0) && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-          {criticalRisksOpen > 0 && (
-            <div onClick={() => setRoute({ view: "projects" })}
-              style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff1f2", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 10, padding: "10px 18px", cursor: "pointer", flex: 1, minWidth: 220, transition: "box-shadow 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(220,38,38,0.15)"}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#dc2626", flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#991b1b" }}>{criticalRisksOpen} Critical Risk{criticalRisksOpen !== 1 ? "s" : ""} Open</div>
-                <div style={{ fontSize: 11, color: "#991b1b", opacity: 0.75 }}>Portfolio-wide · Immediate review required</div>
-              </div>
-            </div>
-          )}
-          {overdueCount > 0 && (
-            <div onClick={() => setRoute({ view: "projects" })}
-              style={{ display: "flex", alignItems: "center", gap: 12, background: "#fffbeb", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 10, padding: "10px 18px", cursor: "pointer", flex: 1, minWidth: 220, transition: "box-shadow 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 14px rgba(245,158,11,0.15)"}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#92400e" }}>{overdueCount} Overdue Milestone{overdueCount !== 1 ? "s" : ""}</div>
-                <div style={{ fontSize: 11, color: "#92400e", opacity: 0.75 }}>Portfolio-wide · PMO review recommended</div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── ROW 1: Department Health (wide) + Budget Summary ── */}
       <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 20 }}>
 
