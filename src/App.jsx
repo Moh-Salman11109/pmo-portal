@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
-import { SPService, isUsingMock } from "./services/sharepoint.js";
+import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
+import { useCurrentUser } from "./hooks/useCurrentUser.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
 const THEMES = {
@@ -397,15 +398,27 @@ const RiskMatrix = ({ risks }) => {
 };
 
 // ─── GATE TRACKER COMPONENT ──────────────────────────────────────
-const GateTracker = ({ gates }) => {
+const GateTracker = ({ gates, currentGate, startDate }) => {
   const T = useT();
   const [expanded, setExpanded] = useState(null);
 
-  // Gate SLA — which gate is current and how long has it been there
-  const _ordered = GATE_DEFS.map(def => ({
-    def,
-    g: gates?.find(x => x.id === def.id) || { status: "Pending" }
-  }));
+  // Map "Gate 3" → "G3" for fallback when GatesJSON is empty
+  const _currentGateId = currentGate?.replace("Gate ", "G").replace(" ", "") || null;
+
+  const _ordered = GATE_DEFS.map(def => {
+    const fromJson = gates?.find(x => x.id === def.id);
+    if (fromJson) return { def, g: fromJson };
+    // Fallback: derive status from CurrentGate field
+    const defIdx  = GATE_DEFS.findIndex(d => d.id === def.id);
+    const curIdx  = GATE_DEFS.findIndex(d => d.id === _currentGateId);
+    let status = "Pending";
+    if (curIdx >= 0) {
+      if (defIdx < curIdx)  status = "Approved";
+      if (defIdx === curIdx) status = "In Progress";
+    }
+    return { def, g: { status } };
+  });
+
   const _lastApprovedIdx = _ordered.reduce((idx, x, i) => x.g.status === "Approved" ? i : idx, -1);
   const _currentIdx = (() => {
     const ip = _ordered.findIndex(x => x.g.status === "In Progress");
@@ -413,7 +426,7 @@ const GateTracker = ({ gates }) => {
     return _lastApprovedIdx >= 0 && _lastApprovedIdx + 1 < _ordered.length ? _lastApprovedIdx + 1 : 0;
   })();
   const _currentGateDef = _ordered[_currentIdx]?.def;
-  const _slaFromDate = _lastApprovedIdx >= 0 ? _ordered[_lastApprovedIdx]?.g?.date : null;
+  const _slaFromDate = _lastApprovedIdx >= 0 ? _ordered[_lastApprovedIdx]?.g?.date : startDate;
   const _slaDays = daysSince(_slaFromDate);
 
   const gateStyle = {
@@ -620,7 +633,7 @@ const Tab = ({ tabs, active, onSelect }) => {
 };
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
-const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, currentUserEmail, open, onClose }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -636,13 +649,6 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
     return () => document.body.classList.remove("pmo-sidebar-open");
   }, [open, isDesktop]);
 
-  const navItems = [
-    { icon: "🏠", label: "Portfolio Overview", route: "home" },
-    { icon: "📁", label: "Departments", route: "departments" },
-    { icon: "📋", label: "All Projects", route: "projects" },
-    { icon: "⚙️", label: "Admin Panel", route: "admin" },
-  ];
-
   const navigate = (routeObj) => {
     setRoute(routeObj);
     if (!isDesktop) onClose();
@@ -652,6 +658,28 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
     () => projects.filter(p => !p.archived && (p.status === "Delayed" || p.riskLevel === "Critical")).length,
     [projects]
   );
+
+  // Pending actions = submissions where pendingWithEmail matches current user
+  const actionsCount = useMemo(() => {
+    const reqPending  = (requests       || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
+    const gatePending = (gateSubmissions|| []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
+    return reqPending + gatePending;
+  }, [requests, gateSubmissions, currentUserEmail]);
+
+  // Open (active) requests belonging to the current user
+  const myRequestsCount = useMemo(
+    () => (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status)).length,
+    [requests]
+  );
+
+  const navItems = [
+    { icon: "🏠", label: "Portfolio Overview", route: "home" },
+    { icon: "📁", label: "Departments",         route: "departments" },
+    { icon: "📋", label: "All Projects",         route: "projects", badge: attnCount },
+    { icon: "📨", label: "New Request",          route: "requests", badge: myRequestsCount },
+    { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
+    { icon: "⚙️", label: "Admin Panel",           route: "admin" },
+  ];
 
   const sidebarStyle = isDesktop
     ? { width: 220, minWidth: 220, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, flexShrink: 0 }
@@ -686,8 +714,8 @@ const Sidebar = ({ route, setRoute, projects, open, onClose }) => {
             }}>
               <span style={{ fontSize: 16 }}>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
-              {item.route === "projects" && attnCount > 0 && (
-                <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 10, lineHeight: "18px" }}>{attnCount}</span>
+              {item.badge > 0 && (
+                <span style={{ background: item.badgeColor || "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 10, lineHeight: "18px" }}>{item.badge}</span>
               )}
             </button>
           ))}
@@ -898,7 +926,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
 };
 
 // ─── HOME / PORTFOLIO OVERVIEW ────────────────────────────────────
-const HomeView = ({ projects, setRoute, loadedAt }) => {
+const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) => {
   const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
@@ -936,9 +964,6 @@ const HomeView = ({ projects, setRoute, loadedAt }) => {
     const short = d.name.replace("Strategy & PMO","Strategy").replace("Operations","Ops").replace("Performance","Perf");
     return { name: short, budget: +(s.totalBudget/1000000).toFixed(1), spent: +(s.actualCost/1000000).toFixed(1) };
   });
-
-  const criticalRisksOpen = allProjects.reduce((c, p) => c + (p.risks || []).filter(r => r.level === "Critical" && r.status === "Open").length, 0);
-  const overdueCount = allProjects.reduce((c, p) => c + (p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY).length, 0);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -1288,13 +1313,148 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
   );
 };
 
+// ─── QUICK UPDATE PANEL ──────────────────────────────────────────
+const QuickUpdatePanel = ({ project, onClose, onSubmit }) => {
+  const T = useT();
+  const [status, setStatus]       = useState(project.status);
+  const [progress, setProgress]   = useState(project.progress);
+  const [milestones, setMilestones] = useState(project.milestones?.map(m => ({ ...m })) || []);
+  const [note, setNote]           = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+
+  const statusOpts = ["On Track","At Risk","Delayed","Completed","Not Started"];
+  const msOpts     = ["Upcoming","In Progress","Completed","Delayed"];
+  const msColor    = { "Completed": "#16a34a", "In Progress": "#eab308", "Delayed": "#dc2626", "Upcoming": "#9ca3af" };
+  const msIcon     = { "Completed": "✅", "In Progress": "🔄", "Delayed": "🔴", "Upcoming": "⏳" };
+
+  const setMsStatus = (id, val) =>
+    setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: val } : m));
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      await onSubmit(project.id, { status, progress, milestones, note });
+      setSaved(true);
+      setTimeout(onClose, 900);
+    } catch (err) {
+      alert("Save failed: " + err.message);
+      setSaving(false);
+    }
+  };
+
+  const s = { width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13, border: `1px solid ${T.border}`, background: T.inputBg, color: T.text, outline: "none", boxSizing: "border-box" };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, animation: "pmo-fade-in 0.2s ease" }} />
+      {/* Panel */}
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(480px, 100vw)", background: T.surface, zIndex: 201, boxShadow: "-8px 0 40px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", animation: "slideInRight 0.25s ease" }}>
+        <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+
+        {/* Header */}
+        <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Submit Update</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{project.name}</div>
+          </div>
+          <button onClick={onClose} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.muted, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+
+          {/* Status */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8 }}>PROJECT STATUS</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {statusOpts.map(o => {
+                const sc = statusColor[o];
+                return (
+                  <button key={o} onClick={() => setStatus(o)}
+                    style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      background: status === o ? sc.bg : T.bg,
+                      color: status === o ? sc.text : T.muted,
+                      border: status === o ? `2px solid ${sc.dot}` : `1px solid ${T.border}` }}>
+                    {o}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
+              <span>OVERALL PROGRESS</span>
+              <span style={{ color: T.primary, fontWeight: 900 }}>{progress}%</span>
+            </div>
+            <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))}
+              style={{ width: "100%", accentColor: T.primary, cursor: "pointer" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginTop: 3 }}>
+              <span>0%</span><span>50%</span><span>100%</span>
+            </div>
+          </div>
+
+          {/* Milestones */}
+          {milestones.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 10 }}>MILESTONES</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {milestones.map(m => (
+                  <div key={m.id} style={{ background: T.bg, borderRadius: 10, padding: "10px 14px", border: `1px solid ${T.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>{msIcon[m.status] || "⏳"}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                          {m.date && <div style={{ fontSize: 11, color: T.muted }}>{m.date}{m.owner ? ` · ${m.owner}` : ""}</div>}
+                        </div>
+                      </div>
+                      <select value={m.status} onChange={e => setMsStatus(m.id, e.target.value)}
+                        style={{ ...s, width: "auto", fontSize: 11, fontWeight: 700, padding: "5px 8px",
+                          color: msColor[m.status] || T.muted,
+                          background: T.surface, flexShrink: 0 }}>
+                        {msOpts.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Update Note */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8 }}>UPDATE NOTE</div>
+            <textarea value={note} onChange={e => setNote(e.target.value)} rows={4}
+              placeholder="What's the current status? Key decisions, blockers, next steps..."
+              style={{ ...s, resize: "none" }} />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 13, cursor: "pointer", color: T.text, fontWeight: 600 }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={saving || saved}
+            style={{ flex: 2, background: saved ? "#16a34a" : T.btnPrimBg, color: saved ? "#fff" : T.btnPrimText, border: "none", borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: saving || saved ? "default" : "pointer", transition: "background 0.3s" }}>
+            {saved ? "✓ Saved!" : saving ? "Saving…" : "Submit to SharePoint →"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+};
+
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
-const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
+const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdate }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
   const project = projects.find(p => p.id === projectId);
   const [tab, setTab] = useState("Exec Summary");
+  const [showUpdate, setShowUpdate] = useState(false);
   const TABS = ["Exec Summary", "Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
@@ -1332,8 +1492,18 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
             <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
           </div>
           <div style={{ textAlign: "right" }}>
-            <Badge status={project.status} />
-            <div style={{ marginTop: 12, fontSize: 32, fontWeight: 900, color: T.accent }}>{project.progress}%</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
+              <Badge status={project.status} />
+              <button onClick={() => setShowUpdate(true)}
+                style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "4px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                ↑ Submit Update
+              </button>
+              <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id })}
+                style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, padding: "4px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                ✏️ Edit
+              </button>
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: T.accent }}>{project.progress}%</div>
             <div style={{ fontSize: 12, opacity: 0.6 }}>Overall Progress</div>
             {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
           </div>
@@ -1373,7 +1543,10 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject }) => {
       <Tab tabs={TABS} active={tab} onSelect={setTab} />
 
       {/* ── GATE TRACKER — always visible ── */}
-      <GateTracker gates={project.gates} />
+      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
+
+      {/* ── Submit Update Panel ─────────────────────────────────── */}
+      {showUpdate && <QuickUpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} />}
 
       {/* EXEC SUMMARY TAB */}
       {tab === "Exec Summary" && (() => {
@@ -2169,8 +2342,337 @@ const DeptCRUD = ({ projects }) => {
   );
 };
 
+// ─── HELPERS FOR REQUESTS ────────────────────────────────────────
+const REQUEST_STATUS_META = {
+  Draft:           { label: "Draft",              color: "#6b7280", bg: "#f3f4f6" },
+  Submitted:       { label: "Submitted",          color: "#2563eb", bg: "#eff6ff" },
+  PendingOwner:    { label: "Pending Sponsor",     color: "#d97706", bg: "#fffbeb" },
+  PendingPMO:      { label: "Pending PMO",         color: "#7c3aed", bg: "#f5f3ff" },
+  PendingStrategy: { label: "Pending Strategy",    color: "#0891b2", bg: "#ecfeff" },
+  Approved:        { label: "Approved",            color: "#16a34a", bg: "#f0fdf4" },
+  Returned:        { label: "Returned",            color: "#d97706", bg: "#fef3c7" },
+  Rejected:        { label: "Rejected",            color: "#dc2626", bg: "#fef2f2" },
+};
+
+const RequestStatusBadge = ({ status }) => {
+  const T = useT();
+  const meta = REQUEST_STATUS_META[status] || { label: status, color: T.muted, bg: T.surface };
+  return (
+    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.color}30` }}>
+      {meta.label}
+    </span>
+  );
+};
+
+const ApprovalTimeline = ({ history }) => {
+  const T = useT();
+  if (!history || history.length === 0) return <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>No approval actions yet.</p>;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {history.map((h, i) => (
+        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5, flexShrink: 0, background: h.action === "Approved" ? "#16a34a" : h.action === "Returned" ? "#d97706" : "#dc2626" }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{h.stage} — <span style={{ color: h.action === "Approved" ? "#16a34a" : h.action === "Returned" ? "#d97706" : "#dc2626" }}>{h.action}</span></div>
+            <div style={{ fontSize: 11, color: T.muted }}>{h.by} · {h.date}</div>
+            {h.notes && <div style={{ fontSize: 11, color: T.text, marginTop: 2, fontStyle: "italic" }}>{h.notes}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── MY REQUESTS VIEW ────────────────────────────────────────────
+const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail }) => {
+  const T = useT();
+  const bp = useBp();
+  const [expandedId, setExpandedId] = useState(null);
+  const pad = bp === "mobile" ? "16px" : "32px";
+  const intakeUrl = FORM_URLS.intake;
+
+  const pending   = (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status));
+  const completed = (requests || []).filter(r =>  ["Approved", "Rejected"].includes(r.status));
+
+  const pendingGates = (gateSubmissions || []).filter(g => !["Approved", "Rejected"].includes(g.status));
+
+  const RequestCard = ({ req }) => {
+    const isExpanded = expandedId === req.id;
+    const meta = REQUEST_STATUS_META[req.status] || {};
+    return (
+      <div style={{ background: T.surface, border: req.status === "Returned" ? "1.5px solid #fcd34d" : `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+          onClick={() => setExpandedId(isExpanded ? null : req.id)}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{req.title}</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+              Requested by {req.requestedBy} · {req.requestDate}
+              {req.deptId && <span> · {req.deptId}</span>}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <RequestStatusBadge status={req.status} />
+            <span style={{ color: T.muted, fontSize: 14 }}>{isExpanded ? "▲" : "▼"}</span>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div style={{ padding: "0 18px 18px", borderTop: `1px solid ${T.border}` }}>
+            {/* Return reason */}
+            {req.status === "Returned" && req.returnReason && (
+              <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", margin: "14px 0 12px", fontSize: 13 }}>
+                <div style={{ fontWeight: 700, color: "#92400e", marginBottom: 4 }}>↩ Returned — Action Required</div>
+                <div style={{ color: "#78350f" }}>{req.returnReason}</div>
+              </div>
+            )}
+
+            {/* Current stage */}
+            {req.currentStage && !["Approved", "Rejected", "Returned to Requester"].includes(req.currentStage) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 12px" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#d97706", animation: "pmo-pulse-orange 1.5s ease-in-out infinite" }} />
+                <span style={{ fontSize: 13, color: T.text }}>
+                  Currently with <strong>{req.pendingWith || req.currentStage}</strong>
+                  {req.daysInCurrentStage > 0 && <span style={{ color: T.muted }}> · {req.daysInCurrentStage} day{req.daysInCurrentStage !== 1 ? "s" : ""}</span>}
+                </span>
+              </div>
+            )}
+
+            {/* Approval timeline */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approval History</div>
+              <ApprovalTimeline history={req.approvalHistory} />
+            </div>
+
+            {/* Description */}
+            {req.description && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Description</div>
+                <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{req.description}</div>
+              </div>
+            )}
+
+            {/* Linked project */}
+            {req.linkedProjectId && (
+              <div style={{ marginTop: 14 }}>
+                <button onClick={() => setRoute({ view: "project", projectId: req.linkedProjectId })}
+                  style={{ padding: "7px 14px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  View Project →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const GateCard = ({ gs }) => (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{gs.gateLabel}</div>
+        <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{gs.projectTitle} · Submitted {gs.submissionDate}</div>
+        {gs.pendingWith && (
+          <div style={{ fontSize: 12, color: "#d97706", marginTop: 4 }}>Pending with {gs.pendingWith} · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</div>
+        )}
+      </div>
+      <RequestStatusBadge status={gs.status} />
+    </div>
+  );
+
+  return (
+    <div style={{ padding: pad, maxWidth: 1400 }}>
+      {/* New Request action card */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 28, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 16, color: T.text }}>New Project Request</div>
+          <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>
+            Start the intake process — fills a form, then goes through approval before becoming an active project
+          </div>
+        </div>
+        <button
+          onClick={() => intakeUrl ? window.open(intakeUrl, "_blank") : null}
+          disabled={!intakeUrl}
+          style={{ padding: "11px 24px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: intakeUrl ? "pointer" : "default", opacity: intakeUrl ? 1 : 0.5, whiteSpace: "nowrap" }}>
+          + New Request
+        </button>
+      </div>
+
+      {/* Section title */}
+      <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: T.text }}>My Requests</h3>
+
+      {/* Gate submissions */}
+      {pendingGates.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Gate Reviews In Progress</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingGates.map(gs => <GateCard key={gs.id} gs={gs} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Active requests */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+          Active Requests {pending.length > 0 && <span style={{ background: "#dbeafe", color: "#1d4ed8", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{pending.length}</span>}
+        </div>
+        {pending.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "32px 20px", color: T.muted, background: T.surface, borderRadius: 12, border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>No active requests</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>Click "New Project Request" to start the intake process</div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pending.map(req => <RequestCard key={req.id} req={req} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Completed/rejected */}
+      {completed.length > 0 && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Completed</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {completed.map(req => <RequestCard key={req.id} req={req} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── MY ACTIONS VIEW ─────────────────────────────────────────────
+const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentUserEmail, currentUserName }) => {
+  const T = useT();
+  const bp = useBp();
+  const pad = bp === "mobile" ? "16px" : "32px";
+
+  // In mock mode, show all pending items as demo. In live mode, filter by current user email.
+  const isMock = isUsingMock();
+
+  const pendingRequests = (requests || []).filter(r =>
+    ["PendingOwner", "PendingPMO", "PendingStrategy", "Submitted"].includes(r.status) &&
+    (isMock || r.pendingWithEmail === currentUserEmail)
+  );
+
+  const pendingGates = (gateSubmissions || []).filter(g =>
+    !["Approved", "Rejected"].includes(g.status) &&
+    (isMock || g.pendingWithEmail === currentUserEmail)
+  );
+
+  // Overdue milestones in projects where PM matches current user
+  const TODAY = new Date().toISOString().split("T")[0];
+  const overdueMilestones = (projects || []).flatMap(p =>
+    (p.milestones || [])
+      .filter(m => m.status !== "Completed" && m.date && m.date < TODAY)
+      .map(m => ({ ...m, projectId: p.id, projectName: p.name, pm: p.pm }))
+  ).filter(m => isMock || m.pm === currentUserName);
+
+  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || overdueMilestones.length > 0;
+
+  const ActionCard = ({ icon, title, subtitle, rightContent, onClick, urgency }) => {
+    const borderColor = urgency === "high" ? "#dc2626" : urgency === "medium" ? "#d97706" : T.border;
+    return (
+      <div onClick={onClick} style={{ background: T.surface, border: `1px solid ${borderColor}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: onClick ? "pointer" : "default", transition: "all 0.15s" }}>
+        <div style={{ fontSize: 22, flexShrink: 0 }}>{icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{title}</div>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{subtitle}</div>
+        </div>
+        {rightContent && <div style={{ flexShrink: 0 }}>{rightContent}</div>}
+        {onClick && <span style={{ color: T.muted, fontSize: 13 }}>→</span>}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ padding: pad, maxWidth: 1400 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: T.text }}>My Actions</h2>
+        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>
+          Items waiting for your review or approval
+          {isMock && <span style={{ color: "#d97706", marginLeft: 6, fontWeight: 600 }}>[Mock mode — showing all pending items]</span>}
+        </p>
+      </div>
+
+      {!hasAnything && (
+        <div style={{ textAlign: "center", padding: "48px 20px", color: T.muted, background: T.surface, borderRadius: 14, border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>All clear</div>
+          <div style={{ fontSize: 13, marginTop: 6 }}>No pending actions at this time</div>
+        </div>
+      )}
+
+      {/* Pending project requests */}
+      {pendingRequests.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Project Request Approvals
+            <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{pendingRequests.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingRequests.map(req => (
+              <ActionCard key={req.id}
+                icon="📥"
+                title={req.title}
+                subtitle={`Requested by ${req.requestedBy} · ${req.daysInCurrentStage} day${req.daysInCurrentStage !== 1 ? "s" : ""} pending`}
+                rightContent={<RequestStatusBadge status={req.status} />}
+                urgency={req.daysInCurrentStage > 5 ? "medium" : null}
+                onClick={() => setRoute({ view: "requests" })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending gate reviews */}
+      {pendingGates.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Gate Reviews Awaiting You
+            <span style={{ background: "#ede9fe", color: "#5b21b6", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{pendingGates.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingGates.map(gs => (
+              <ActionCard key={gs.id}
+                icon="🔖"
+                title={`${gs.gateLabel} — ${gs.projectTitle}`}
+                subtitle={`Submitted by ${gs.submittedBy} · ${gs.daysAtGate} day${gs.daysAtGate !== 1 ? "s" : ""} at gate`}
+                rightContent={<RequestStatusBadge status={gs.status} />}
+                urgency={gs.daysAtGate > 5 ? "medium" : null}
+                onClick={() => setRoute({ view: "project", projectId: gs.projectId })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Overdue milestones */}
+      {overdueMilestones.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Overdue Milestones
+            <span style={{ background: "#fee2e2", color: "#991b1b", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{overdueMilestones.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {overdueMilestones.slice(0, 10).map(m => (
+              <ActionCard key={`${m.projectId}-${m.id}`}
+                icon="⏰"
+                title={m.name}
+                subtitle={`${m.projectName} · Due ${m.date} · Owner: ${m.owner}`}
+                urgency="high"
+                onClick={() => setRoute({ view: "project", projectId: m.projectId })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── ADMIN PANEL ──────────────────────────────────────────────────
-const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProject, restoreProject, deleteForever }) => {
+const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProject, deleteForever }) => {
   const { departments } = useDepts();
   const T = useT();
   const activeProjects  = projects.filter(p => !p.archived);
@@ -2199,16 +2701,40 @@ const AdminView = ({ projects, setRoute, addProject, updateProject, archiveProje
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name || !formData.code) { showToast("Project name and code are required", "error"); return; }
-    if (editingProject) {
-      updateProject(editingProject, formData);
-      showToast("Project updated successfully");
-    } else {
-      addProject(formData);
-      showToast("Project added successfully");
+    try {
+      if (editingProject) {
+        await onSaveForm(formData, "edit", formData.spId, formData.id);
+        showToast("Project updated successfully");
+      } else {
+        const today = new Date().toISOString().split("T")[0];
+        const mandatoryDocs = [
+          { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
+          { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
+          { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
+        ];
+        const defaultGates = GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" }));
+        const fullCreate = {
+          ...formData,
+          projectType: formData.projectType || "Internal Project",
+          gates: defaultGates,
+          milestones: [], risks: [], issues: [], benefits: [],
+          approvals: [], updates: [],
+          documents: mandatoryDocs,
+          health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
+          spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
+          scheduleVariance: "0", actualCost: 0,
+          forecast: Number(formData.budget),
+          lastUpdate: today,
+        };
+        await onSaveForm(fullCreate, "create", null, null);
+        showToast("Project added successfully");
+      }
+      setShowForm(false);
+    } catch (err) {
+      showToast(`Save failed: ${err.message}`, "error");
     }
-    setShowForm(false);
   };
 
   const handleDelete = (id) => {
@@ -2715,9 +3241,15 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
 
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>All Projects</h1>
-        <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>All Projects</h1>
+          <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
+        </div>
+        <button onClick={() => setRoute({ view: "form", mode: "create" })}
+          style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+          + New Project
+        </button>
       </div>
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, codes, or PMs..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, minWidth: 160, background: T.inputBg, color: T.inputText }} />
@@ -2793,6 +3325,458 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
   );
 };
 
+// ─── PROJECT FORM HELPERS ─────────────────────────────────────────
+const FField = ({ label, required, error, children }) => {
+  const T = useT();
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 5 }}>
+        {label}{required && <span style={{ color: "#dc2626" }}> *</span>}
+      </label>
+      {children}
+      {error && <div style={{ color: "#dc2626", fontSize: 11, marginTop: 3 }}>{error}</div>}
+    </div>
+  );
+};
+
+const fInputStyle = (T, err) => ({
+  width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13,
+  border: `1px solid ${err ? "#dc2626" : T.border}`,
+  background: T.inputBg, color: T.text, outline: "none", boxSizing: "border-box",
+});
+
+const MilestoneListEditor = ({ items, onChange }) => {
+  const T = useT();
+  const [draft, setDraft] = useState({ name: "", date: "", status: "Upcoming", owner: "" });
+  const [adding, setAdding] = useState(false);
+  const s = fInputStyle(T, false);
+  const add = () => {
+    if (!draft.name.trim()) return;
+    onChange([...items, { ...draft, id: `M${Date.now()}` }]);
+    setDraft({ name: "", date: "", status: "Upcoming", owner: "" });
+    setAdding(false);
+  };
+  const remove = id => onChange(items.filter(m => m.id !== id));
+  const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
+  const cols = "2fr 130px 130px 130px 32px";
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Milestones</div>
+        {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add</button>}
+      </div>
+      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet</div>}
+      {items.map(m => (
+        <div key={m.id} style={{ display: "grid", gridTemplateColumns: cols, gap: 6, marginBottom: 6, alignItems: "center" }}>
+          <input value={m.name} onChange={e => upd(m.id, "name", e.target.value)} style={s} />
+          <input type="date" value={m.date || ""} onChange={e => upd(m.id, "date", e.target.value)} style={s} />
+          <select value={m.status} onChange={e => upd(m.id, "status", e.target.value)} style={{ ...s, background: T.selectBg }}>
+            {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
+          </select>
+          <input value={m.owner} onChange={e => upd(m.id, "owner", e.target.value)} placeholder="Owner" style={s} />
+          <button onClick={() => remove(m.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 15, padding: "4px" }}>×</button>
+        </div>
+      ))}
+      {adding && (
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 12, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: cols, gap: 6, marginBottom: 10, alignItems: "center" }}>
+            <input autoFocus value={draft.name} onChange={e => setDraft(p => ({ ...p, name: e.target.value }))} placeholder="Milestone name *" style={s} />
+            <input type="date" value={draft.date} onChange={e => setDraft(p => ({ ...p, date: e.target.value }))} style={s} />
+            <select value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value }))} style={{ ...s, background: T.selectBg }}>
+              {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
+            </select>
+            <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} placeholder="Owner" style={s} />
+            <div />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add</button>
+            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const RiskListEditor = ({ items, onChange }) => {
+  const T = useT();
+  const [adding, setAdding] = useState(false);
+  const blank = { title: "", probability: "Medium", impact: "Medium", level: "Medium", owner: "", status: "Open", mitigation: "", dueDate: "" };
+  const [draft, setDraft] = useState(blank);
+  const s = fInputStyle(T, false);
+  const ss = { ...s, background: T.selectBg };
+  const add = () => {
+    if (!draft.title.trim()) return;
+    onChange([...items, { ...draft, id: `R${Date.now()}` }]);
+    setDraft(blank);
+    setAdding(false);
+  };
+  const remove = id => onChange(items.filter(r => r.id !== id));
+  const levelC = { Critical: "#dc2626", High: "#f97316", Medium: "#eab308", Low: "#16a34a" };
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Risks</div>
+        {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Risk</button>}
+      </div>
+      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px 0" }}>No risks yet</div>}
+      {items.map(r => (
+        <div key={r.id} style={{ background: T.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 8, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{r.title}</div>
+            <button onClick={() => remove(r.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 4, cursor: "pointer", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px" }}>Remove</button>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: 11 }}>
+            {[["Prob", r.probability], ["Impact", r.impact]].map(([k,v]) => <span key={k} style={{ background: T.border, borderRadius: 10, padding: "2px 8px" }}>{k}: {v}</span>)}
+            <span style={{ background: levelC[r.level] || T.border, color: "#fff", borderRadius: 10, padding: "2px 8px" }}>{r.level}</span>
+            {r.owner && <span style={{ background: T.border, borderRadius: 10, padding: "2px 8px" }}>Owner: {r.owner}</span>}
+          </div>
+          {r.mitigation && <div style={{ fontSize: 11, color: T.muted, marginTop: 5 }}>Mitigation: {r.mitigation}</div>}
+        </div>
+      ))}
+      {adding && (
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Risk Title *</div>
+              <input autoFocus value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))} style={s} />
+            </div>
+            {[["Probability", "probability", ["Low","Medium","High"]], ["Impact", "impact", ["Low","Medium","High"]], ["Level", "level", ["Low","Medium","High","Critical"]], ["Status", "status", ["Open","In Progress","Mitigated","Closed"]]].map(([l,k,opts]) => (
+              <div key={k}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>{l}</div>
+                <select value={draft[k]} onChange={e => setDraft(p => ({ ...p, [k]: e.target.value }))} style={ss}>{opts.map(o => <option key={o}>{o}</option>)}</select>
+              </div>
+            ))}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Owner</div>
+              <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Due Date</div>
+              <input type="date" value={draft.dueDate} onChange={e => setDraft(p => ({ ...p, dueDate: e.target.value }))} style={s} />
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Mitigation Plan</div>
+              <input value={draft.mitigation} onChange={e => setDraft(p => ({ ...p, mitigation: e.target.value }))} style={s} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add Risk</button>
+            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const IssueListEditor = ({ items, onChange }) => {
+  const T = useT();
+  const today = new Date().toISOString().split("T")[0];
+  const [adding, setAdding] = useState(false);
+  const blank = { title: "", severity: "Medium", status: "Open", owner: "", raised: today, escalated: false };
+  const [draft, setDraft] = useState(blank);
+  const s = fInputStyle(T, false);
+  const ss = { ...s, background: T.selectBg };
+  const add = () => {
+    if (!draft.title.trim()) return;
+    onChange([...items, { ...draft, id: `I${Date.now()}` }]);
+    setDraft(blank);
+    setAdding(false);
+  };
+  const remove = id => onChange(items.filter(i => i.id !== id));
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Issues</div>
+        {!adding && <button onClick={() => setAdding(true)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Issue</button>}
+      </div>
+      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px 0" }}>No issues yet</div>}
+      {items.map(i => (
+        <div key={i.id} style={{ background: "#fef2f2", borderRadius: 8, padding: "10px 14px", marginBottom: 8, border: "1px solid #fecaca" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{i.title}</div>
+            <button onClick={() => remove(i.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 4, cursor: "pointer", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px" }}>Remove</button>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 5, fontSize: 11, flexWrap: "wrap" }}>
+            <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.severity}</span>
+            <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.status}</span>
+            {i.escalated && <span style={{ background: "#dc2626", color: "#fff", borderRadius: 10, padding: "2px 8px" }}>Escalated</span>}
+          </div>
+        </div>
+      ))}
+      {adding && (
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Issue Title *</div>
+              <input autoFocus value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))} style={s} />
+            </div>
+            {[["Severity", "severity", ["Low","Medium","High","Critical"]], ["Status", "status", ["Open","In Progress","Escalated","Resolved"]]].map(([l,k,opts]) => (
+              <div key={k}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>{l}</div>
+                <select value={draft[k]} onChange={e => setDraft(p => ({ ...p, [k]: e.target.value }))} style={ss}>{opts.map(o => <option key={o}>{o}</option>)}</select>
+              </div>
+            ))}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Owner</div>
+              <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Escalated?</div>
+              <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                {[false, true].map(v => (
+                  <button key={String(v)} onClick={() => setDraft(p => ({ ...p, escalated: v }))}
+                    style={{ flex: 1, padding: "7px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      background: draft.escalated === v ? (v ? "#fee2e2" : "#dcfce7") : T.bg,
+                      border: draft.escalated === v ? `1px solid ${v ? "#dc2626" : "#16a34a"}` : `1px solid ${T.border}`,
+                      color: draft.escalated === v ? (v ? "#dc2626" : "#15803d") : T.muted }}>
+                    {v ? "Yes" : "No"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add Issue</button>
+            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── PROJECT FORM ─────────────────────────────────────────────────
+const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
+  const T = useT();
+  const { departments } = useDepts();
+  const bp = useBp();
+  const existing = mode === "edit" ? projects.find(p => p.id === projectId) : null;
+  const today = new Date().toISOString().split("T")[0];
+
+  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const defaultDocs = [
+    { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
+    { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
+    { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
+  ];
+
+  const [form, setForm] = useState(() => existing ? { ...existing, _newUpdate: "" } : {
+    name: "", code: "", deptId: "", pm: "", sponsor: "",
+    projectType: "Enterprise Project", phase: "Planning", gate: "Gate 1",
+    status: "Not Started", priority: "Medium", riskLevel: "Low",
+    budgetStatus: "On Budget", classification: "Strategic", strategic: "",
+    objective: "", businessCase: "",
+    startDate: today, plannedEnd: "",
+    progress: 0, plannedProgress: 0,
+    budget: 0, forecast: 0, actualCost: 0,
+    spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "0",
+    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
+    milestones: [], risks: [], issues: [], updates: [], benefits: [], approvals: [],
+    documents: defaultDocs, requiredDocs: [],
+    gates: GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" })),
+    updateCadence: "Biweekly", archived: false, pmoStatus: "Draft", dataReliabilityFlag: "Pending",
+    _newUpdate: "",
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setH = (k, v) => setForm(f => ({ ...f, health: { ...f.health, [k]: v } }));
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = "Required";
+    if (!form.code.trim()) e.code = "Required";
+    if (!form.deptId) e.deptId = "Required";
+    if (!form.pm.trim()) e.pm = "Required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) { setStep(0); return; }
+    setSaving(true); setSaveError(null);
+    try {
+      await onSaveForm(form, mode, existing?.spId, existing?.id);
+      setRoute(mode === "edit" ? { view: "project", projectId: existing?.id } : { view: "projects" });
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const STEPS = [
+    { label: "Basic Info", icon: "📋" },
+    { label: "Timeline & Budget", icon: "📅" },
+    { label: "Health", icon: "🩺" },
+    { label: "Milestones", icon: "🎯" },
+    { label: "Risks & Issues", icon: "⚠️" },
+    { label: "Updates", icon: "📝" },
+  ];
+
+  const s = fInputStyle(T, false);
+  const sErr = k => fInputStyle(T, !!errors[k]);
+  const ss = { ...s, background: T.selectBg };
+
+  const RAGBtn = ({ hKey, label }) => {
+    const opts = ["Green", "Amber", "Red"];
+    const clr = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
+    const v = form.health[hKey];
+    return (
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 6 }}>{label}</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {opts.map(o => (
+            <button key={o} onClick={() => setH(hKey, o)} style={{ flex: 1, padding: "7px 4px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              background: v === o ? clr[o].bg : T.bg,
+              border: v === o ? `2px solid ${clr[o].b}` : `1px solid ${T.border}`,
+              color: v === o ? clr[o].text : T.muted }}>
+              {o}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStep = () => {
+    if (step === 0) return (
+      <div>
+        <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16 }}>
+          <FField label="Project Name" required error={errors.name}><input value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Digital Insurer Transformation" style={sErr("name")} /></FField>
+          <FField label="Project Code" required error={errors.code}><input value={form.code} onChange={e => set("code", e.target.value)} placeholder="e.g. PRJ-2026-45" style={sErr("code")} /></FField>
+          <FField label="Department" required error={errors.deptId}>
+            <select value={form.deptId} onChange={e => set("deptId", e.target.value)} style={{ ...ss, borderColor: errors.deptId ? "#dc2626" : T.border }}>
+              <option value="">— Select Department —</option>
+              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </FField>
+          <FField label="Project Type"><select value={form.projectType} onChange={e => set("projectType", e.target.value)} style={ss}>{PROJECT_TYPES.map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Project Manager" required error={errors.pm}><input value={form.pm} onChange={e => set("pm", e.target.value)} placeholder="Full name" style={sErr("pm")} /></FField>
+          <FField label="Sponsor"><input value={form.sponsor} onChange={e => set("sponsor", e.target.value)} placeholder="Full name" style={s} /></FField>
+          <FField label="Phase"><select value={form.phase} onChange={e => set("phase", e.target.value)} style={ss}>{["Initiation","Planning","Execution","Monitoring","Closure"].map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Current Gate"><select value={form.gate} onChange={e => set("gate", e.target.value)} style={ss}>{["Gate 1","Gate 2","Gate 3","Gate 4","Gate 5"].map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Status"><select value={form.status} onChange={e => set("status", e.target.value)} style={ss}>{["Not Started","On Track","At Risk","Delayed","Completed"].map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Priority"><select value={form.priority} onChange={e => set("priority", e.target.value)} style={ss}>{["Critical","High","Medium","Low"].map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Risk Level"><select value={form.riskLevel} onChange={e => set("riskLevel", e.target.value)} style={ss}>{["Critical","High","Medium","Low"].map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Budget Status"><select value={form.budgetStatus} onChange={e => set("budgetStatus", e.target.value)} style={ss}>{["On Budget","Over Budget","Under Budget"].map(o => <option key={o}>{o}</option>)}</select></FField>
+          <FField label="Classification"><input value={form.classification} onChange={e => set("classification", e.target.value)} placeholder="e.g. Strategic Initiative" style={s} /></FField>
+          <FField label="Strategic Objective"><input value={form.strategic} onChange={e => set("strategic", e.target.value)} placeholder="e.g. Digital Transformation" style={s} /></FField>
+        </div>
+        <FField label="Objective"><textarea value={form.objective} onChange={e => set("objective", e.target.value)} rows={3} style={{ ...s, resize: "vertical" }} /></FField>
+        <FField label="Business Case"><textarea value={form.businessCase} onChange={e => set("businessCase", e.target.value)} rows={3} style={{ ...s, resize: "vertical" }} /></FField>
+      </div>
+    );
+    if (step === 1) return (
+      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16 }}>
+        <FField label="Start Date"><input type="date" value={form.startDate || ""} onChange={e => set("startDate", e.target.value)} style={s} /></FField>
+        <FField label="Planned End Date"><input type="date" value={form.plannedEnd || ""} onChange={e => set("plannedEnd", e.target.value)} style={s} /></FField>
+        <FField label="Progress (%)"><input type="number" min={0} max={100} value={form.progress} onChange={e => set("progress", Number(e.target.value))} style={s} /></FField>
+        <FField label="Planned Progress (%)"><input type="number" min={0} max={100} value={form.plannedProgress} onChange={e => set("plannedProgress", Number(e.target.value))} style={s} /></FField>
+        <FField label="Budget (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>
+        <FField label="Forecast (SAR)"><input type="number" min={0} step={10000} value={form.forecast} onChange={e => set("forecast", Number(e.target.value))} style={s} /></FField>
+        <FField label="Actual Cost (SAR)"><input type="number" min={0} step={10000} value={form.actualCost} onChange={e => set("actualCost", Number(e.target.value))} style={s} /></FField>
+        <FField label="SPI (Schedule Performance Index)"><input type="number" min={0} max={3} step={0.01} value={form.spi} onChange={e => set("spi", Number(e.target.value))} style={s} /></FField>
+        <FField label="CPI (Cost Performance Index)"><input type="number" min={0} max={3} step={0.01} value={form.cpi} onChange={e => set("cpi", Number(e.target.value))} style={s} /></FField>
+        <FField label="Days Remaining"><input type="number" min={0} value={form.daysRemaining} onChange={e => set("daysRemaining", Number(e.target.value))} style={s} /></FField>
+      </div>
+    );
+    if (step === 2) return (
+      <div>
+        <p style={{ margin: "0 0 20px", fontSize: 13, color: T.muted }}>Set Green / Amber / Red for each dimension. Affects the Health tab and IPI score.</p>
+        <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 20 }}>
+          {[["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]].map(([k,l]) => <RAGBtn key={k} hKey={k} label={l} />)}
+        </div>
+      </div>
+    );
+    if (step === 3) return <MilestoneListEditor items={form.milestones} onChange={v => set("milestones", v)} />;
+    if (step === 4) return (
+      <div>
+        <RiskListEditor items={form.risks} onChange={v => set("risks", v)} />
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 20, marginTop: 4 }}>
+          <IssueListEditor items={form.issues} onChange={v => set("issues", v)} />
+        </div>
+      </div>
+    );
+    if (step === 5) return (
+      <div>
+        <FField label="Add Update Note (optional)">
+          <textarea value={form._newUpdate || ""} onChange={e => set("_newUpdate", e.target.value)} rows={4} placeholder="What's the latest status? Key decisions, blockers, progress..." style={{ ...s, resize: "vertical" }} />
+        </FField>
+        {form.updates?.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 10 }}>Previous Updates</div>
+            {[...form.updates].reverse().map(u => (
+              <div key={u.id} style={{ background: T.bg, borderRadius: 8, padding: 12, marginBottom: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.muted, marginBottom: 3 }}>{u.date} — {u.owner}</div>
+                <div style={{ fontSize: 13, color: T.text }}>{u.note}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+    return null;
+  };
+
+  return (
+    <div style={{ padding: bp === "mobile" ? 16 : 32, maxWidth: 860, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: T.text }}>{mode === "create" ? "New Project" : `Edit — ${existing?.name}`}</h1>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: T.muted }}>{mode === "create" ? "Fill in the project details. Required fields are marked *" : "Update project information and save to SharePoint"}</p>
+        </div>
+        <button onClick={() => setRoute(mode === "edit" ? { view: "project", projectId: existing?.id } : { view: "projects" })}
+          style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: T.text, flexShrink: 0 }}>
+          ✕ Cancel
+        </button>
+      </div>
+
+      {/* Step tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
+        {STEPS.map((st, i) => (
+          <button key={i} onClick={() => setStep(i)}
+            style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              background: step === i ? T.primary : T.bg,
+              color: step === i ? (T.btnPrimText || "#fff") : T.muted,
+              border: step === i ? "none" : `1px solid ${T.border}` }}>
+            {st.icon} {st.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: bp === "mobile" ? 16 : 24 }}>
+        {renderStep()}
+      </div>
+
+      {saveError && (
+        <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 16px", marginTop: 12, color: "#991b1b", fontSize: 13 }}>
+          ⚠️ {saveError}
+        </div>
+      )}
+
+      {/* Bottom nav */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          {step > 0 && <button onClick={() => setStep(s => s - 1)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>← Back</button>}
+          {step < STEPS.length - 1 && <button onClick={() => setStep(s => s + 1)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Next →</button>}
+        </div>
+        <button onClick={handleSave} disabled={saving}
+          style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 13, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1 }}>
+          {saving ? "Saving…" : mode === "create" ? "Create Project" : "Save Changes"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
@@ -2803,24 +3787,31 @@ export default function App() {
     setDark(themeStore.dark);      // keep local state in sync for Header prop
   };
   const activeT = themeStore.T;
+  const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [projects, setProjects] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [gateSubmissions, setGateSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [loadedAt, setLoadedAt] = useState(null);
 
-  // ── Bootstrap: load projects + departments from SP (or mock) ──
+  // ── Bootstrap: load all data from SP (or mock) ────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [projs, depts] = await Promise.all([
+        const [projs, depts, reqs, gates] = await Promise.all([
           SPService.getProjects(),
           SPService.getDepartments(),
+          SPService.getRequests(),
+          SPService.getGateSubmissions(),
         ]);
         if (cancelled) return;
         setProjects(projs);
         setDepartments(depts);
+        setRequests(reqs);
+        setGateSubmissions(gates);
         setLoadedAt(new Date());
       } catch (err) {
         if (!cancelled) setLoadError(err.message || "Failed to load data");
@@ -2891,12 +3882,58 @@ export default function App() {
     setProjects(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // ── Quick update: status + progress + milestones + note → SP ───
+  const submitUpdate = useCallback(async (projectId, { status, progress, milestones, note }) => {
+    const today = new Date().toISOString().split("T")[0];
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    const newUpdates = note?.trim()
+      ? [...(project.updates || []), { id: `U${Date.now()}`, date: today, owner: project.pm, note: note.trim() }]
+      : project.updates || [];
+    const updated = { ...project, status, progress, milestones, updates: newUpdates, lastUpdate: today };
+    if (!isUsingMock() && project.spId) {
+      await SPService.updateProject(project.spId, updated);
+    }
+    setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
+  }, [projects]);
+
+  // ── Form save: persists to SP then updates local state ──────────
+  const onSaveForm = useCallback(async (form, mode, spId, localId) => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const newUpdate = form._newUpdate?.trim();
+    const updates = newUpdate
+      ? [...(form.updates || []), { id: `U${Date.now()}`, date: todayStr, owner: form.pm, note: newUpdate }]
+      : (form.updates || []);
+    const full = { ...form, updates, _newUpdate: undefined, lastUpdate: todayStr };
+
+    if (!isUsingMock()) {
+      if (mode === "create") {
+        const created = await SPService.createProject(full);
+        setProjects(prev => [...prev, { ...full, id: created.id || full.code, spId: created.spId }]);
+      } else {
+        await SPService.updateProject(spId, full);
+        setProjects(prev => prev.map(p => p.id === localId ? { ...p, ...full } : p));
+      }
+    } else {
+      if (mode === "create") {
+        setProjects(prev => {
+          const next = prev.reduce((max, p) => Math.max(max, parseInt(p.id.replace(/\D/g,""),10)||0), 0) + 1;
+          return [...prev, { ...full, id: full.code || `P${String(next).padStart(3,"0")}` }];
+        });
+      } else {
+        setProjects(prev => prev.map(p => p.id === localId ? { ...p, ...full } : p));
+      }
+    }
+  }, []);
+
   // ── Dynamic title ───────────────────────────────────────────────
   const getTitle = () => {
-    if (route.view === "home") return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
+    if (route.view === "home")        return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
     if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${departments.length} departments`];
-    if (route.view === "projects") return ["All Projects", "Complete project portfolio"];
-    if (route.view === "admin") return ["Admin Panel", "System data management"];
+    if (route.view === "projects")    return ["All Projects", "Complete project portfolio"];
+    if (route.view === "admin")       return ["Admin Panel", "System data management"];
+    if (route.view === "requests")    return ["New Request", "Submit a new project request or track existing ones"];
+    if (route.view === "actions")     return ["My Actions", "Items pending your review or approval"];
     if (route.view === "department") {
       const d = departments.find(x => x.id === route.deptId);
       return [d?.name || "Department", "Project portfolio"];
@@ -2905,6 +3942,7 @@ export default function App() {
       const p = projects.find(x => x.id === route.projectId);
       return [p?.name || "Project", p?.code || ""];
     }
+    if (route.view === "form") return [route.mode === "create" ? "New Project" : "Edit Project", "Fill in details and save"];
     return ["PMO Portal", ""];
   };
 
@@ -2940,16 +3978,19 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={projects} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar route={route} setRoute={setRoute} projects={projects} requests={requests} gateSubmissions={gateSubmissions} currentUserEmail={currentUserEmail} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
-          {route.view === "home"        && <HomeView          projects={projects} setRoute={setRoute} loadedAt={loadedAt} />}
+          {route.view === "home"        && <HomeView          projects={projects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
           {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} route={route} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
-          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} />}
-          {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} addProject={addProject} updateProject={updateProject} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
+          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} submitUpdate={submitUpdate} />}
+          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} currentUserEmail={currentUserEmail} />}
+          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={projects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
+          {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
+          {route.view === "form"        && <ProjectForm        projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
         </main>
       </div>
     </div>

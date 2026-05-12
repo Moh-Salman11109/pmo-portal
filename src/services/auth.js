@@ -29,9 +29,9 @@ export const loginRequest = {
   scopes: ["User.Read", "openid", "profile"],
 };
 
-// SharePoint REST API token — all delegated SP permissions for the signed-in user
+// SharePoint REST API token — AllSites.Write includes read+write, triggers user consent once
 export const spRequest = {
-  scopes: spOrigin ? [`${spOrigin}/.default`] : [],
+  scopes: spOrigin ? [`${spOrigin}/AllSites.Write`] : [],
 };
 
 // ── Singleton MSAL instance ──────────────────────────────────────────────────
