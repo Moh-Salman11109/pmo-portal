@@ -9,7 +9,7 @@ export const SP_CONFIG = {
   projectsListName:      import.meta.env.VITE_SP_PROJECTS_LIST          || "PMO_Projects",
   deptsListName:         import.meta.env.VITE_SP_DEPARTMENTS_LIST        || "PMO_Departments",
   requestsListName:      import.meta.env.VITE_SP_REQUESTS_LIST          || "New Project Request",
-  gateSubmissionsListName: import.meta.env.VITE_SP_GATE_SUBMISSIONS_LIST || "PMO_GateSubmissions",
+  gateSubmissionsListName: import.meta.env.VITE_SP_GATE_SUBMISSIONS_LIST || "G1 - Project Initiation",
   pageSize:              Number(import.meta.env.VITE_SP_PAGE_SIZE)       || 500,
 };
 
@@ -423,50 +423,66 @@ export function mapSPItemToRequest(item) {
   };
 }
 
-// ─── GATE SUBMISSIONS FIELD MAP ──────────────────────────────────
+// ─── G1 - PROJECT INITIATION FIELD MAP ───────────────────────────
 export const SP_GATE_SUBMISSIONS_FIELD_MAP = {
-  spId:                  "ID",
-  projectId:             "ProjectID",
-  projectTitle:          "ProjectTitle",
-  gateNumber:            "GateNumber",
-  gateLabel:             "GateLabel",
-  submittedBy:           "SubmittedBy",
-  submittedByEmail:      "SubmittedByEmail",
-  submissionDate:        "SubmissionDate",
-  status:                "Status",
-  currentStage:          "CurrentStage",
-  pendingWith:           "PendingWith",
-  pendingWithEmail:      "PendingWithEmail",
-  lastActionDate:        "LastActionDate",
-  daysAtGate:            "DaysAtGate",
-  returnReason:          "ReturnReason",
-  financeClassification: "FinanceClassification",
-  approvalHistory:       "ApprovalHistoryJSON",
-  documentsJSON:         "DocumentsJSON",
+  spId:             "ID",
+  title:            "Title",          // project name
+  status:           "Status",
+  projectManager:   "ProjectManager", // User — expanded
+  projectSponsor:   "ProjectSponsor", // User — expanded
+  stakeholders:     "Stakeholders",   // Multi-user — expanded
+  projectCode:      "ProjectCode",
+  financeCapital:   "IsFinanceCapitalizationAssessmen",
+  author:           "Author",         // User — expanded (submitted by)
+  created:          "Created",
+};
+
+const G1_SELECT = [
+  "ID","Title","Status","ProjectCode","IsFinanceCapitalizationAssessmen",
+  "ProjectManager/Title","ProjectManager/EMail",
+  "ProjectSponsor/Title","ProjectSponsor/EMail",
+  "Stakeholders/Title","Stakeholders/EMail",
+  "Author/Title","Author/EMail",
+  "Created","Modified",
+].join(",");
+const G1_EXPAND = "ProjectManager,ProjectSponsor,Stakeholders,Author";
+
+// Derive who the item is currently pending with from its status string.
+const pendingWithFromG1Status = (status) => {
+  if (!status) return "";
+  if (status === "Project Sponsor Review")          return "Project Sponsor";
+  if (status === "Stakeholder Review")              return "Stakeholders";
+  if (status === "PMO Review")                      return "PMO";
+  if (status.startsWith("Finance Review"))          return "Finance";
+  return "";
 };
 
 export function mapSPItemToGateSubmission(item) {
-  const f = SP_GATE_SUBMISSIONS_FIELD_MAP;
+  const submissionDate = safeDate(item.Created);
+  const daysAtGate = submissionDate
+    ? Math.floor((Date.now() - new Date(item.Created)) / 86400000)
+    : 0;
   return {
-    id:                  `GS${item[f.spId]}`,
-    spId:                item[f.spId]                || null,
-    projectId:           item[f.projectId]           || "",
-    projectTitle:        item[f.projectTitle]        || "",
-    gateNumber:          item[f.gateNumber]          || "",
-    gateLabel:           item[f.gateLabel]           || "",
-    submittedBy:         item[f.submittedBy]         || "",
-    submittedByEmail:    item[f.submittedByEmail]    || "",
-    submissionDate:      safeDate(item[f.submissionDate]),
-    status:              item[f.status]              || "Submitted",
-    currentStage:        item[f.currentStage]        || "",
-    pendingWith:         item[f.pendingWith]         || "",
-    pendingWithEmail:    item[f.pendingWithEmail]    || "",
-    lastActionDate:      safeDate(item[f.lastActionDate]),
-    daysAtGate:          safeNum(item[f.daysAtGate]),
-    returnReason:        item[f.returnReason]        || "",
-    financeClassification: item[f.financeClassification] || "",
-    approvalHistory:     safeJSON(item[f.approvalHistory], []),
-    documentsJSON:       safeJSON(item[f.documentsJSON],  []),
+    id:                   `GS${item.ID}`,
+    spId:                 item.ID                          || null,
+    projectTitle:         item.Title                       || "",
+    projectCode:          item.ProjectCode                 || "",
+    projectId:            item.ProjectCode                 || "", // matched by code in UI
+    gateNumber:           "1",
+    gateLabel:            "Gate 1 — Project Initiation",
+    status:               item.Status                      || "",
+    pendingWith:          pendingWithFromG1Status(item.Status),
+    pendingWithEmail:     "",
+    projectManager:       item.ProjectManager?.Title       || "",
+    projectSponsor:       item.ProjectSponsor?.Title       || "",
+    stakeholders:         (item.Stakeholders || []).map(u => u.Title).filter(Boolean),
+    financeCapital:       item.IsFinanceCapitalizationAssessmen || "No",
+    submittedBy:          item.Author?.Title               || "",
+    submittedByEmail:     item.Author?.EMail               || "",
+    submissionDate,
+    daysAtGate,
+    returnReason:         "",
+    approvalHistory:      [],
   };
 }
 
@@ -488,11 +504,15 @@ Object.assign(SPService, {
     }
   },
 
-  /** Fetch all gate submissions. */
+  /** Fetch all G1 - Project Initiation submissions. */
   async getGateSubmissions() {
     if (USE_MOCK) return MOCK_GATE_SUBMISSIONS;
     try {
-      const items = await fetchAllItems(SP_CONFIG.gateSubmissionsListName);
+      const items = await fetchAllItems(
+        SP_CONFIG.gateSubmissionsListName,
+        G1_SELECT,
+        G1_EXPAND,
+      );
       return items.map(mapSPItemToGateSubmission);
     } catch (err) {
       console.warn("getGateSubmissions failed (non-fatal):", err.message);

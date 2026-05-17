@@ -2344,18 +2344,29 @@ const DeptCRUD = ({ projects }) => {
 
 // ─── HELPERS FOR REQUESTS ────────────────────────────────────────
 const REQUEST_STATUS_META = {
-  // SP "New Project Request" list values (set by Power Automate)
-  Opened:          { label: "Opened",              color: "#059669", bg: "#ecfdf5" },
-  "Under Review":  { label: "Under Review",        color: "#7c3aed", bg: "#f5f3ff" },
-  Approved:        { label: "Approved",            color: "#16a34a", bg: "#f0fdf4" },
-  Rejected:        { label: "Rejected",            color: "#dc2626", bg: "#fef2f2" },
-  Returned:        { label: "Returned",            color: "#d97706", bg: "#fef3c7" },
-  // Legacy / mock statuses kept for mock-data compatibility
-  Draft:           { label: "Draft",              color: "#6b7280", bg: "#f3f4f6" },
-  Submitted:       { label: "Submitted",          color: "#2563eb", bg: "#eff6ff" },
-  PendingOwner:    { label: "Pending Sponsor",    color: "#d97706", bg: "#fffbeb" },
-  PendingPMO:      { label: "Pending PMO",        color: "#7c3aed", bg: "#f5f3ff" },
-  PendingStrategy: { label: "Pending Strategy",   color: "#0891b2", bg: "#ecfeff" },
+  // ── New Project Request (intake) statuses ────────────────────────
+  Opened:                         { label: "Opened",                   color: "#059669", bg: "#ecfdf5" },
+  "Under Review":                 { label: "Under Review",             color: "#7c3aed", bg: "#f5f3ff" },
+  Approved:                       { label: "Approved",                 color: "#16a34a", bg: "#f0fdf4" },
+  Rejected:                       { label: "Rejected",                 color: "#dc2626", bg: "#fef2f2" },
+  Returned:                       { label: "Returned",                 color: "#d97706", bg: "#fef3c7" },
+  // ── G1 - Project Initiation statuses (Power Automate) ────────────
+  "Project Sponsor Review":       { label: "Sponsor Review",          color: "#d97706", bg: "#fffbeb" },
+  "Rejected By Project Sponsor":  { label: "Rejected by Sponsor",     color: "#dc2626", bg: "#fef2f2" },
+  "Stakeholder Review":           { label: "Stakeholder Review",      color: "#0891b2", bg: "#ecfeff" },
+  "Rejected By Stakeholder":      { label: "Rejected by Stakeholder", color: "#dc2626", bg: "#fef2f2" },
+  "PMO Review":                   { label: "PMO Review",              color: "#7c3aed", bg: "#f5f3ff" },
+  "Rejected By PMO":              { label: "Rejected by PMO",         color: "#dc2626", bg: "#fef2f2" },
+  "Finance Review (Stage 1)":     { label: "Finance Review",          color: "#2563eb", bg: "#eff6ff" },
+  "Finance Review (Final Stage)": { label: "Finance (Final)",         color: "#1d4ed8", bg: "#dbeafe" },
+  "Approved - Capitalized Proj":  { label: "Approved (Capital)",      color: "#15803d", bg: "#dcfce7" },
+  "Approved - Non-Capitalized":   { label: "Approved (Non-Capital)",  color: "#16a34a", bg: "#f0fdf4" },
+  // ── Legacy / mock compatibility ───────────────────────────────────
+  Draft:           { label: "Draft",           color: "#6b7280", bg: "#f3f4f6" },
+  Submitted:       { label: "Submitted",       color: "#2563eb", bg: "#eff6ff" },
+  PendingOwner:    { label: "Pending Sponsor", color: "#d97706", bg: "#fffbeb" },
+  PendingPMO:      { label: "Pending PMO",     color: "#7c3aed", bg: "#f5f3ff" },
+  PendingStrategy: { label: "Pending Strategy",color: "#0891b2", bg: "#ecfeff" },
 };
 
 const RequestStatusBadge = ({ status }) => {
@@ -2468,16 +2479,37 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute }) => {
     );
   };
 
-  const GateCard = ({ gs }) => (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{gs.gateLabel}</div>
-        <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{gs.projectTitle} · Submitted {gs.submissionDate}</div>
-        {gs.pendingWith && <div style={{ fontSize: 12, color: "#d97706", marginTop: 4 }}>Pending with {gs.pendingWith} · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</div>}
+  const GateCard = ({ gs }) => {
+    const isRejected = gs.status?.startsWith("Rejected");
+    const isApproved = gs.status?.startsWith("Approved");
+    const borderColor = isRejected ? "#fecaca" : isApproved ? "#bbf7d0" : T.border;
+    return (
+      <div style={{ background: T.surface, border: `1px solid ${borderColor}`, borderRadius: 12, padding: "14px 18px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{gs.projectTitle}</span>
+              <span style={{ fontSize: 11, color: T.muted, background: T.bgAlt || "#f3f4f6", padding: "1px 7px", borderRadius: 6 }}>{gs.gateLabel}</span>
+              {gs.projectCode && <span style={{ fontSize: 11, color: T.muted }}>{gs.projectCode}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>
+              Submitted {gs.submissionDate}
+              {gs.projectManager && <span> · PM: {gs.projectManager}</span>}
+              {gs.projectSponsor && <span> · Sponsor: {gs.projectSponsor}</span>}
+            </div>
+            {gs.pendingWith && !isRejected && !isApproved && (
+              <div style={{ fontSize: 12, color: "#d97706", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#d97706", display: "inline-block" }} />
+                Pending with {gs.pendingWith}
+                {gs.daysAtGate > 0 && <span style={{ color: T.muted }}> · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</span>}
+              </div>
+            )}
+          </div>
+          <RequestStatusBadge status={gs.status} />
+        </div>
       </div>
-      <RequestStatusBadge status={gs.status} />
-    </div>
-  );
+    );
+  };
 
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
