@@ -481,8 +481,8 @@ Object.assign(SPService, {
       );
       return items.map(mapSPItemToRequest);
     } catch (err) {
-      if (err.message?.includes("404")) return [];
-      throw err;
+      console.warn("getRequests failed (non-fatal):", err.message);
+      return [];
     }
   },
 
@@ -493,9 +493,8 @@ Object.assign(SPService, {
       const items = await fetchAllItems(SP_CONFIG.gateSubmissionsListName);
       return items.map(mapSPItemToGateSubmission);
     } catch (err) {
-      // List does not exist yet — return empty until IT creates it
-      if (err.message?.includes("404")) return [];
-      throw err;
+      console.warn("getGateSubmissions failed (non-fatal):", err.message);
+      return [];
     }
   },
 
