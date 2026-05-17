@@ -203,9 +203,15 @@ export function mapProjectToSPItem(project) {
     [f.plannedEnd]:        nd(project.plannedEnd),
     [f.lastUpdate]:        new Date().toISOString().split("T")[0],
     [f.archivedDate]:      nd(project.archivedDate),
-    // Progress & financials: columns not yet in SP list — omit from write
-    // Add Number columns: Progress, PlannedProgress, Budget, Forecast,
-    // ActualCost, SPI, CPI, DaysRemaining, DaysDelayed to PMO_Projects
+    [f.progress]:          nn(project.progress),
+    [f.plannedProgress]:   nn(project.plannedProgress),
+    [f.budget]:            nn(project.budget),
+    [f.forecast]:          nn(project.forecast),
+    [f.actualCost]:        nn(project.actualCost),
+    [f.spi]:               nn(project.spi),
+    [f.cpi]:               nn(project.cpi),
+    [f.daysRemaining]:     nn(project.daysRemaining),
+    [f.daysDelayed]:       nn(project.daysDelayed),
     [f.scheduleVariance]:  project.scheduleVariance || "0",
     [f.objective]:         ns(project.objective),
     [f.businessCase]:      ns(project.businessCase),
