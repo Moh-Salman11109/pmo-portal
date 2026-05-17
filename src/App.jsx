@@ -638,7 +638,7 @@ const Tab = ({ tabs, active, onSelect }) => {
 };
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
-const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, currentUserEmail, open, onClose }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, open, onClose }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -671,11 +671,13 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, current
     return reqPending + gatePending;
   }, [requests, gateSubmissions, currentUserEmail]);
 
-  // Open (active) requests belonging to the current user
-  const myRequestsCount = useMemo(
-    () => (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status)).length,
-    [requests]
-  );
+  // All active submissions across all three lists
+  const myRequestsCount = useMemo(() => {
+    const reqs    = (requests           || []).filter(r => !r.status?.startsWith("Approved") && !r.status?.startsWith("Rejected")).length;
+    const gates   = (gateSubmissions    || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected")).length;
+    const closures= (closureSubmissions || []).filter(c => c.status !== "Closed").length;
+    return reqs + gates + closures;
+  }, [requests, gateSubmissions, closureSubmissions]);
 
   const navItems = [
     { icon: "🏠", label: "Portfolio Overview", route: "home" },
@@ -4047,7 +4049,7 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={projects} requests={requests} gateSubmissions={gateSubmissions} currentUserEmail={currentUserEmail} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar route={route} setRoute={setRoute} projects={projects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
