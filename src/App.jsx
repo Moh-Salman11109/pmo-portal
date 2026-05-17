@@ -87,8 +87,6 @@ const useT = () => {
   return themeStore.T;
 };
 
-// Keep ThemeContext for compatibility (Header needs dark prop)
-const ThemeContext = createContext(null);
 const useDark = () => themeStore.dark;
 
 // ─── BREAKPOINT STORE ─────────────────────────────────────────────
@@ -226,6 +224,13 @@ const riskColor = {
 };
 
 const TODAY = new Date().toISOString().split("T")[0];
+
+// Mandatory docs every project gets at creation — single source of truth
+const MANDATORY_DOCS = [
+  { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
+  { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
+  { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
+];
 
 // Days since a date string — staleness + Gate SLA calculations
 const daysSince = (dateStr) => {
@@ -2757,11 +2762,6 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
         showToast("Project updated successfully");
       } else {
         const today = new Date().toISOString().split("T")[0];
-        const mandatoryDocs = [
-          { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
-          { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
-          { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
-        ];
         const defaultGates = GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" }));
         const fullCreate = {
           ...formData,
@@ -2769,7 +2769,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
           gates: defaultGates,
           milestones: [], risks: [], issues: [], benefits: [],
           approvals: [], updates: [],
-          documents: mandatoryDocs,
+          documents: [...MANDATORY_DOCS],
           health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
           spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
           scheduleVariance: "0", actualCost: 0,
@@ -2785,9 +2785,13 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
     }
   };
 
-  const handleDelete = (id) => {
-    archiveProject(id);
-    showToast("Project archived");
+  const handleDelete = async (id) => {
+    try {
+      await archiveProject(id);
+      showToast("Project archived");
+    } catch (err) {
+      showToast(`Archive failed: ${err.message}`, "error");
+    }
   };
 
   const fp = { formData, setFormData, T, dark: themeStore.dark };
@@ -2810,7 +2814,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
               <button onClick={() => setConfirmDeleteForever(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 24px", fontSize: 13, cursor: "pointer", fontWeight: 600, color: T.text }}>Cancel</button>
-              <button onClick={() => { deleteForever(confirmDeleteForever); showToast(`Project deleted permanently`, "error"); setConfirmDeleteForever(null); }}
+              <button onClick={async () => { try { await deleteForever(confirmDeleteForever); showToast(`Project deleted permanently`, "error"); } catch (err) { showToast(`Delete failed: ${err.message}`, "error"); } setConfirmDeleteForever(null); }}
                 style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Delete Forever</button>
             </div>
           </div>
@@ -2978,7 +2982,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", gap: 6 }}>
                         {/* Restore */}
-                        <button onClick={() => { restoreProject(p.id); showToast(`"${p.name}" restored successfully`); }}
+                        <button onClick={async () => { try { await restoreProject(p.id); showToast(`"${p.name}" restored successfully`); } catch (err) { showToast(`Restore failed: ${err.message}`, "error"); } }}
                           style={{ background: "#dcfce7", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", color: "#15803d", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
                           ↩ Restore
                         </button>
@@ -3595,12 +3599,6 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   const [saveError, setSaveError] = useState(null);
   const [errors, setErrors] = useState({});
 
-  const defaultDocs = [
-    { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
-    { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
-    { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
-  ];
-
   const [form, setForm] = useState(() => existing ? { ...existing, _newUpdate: "" } : {
     name: "", code: "", deptId: "", pm: "", sponsor: "",
     projectType: "Enterprise Project", phase: "Planning", gate: "Gate 1",
@@ -3613,7 +3611,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "0",
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
     milestones: [], risks: [], issues: [], updates: [], benefits: [], approvals: [],
-    documents: defaultDocs, requiredDocs: [],
+    documents: [...MANDATORY_DOCS], requiredDocs: [],
     gates: GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" })),
     updateCadence: "Biweekly", archived: false, pmoStatus: "Draft", dataReliabilityFlag: "Pending",
     _newUpdate: "",
@@ -3815,12 +3813,10 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
-  const [dark, setDark] = useState(false);
+  const [, rerenderDark] = useState(0);
+  const dark = themeStore.dark;
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const toggleDark = () => {
-    themeStore.toggle();           // notifies ALL useT() subscribers instantly
-    setDark(themeStore.dark);      // keep local state in sync for Header prop
-  };
+  const toggleDark = () => { themeStore.toggle(); rerenderDark(n => n + 1); };
   const activeT = themeStore.T;
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [projects, setProjects] = useState([]);
@@ -3863,59 +3859,33 @@ export default function App() {
 
   // theme handled by themeStore pub/sub
 
-  // ── CRUD helpers passed down to AdminView ──────────────────────
-  const addProject = useCallback((data) => {
-    const today = new Date().toISOString().split("T")[0];
-    const mandatoryDocs = [
-      { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
-      { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
-      { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
-    ];
-    const optionalDocs = (data.requiredDocs || []).map((name, i) => ({
-      id: `D${i + 4}`, name, type: name, required: true, status: "Pending", version: "", lastUpdated: ""
-    }));
-    const defaultGates = GATE_DEFS.map(g => ({
-      id: g.id, status: "Pending", date: null, approver: "", notes: ""
-    }));
-    setProjects(prev => {
-      const maxNum = prev.reduce((max, p) => {
-        const n = parseInt(p.id.replace(/\D/g, ""), 10);
-        return isNaN(n) ? max : Math.max(max, n);
-      }, 0);
-      const newId = `P${String(maxNum + 1).padStart(3, "0")}`;
-      return [...prev, {
-        ...data,
-        id: newId,
-        projectType: data.projectType || "Internal Project",
-        gates: defaultGates,
-        milestones: [], risks: [], issues: [], benefits: [],
-        approvals: [], updates: [],
-        documents: [...mandatoryDocs, ...optionalDocs],
-        health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
-        spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
-        scheduleVariance: "0", actualCost: 0,
-        forecast: Number(data.budget),
-        lastUpdate: today,
-      }];
-    });
-  }, []);
-
   const updateProject = useCallback((id, data) => {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data, lastUpdate: new Date().toISOString().split("T")[0] } : p));
   }, []);
 
-  const archiveProject = useCallback((id) => {
+  const archiveProject = useCallback(async (id) => {
     const today = new Date().toISOString().split("T")[0];
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: true, archivedDate: today } : p));
-  }, []);
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    const updated = { ...project, archived: true, archivedDate: today };
+    if (!isUsingMock() && project.spId) await SPService.updateProject(project.spId, updated);
+    setProjects(prev => prev.map(p => p.id === id ? updated : p));
+  }, [projects]);
 
-  const restoreProject = useCallback((id) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: false, archivedDate: null } : p));
-  }, []);
+  const restoreProject = useCallback(async (id) => {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    const updated = { ...project, archived: false, archivedDate: null };
+    if (!isUsingMock() && project.spId) await SPService.updateProject(project.spId, updated);
+    setProjects(prev => prev.map(p => p.id === id ? updated : p));
+  }, [projects]);
 
-  const deleteForever = useCallback((id) => {
+  const deleteForever = useCallback(async (id) => {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    if (!isUsingMock() && project.spId) await SPService.deleteProject(project.spId);
     setProjects(prev => prev.filter(p => p.id !== id));
-  }, []);
+  }, [projects]);
 
   // ── Quick update: status + progress + milestones + note → SP ───
   const submitUpdate = useCallback(async (projectId, { status, progress, milestones, note }) => {
@@ -4004,7 +3974,6 @@ export default function App() {
   }
 
   return (
-    <ThemeContext.Provider value={{ T: activeT, dark }}>
     <DeptContext.Provider value={deptCtx}>
     <div style={{
       display: "flex", height: "100vh",
@@ -4029,6 +3998,5 @@ export default function App() {
       </div>
     </div>
     </DeptContext.Provider>
-    </ThemeContext.Provider>
   );
 }

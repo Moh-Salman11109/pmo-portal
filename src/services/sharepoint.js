@@ -338,6 +338,29 @@ export const SPService = {
     }
     return project;
   },
+
+  /** Permanently delete an SP item by its numeric SP ID. */
+  async deleteProject(spId) {
+    if (USE_MOCK) return;
+    const { siteUrl, projectsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-HTTP-Method": "DELETE",
+          "IF-MATCH": "*",
+        },
+      }
+    );
+    if (!res.ok && res.status !== 204) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`SP delete failed: ${res.status} — ${body.slice(0, 300)}`);
+    }
+  },
 };
 
 /** True when running against mock data, false when live SP. */
