@@ -2490,10 +2490,25 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail 
           </div>
         </div>
         <button
-          onClick={() => intakeUrl ? window.open(https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JABDKIaeBCPoS5HMUrzZi2zeASFvBkPx7cy0asCi2R7BHSU?nav=YTk2MmNmODAtNzJiMy00NmE2LWJiMmItOWJlZDNhMTdiNThk, "_blank") : null}
-          disabled={!intakeUrl}
-          style={{ padding: "11px 24px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: intakeUrl ? "pointer" : "default", opacity: intakeUrl ? 1 : 0.5, whiteSpace: "nowrap" }}>
-          + New Request
+          onClick={() =>
+    window.open(
+      "https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JABDKIaeBCPoS5HMUrzZi2zeASFvBkPx7cy0asCi2R7BHSU?nav=YTk2MmNmODAtNzJiMy00NmE2LWJiMmItOWJlZDNhMTdiNThk",
+      "_blank"
+    )
+  }
+  style={{
+    padding: "11px 24px",
+    background: T.btnPrimBg,
+    color: T.btnPrimText,
+    border: "none",
+    borderRadius: 10,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  }}
+>
+  + New Request
         </button>
       </div>
 
@@ -2503,7 +2518,12 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail 
       {/* Gate submissions */}
       {pendingGates.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Gate Reviews In Progress</div>
+          <div style={{ fontSize: 13,
+                       fontWeight: 700, 
+                       color: T.muted, 
+                       textTransform: "uppercase", 
+                       letterSpacing: "0.06em", 
+                       marginBottom: 10 }}>Gate Reviews In Progress</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingGates.map(gs => <GateCard key={gs.id} gs={gs} />)}
           </div>
