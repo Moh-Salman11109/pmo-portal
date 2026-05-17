@@ -2415,9 +2415,10 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute }) => {
   const pad = bp === "mobile" ? "16px" : "32px";
 
   const intakeUrl   = FORM_URLS.intake;
-  const pending      = (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status));
-  const completed    = (requests || []).filter(r =>  ["Approved", "Rejected"].includes(r.status));
-  const pendingGates = (gateSubmissions || []).filter(g => !["Approved", "Rejected"].includes(g.status));
+  const isClosedReq  = (r) => r.status?.startsWith("Approved") || r.status?.startsWith("Rejected");
+  const pending      = (requests || []).filter(r => !isClosedReq(r));
+  const completed    = (requests || []).filter(r =>  isClosedReq(r));
+  const pendingGates = (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
 
   // ── Request Card ─────────────────────────────────────────────────
   const RequestCard = ({ req }) => {
@@ -2588,7 +2589,7 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
   );
 
   const pendingGates = (gateSubmissions || []).filter(g =>
-    !["Approved", "Rejected"].includes(g.status) &&
+    !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected") &&
     (isMock || g.pendingWithEmail === currentUserEmail)
   );
 
