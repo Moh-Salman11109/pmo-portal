@@ -2345,7 +2345,7 @@ const DeptCRUD = ({ projects }) => {
 // ─── HELPERS FOR REQUESTS ────────────────────────────────────────
 const REQUEST_STATUS_META = {
   // SP "New Project Request" list values (set by Power Automate)
-  Opened:          { label: "Opened",              color: "#2563eb", bg: "#eff6ff" },
+  Opened:          { label: "Opened",              color: "#059669", bg: "#ecfdf5" },
   "Under Review":  { label: "Under Review",        color: "#7c3aed", bg: "#f5f3ff" },
   Approved:        { label: "Approved",            color: "#16a34a", bg: "#f0fdf4" },
   Rejected:        { label: "Rejected",            color: "#dc2626", bg: "#fef2f2" },

@@ -94,6 +94,8 @@ const safeNum = (val, fallback = 0) => {
 
 const safeDate = (val) => (val ? String(val).split("T")[0] : null);
 
+const stripHtml = (str) => str ? String(str).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "";
+
 // ─── SP ITEM → APP SHAPE ─────────────────────────────────────────
 // Converts a raw SharePoint list item to the project shape the UI expects.
 // All components read from this normalised shape — SP schema changes only
@@ -400,7 +402,7 @@ export function mapSPItemToRequest(item) {
     deptId:          item[f.department]            || "",  // alias for existing card UI
     projectManager:  item.ProjectManager?.Title    || "",
     projectOwner:    item["ProjectOwner_x002f_Manager"]?.Title || "",
-    description:     item[f.description]           || "",
+    description:     stripHtml(item[f.description]),
     newProduct:      !!item[f.newProduct],
     newSalesChannel: !!item[f.newSalesChannel],
     enterpriseWide:  !!item[f.enterpriseWide],
