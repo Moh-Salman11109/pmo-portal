@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
-import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
+import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -2413,17 +2413,17 @@ const Lbl = ({ label, err, children, T }) => (
   </div>
 );
 
-const MyRequestsView = ({ requests, gateSubmissions, setRoute }) => {
+const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute }) => {
   const T = useT();
   const bp = useBp();
   const [expandedId, setExpandedId] = useState(null);
   const pad = bp === "mobile" ? "16px" : "32px";
 
-  const intakeUrl   = FORM_URLS.intake;
-  const isClosedReq  = (r) => r.status?.startsWith("Approved") || r.status?.startsWith("Rejected");
-  const pending      = (requests || []).filter(r => !isClosedReq(r));
-  const completed    = (requests || []).filter(r =>  isClosedReq(r));
-  const pendingGates = (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
+  const isClosedReq    = (r) => r.status?.startsWith("Approved") || r.status?.startsWith("Rejected");
+  const pending        = (requests || []).filter(r => !isClosedReq(r));
+  const completed      = (requests || []).filter(r =>  isClosedReq(r));
+  const pendingGates   = (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
+  const pendingClosures = (closureSubmissions || []).filter(c => c.status !== "Closed");
 
   // ── Request Card ─────────────────────────────────────────────────
   const RequestCard = ({ req }) => {
@@ -2570,6 +2570,41 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute }) => {
           <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Gate Reviews In Progress</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingGates.map(gs => <GateCard key={gs.id} gs={gs} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ── Closure Reviews In Progress ── */}
+      {pendingClosures.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Closure Reviews In Progress</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingClosures.map(cl => (
+              <div key={cl.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cl.projectTitle}</span>
+                      <span style={{ fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>Project Closure</span>
+                      {cl.projectCode && <span style={{ fontSize: 11, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px" }}>{cl.projectCode}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: T.muted }}>
+                      Submitted {cl.submissionDate} · PM: {cl.projectManager}
+                      {cl.department && <span> · {cl.department}</span>}
+                    </div>
+                    {cl.daysInClosure > 0 && (
+                      <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#d97706" }} />
+                        <span style={{ fontSize: 12, color: T.muted }}>In review · <strong>{cl.daysInClosure} day{cl.daysInClosure !== 1 ? "s" : ""}</strong></span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "4px 12px", whiteSpace: "nowrap" }}>
+                    {cl.status || "In Review"}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -3851,6 +3886,7 @@ export default function App() {
   const [departments, setDepartments] = useState([]);
   const [requests, setRequests] = useState([]);
   const [gateSubmissions, setGateSubmissions] = useState([]);
+  const [closureSubmissions, setClosureSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [loadedAt, setLoadedAt] = useState(null);
@@ -3860,17 +3896,19 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const [projs, depts, reqs, gates] = await Promise.all([
+        const [projs, depts, reqs, gates, closures] = await Promise.all([
           SPService.getProjects(),
           SPService.getDepartments(),
           SPService.getRequests(),
           SPService.getGateSubmissions(),
+          SPService.getClosureSubmissions(),
         ]);
         if (cancelled) return;
         setProjects(projs);
         setDepartments(depts);
         setRequests(reqs);
         setGateSubmissions(gates);
+        setClosureSubmissions(closures);
         setLoadedAt(new Date());
       } catch (err) {
         if (!cancelled) setLoadError(err.message || "Failed to load data");
@@ -4018,7 +4056,7 @@ export default function App() {
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} route={route} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} submitUpdate={submitUpdate} />}
-          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} />}
+          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={projects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
           {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
           {route.view === "form"        && <ProjectForm        projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}

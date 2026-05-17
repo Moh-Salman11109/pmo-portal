@@ -791,3 +791,7 @@ export const MOCK_GATE_SUBMISSIONS = [
     ],
   },
 ];
+
+
+// ─── MOCK CLOSURE SUBMISSIONS ─────────────────────────────────────
+export const MOCK_CLOSURE_SUBMISSIONS = [];

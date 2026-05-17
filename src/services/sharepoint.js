@@ -1,4 +1,4 @@
-import { MOCK_PROJECTS, MOCK_DEPARTMENTS, MOCK_REQUESTS, MOCK_GATE_SUBMISSIONS } from "../data/mockData.js";
+import { MOCK_PROJECTS, MOCK_DEPARTMENTS, MOCK_REQUESTS, MOCK_GATE_SUBMISSIONS, MOCK_CLOSURE_SUBMISSIONS } from "../data/mockData.js";
 import { acquireSpToken } from "./auth.js";
 
 // ─── CONFIGURATION ───────────────────────────────────────────────
@@ -10,6 +10,7 @@ export const SP_CONFIG = {
   deptsListName:         import.meta.env.VITE_SP_DEPARTMENTS_LIST        || "PMO_Departments",
   requestsListName:      import.meta.env.VITE_SP_REQUESTS_LIST          || "New Project Request",
   gateSubmissionsListName: import.meta.env.VITE_SP_GATE_SUBMISSIONS_LIST || "G1 - Project Initiation",
+  closureListName:         import.meta.env.VITE_SP_CLOSURE_LIST          || "Project Closure - E-Signoff",
   pageSize:              Number(import.meta.env.VITE_SP_PAGE_SIZE)       || 500,
 };
 
@@ -543,4 +544,66 @@ Object.assign(SPService, {
     }
   },
 
+  /** Fetch all Project Closure - E-Signoff submissions. */
+  async getClosureSubmissions() {
+    if (USE_MOCK) return MOCK_CLOSURE_SUBMISSIONS;
+    try {
+      const items = await fetchAllItems(
+        SP_CONFIG.closureListName,
+        CLOSURE_SELECT,
+        CLOSURE_EXPAND,
+      );
+      return items.map(mapSPItemToClosureSubmission);
+    } catch (err) {
+      console.warn("getClosureSubmissions failed (non-fatal):", err.message);
+      return [];
+    }
+  },
+
 });
+
+// ─── PROJECT CLOSURE FIELD MAP ───────────────────────────────────
+export const SP_CLOSURE_FIELD_MAP = {
+  spId:           "ID",
+  title:          "Title",
+  projectCode:    "ProjectCode",
+  department:     "Department",
+  status:         "Status",
+  stakeholders:   "Stakeholders",
+  projectManager: "ProjectManager",
+  comments:       "Comments",
+  author:         "Author",
+  created:        "Created",
+};
+
+const CLOSURE_SELECT = [
+  "ID","Title","ProjectCode","Department","Status","Comments",
+  "ProjectManager/Title","ProjectManager/EMail",
+  "Stakeholders/Title","Stakeholders/EMail",
+  "Author/Title","Author/EMail",
+  "Created",
+].join(",");
+const CLOSURE_EXPAND = "ProjectManager,Stakeholders,Author";
+
+export function mapSPItemToClosureSubmission(item) {
+  const submissionDate = safeDate(item.Created);
+  const daysInClosure = submissionDate
+    ? Math.floor((Date.now() - new Date(item.Created)) / 86400000)
+    : 0;
+  return {
+    id:             `CL${item.ID}`,
+    spId:           item.ID                        || null,
+    projectTitle:   item.Title                     || "",
+    projectCode:    item.ProjectCode               || "",
+    projectId:      item.ProjectCode               || "",
+    department:     item.Department                || "",
+    status:         item.Status                    || "",
+    projectManager: item.ProjectManager?.Title     || "",
+    stakeholders:   (item.Stakeholders || []).map(u => u.Title).filter(Boolean),
+    comments:       item.Comments                  || "",
+    submittedBy:    item.Author?.Title             || "",
+    submittedByEmail: item.Author?.EMail           || "",
+    submissionDate,
+    daysInClosure,
+  };
+}
