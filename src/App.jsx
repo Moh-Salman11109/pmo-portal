@@ -2544,7 +2544,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
             <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit Gate 1 for an approved project to kick off execution</div>
           </div>
           <button onClick={() => window.open(FORM_URLS.gate1, "_blank")}
-            style={{ marginTop: "auto", padding: "9px 16px", background: "#0891b2", color: "#fff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             Submit Gate 1
           </button>
         </div>
@@ -2557,7 +2557,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
             <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the closure document for a completed project</div>
           </div>
           <button onClick={() => window.open(FORM_URLS.closure, "_blank")}
-            style={{ marginTop: "auto", padding: "9px 16px", background: "#15803d", color: "#fff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             Submit Closure
           </button>
         </div>
