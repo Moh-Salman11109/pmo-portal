@@ -463,22 +463,39 @@ Object.assign(SPService, {
     }
   },
 
-  /** Create a new request record (Draft — before opening SP form). */
+  /** Create a new request submitted directly from the Portal form. */
   async createRequest(request) {
-    if (USE_MOCK) return { ...request, spId: Date.now() };
+    const today = new Date().toISOString().split("T")[0];
+    if (USE_MOCK) {
+      return {
+        ...request,
+        id: `RQ${Date.now()}`,
+        spId: Date.now(),
+        status: "Submitted",
+        currentStage: "Project Owner / Sponsor Approval",
+        requestDate: today,
+        lastActionDate: today,
+        daysInCurrentStage: 0,
+        approvalHistory: [],
+      };
+    }
     const { siteUrl, requestsListName } = SP_CONFIG;
     const token = await acquireSpToken();
     const f = SP_REQUESTS_FIELD_MAP;
     const body = {
-      [f.title]:          request.title       || "",
-      [f.requestedBy]:    request.requestedBy || "",
-      [f.requestedByEmail]: request.requestedByEmail || "",
-      [f.description]:    request.description || "",
-      [f.deptId]:         request.deptId      || "",
-      [f.proposedPm]:     request.proposedPm  || "",
-      [f.proposedSponsor]:request.proposedSponsor || "",
-      [f.status]:         "Draft",
-      [f.requestDate]:    new Date().toISOString().split("T")[0],
+      [f.title]:            request.title           || "",
+      [f.requestedBy]:      request.requestedBy     || "",
+      [f.requestedByEmail]: request.requestedByEmail|| "",
+      [f.description]:      request.description     || "",
+      [f.deptId]:           request.deptId          || "",
+      [f.proposedPm]:       request.proposedPm      || "",
+      [f.proposedSponsor]:  request.proposedSponsor || "",
+      [f.status]:           "Submitted",
+      [f.currentStage]:     "Project Owner / Sponsor Approval",
+      [f.requestDate]:      today,
+      [f.lastActionDate]:   today,
+      [f.daysInCurrentStage]: 0,
+      [f.approvalHistory]:  "[]",
     };
     const res = await fetch(
       `${siteUrl}/_api/web/lists/getbytitle('${requestsListName}')/items`,

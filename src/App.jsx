@@ -2384,21 +2384,68 @@ const ApprovalTimeline = ({ history }) => {
 };
 
 // ─── MY REQUESTS VIEW ────────────────────────────────────────────
-const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail }) => {
+const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail, currentUserName, onCreateRequest }) => {
   const T = useT();
   const bp = useBp();
-  const [expandedId, setExpandedId] = useState(null);
+  const { departments } = useDepts();
+  const [expandedId, setExpandedId]   = useState(null);
+  const [showForm,   setShowForm]     = useState(false);
+  const [submitting, setSubmitting]   = useState(false);
+  const [submitDone, setSubmitDone]   = useState(false);
+  const [errors,     setErrors]       = useState({});
+  const [form, setForm] = useState({ title: "", deptId: "", description: "", proposedSponsor: "", proposedPm: "" });
   const pad = bp === "mobile" ? "16px" : "32px";
-  const intakeUrl = FORM_URLS.intake;
 
-  const pending   = (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status));
-  const completed = (requests || []).filter(r =>  ["Approved", "Rejected"].includes(r.status));
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  const pending      = (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status));
+  const completed    = (requests || []).filter(r =>  ["Approved", "Rejected"].includes(r.status));
   const pendingGates = (gateSubmissions || []).filter(g => !["Approved", "Rejected"].includes(g.status));
 
+  const validate = () => {
+    const e = {};
+    if (!form.title.trim())           e.title           = "Required";
+    if (!form.deptId)                 e.deptId          = "Required";
+    if (!form.description.trim())     e.description     = "Required";
+    if (!form.proposedSponsor.trim()) e.proposedSponsor = "Required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      await onCreateRequest({
+        ...form,
+        requestedBy:      currentUserName  || "Portal User",
+        requestedByEmail: currentUserEmail || "",
+      });
+      setSubmitDone(true);
+      setForm({ title: "", deptId: "", description: "", proposedSponsor: "", proposedPm: "" });
+      setErrors({});
+      setTimeout(() => { setSubmitDone(false); setShowForm(false); }, 2500);
+    } catch (err) {
+      setErrors({ _submit: err.message || "Failed to submit" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inp  = (err) => ({ width: "100%", padding: "9px 12px", border: `1px solid ${err ? "#dc2626" : T.border}`, borderRadius: 8, fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box", outline: "none" });
+  const sel  = (err) => ({ ...inp(err), colorScheme: "light dark" });
+  const Lbl  = ({ label, err, children }) => (
+    <div>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: err ? "#dc2626" : T.muted, marginBottom: 5 }}>
+        {label}{err && <span style={{ marginLeft: 6, fontWeight: 400 }}>{err}</span>}
+      </label>
+      {children}
+    </div>
+  );
+
+  // ── Request Card ─────────────────────────────────────────────────
   const RequestCard = ({ req }) => {
     const isExpanded = expandedId === req.id;
-    const meta = REQUEST_STATUS_META[req.status] || {};
     return (
       <div style={{ background: T.surface, border: req.status === "Returned" ? "1.5px solid #fcd34d" : `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
         <div style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
@@ -2406,52 +2453,42 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail 
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{req.title}</div>
             <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
-              Requested by {req.requestedBy} · {req.requestDate}
+              {req.requestedBy} · {req.requestDate}
               {req.deptId && <span> · {req.deptId}</span>}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <RequestStatusBadge status={req.status} />
-            <span style={{ color: T.muted, fontSize: 14 }}>{isExpanded ? "▲" : "▼"}</span>
+            <span style={{ color: T.muted, fontSize: 13 }}>{isExpanded ? "▲" : "▼"}</span>
           </div>
         </div>
-
         {isExpanded && (
           <div style={{ padding: "0 18px 18px", borderTop: `1px solid ${T.border}` }}>
-            {/* Return reason */}
             {req.status === "Returned" && req.returnReason && (
               <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", margin: "14px 0 12px", fontSize: 13 }}>
                 <div style={{ fontWeight: 700, color: "#92400e", marginBottom: 4 }}>↩ Returned — Action Required</div>
                 <div style={{ color: "#78350f" }}>{req.returnReason}</div>
               </div>
             )}
-
-            {/* Current stage */}
-            {req.currentStage && !["Approved", "Rejected", "Returned to Requester"].includes(req.currentStage) && (
+            {req.currentStage && !["Approved","Rejected","Returned to Requester"].includes(req.currentStage) && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 12px" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#d97706", animation: "pmo-pulse-orange 1.5s ease-in-out infinite" }} />
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#d97706" }} />
                 <span style={{ fontSize: 13, color: T.text }}>
-                  Currently with <strong>{req.pendingWith || req.currentStage}</strong>
+                  Pending with <strong>{req.pendingWith || req.currentStage}</strong>
                   {req.daysInCurrentStage > 0 && <span style={{ color: T.muted }}> · {req.daysInCurrentStage} day{req.daysInCurrentStage !== 1 ? "s" : ""}</span>}
                 </span>
               </div>
             )}
-
-            {/* Approval timeline */}
             <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approval History</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approval History</div>
               <ApprovalTimeline history={req.approvalHistory} />
             </div>
-
-            {/* Description */}
             {req.description && (
               <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Description</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Description</div>
                 <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{req.description}</div>
               </div>
             )}
-
-            {/* Linked project */}
             {req.linkedProjectId && (
               <div style={{ marginTop: 14 }}>
                 <button onClick={() => setRoute({ view: "project", projectId: req.linkedProjectId })}
@@ -2471,9 +2508,7 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail 
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{gs.gateLabel}</div>
         <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{gs.projectTitle} · Submitted {gs.submissionDate}</div>
-        {gs.pendingWith && (
-          <div style={{ fontSize: 12, color: "#d97706", marginTop: 4 }}>Pending with {gs.pendingWith} · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</div>
-        )}
+        {gs.pendingWith && <div style={{ fontSize: 12, color: "#d97706", marginTop: 4 }}>Pending with {gs.pendingWith} · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</div>}
       </div>
       <RequestStatusBadge status={gs.status} />
     </div>
@@ -2481,77 +2516,138 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail 
 
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
-      {/* New Request action card */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 28, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 16, color: T.text }}>New Project Request</div>
-          <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>
-            Start the intake process — fills a form, then goes through approval before becoming an active project
+
+      {/* ── New Request card / form ── */}
+      <div style={{ background: T.surface, border: `1px solid ${showForm ? T.primary : T.border}`, borderRadius: 14, marginBottom: 28, overflow: "hidden", transition: "border-color 0.2s" }}>
+        {/* Header row — always visible */}
+        <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>New Project Request</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>
+              Submit a request — it goes through approval before becoming an active project
+            </div>
           </div>
+          {!showForm && (
+            <button onClick={() => setShowForm(true)}
+              style={{ padding: "9px 20px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+              + Start New Request
+            </button>
+          )}
+          {showForm && (
+            <button onClick={() => { setShowForm(false); setErrors({}); }}
+              style={{ padding: "7px 14px", background: "transparent", color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
+              Cancel
+            </button>
+          )}
         </div>
-        <button
-          onClick={() =>
-    window.open(
-      "https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JABDKIaeBCPoS5HMUrzZi2zeASFvBkPx7cy0asCi2R7BHSU?nav=YTk2MmNmODAtNzJiMy00NmE2LWJiMmItOWJlZDNhMTdiNThk",
-      "_blank"
-    )
-  }
-  style={{
-    padding: "11px 24px",
-    background: T.btnPrimBg,
-    color: T.btnPrimText,
-    border: "none",
-    borderRadius: 10,
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  }}
->
-  + New Request
-        </button>
+
+        {/* Inline form */}
+        {showForm && !submitDone && (
+          <div style={{ padding: "0 24px 24px", borderTop: `1px solid ${T.border}` }}>
+            <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16, marginTop: 18 }}>
+              <div style={{ gridColumn: bp === "mobile" ? "1" : "1 / -1" }}>
+                <Lbl label="Project Name *" err={errors.title}>
+                  <input value={form.title} onChange={e => set("title", e.target.value)}
+                    placeholder="Enter the project or initiative name"
+                    style={inp(errors.title)} />
+                </Lbl>
+              </div>
+
+              <Lbl label="Department *" err={errors.deptId}>
+                <select value={form.deptId} onChange={e => set("deptId", e.target.value)} style={sel(errors.deptId)}>
+                  <option value="">Select department…</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </Lbl>
+
+              <Lbl label="Proposed Sponsor *" err={errors.proposedSponsor}>
+                <input value={form.proposedSponsor} onChange={e => set("proposedSponsor", e.target.value)}
+                  placeholder="Project sponsor / owner name"
+                  style={inp(errors.proposedSponsor)} />
+              </Lbl>
+
+              <div style={{ gridColumn: bp === "mobile" ? "1" : "1 / -1" }}>
+                <Lbl label="Business Need *" err={errors.description}>
+                  <textarea value={form.description} onChange={e => set("description", e.target.value)}
+                    rows={4} placeholder="Describe the business problem or opportunity this project addresses…"
+                    style={{ ...inp(errors.description), resize: "vertical" }} />
+                </Lbl>
+              </div>
+
+              <Lbl label="Proposed PM" err={null}>
+                <input value={form.proposedPm} onChange={e => set("proposedPm", e.target.value)}
+                  placeholder="Proposed Project Manager (optional)"
+                  style={inp(null)} />
+              </Lbl>
+            </div>
+
+            {errors._submit && (
+              <div style={{ marginTop: 14, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, color: "#dc2626" }}>
+                {errors._submit}
+              </div>
+            )}
+
+            <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+              <button onClick={handleSubmit} disabled={submitting}
+                style={{ padding: "10px 24px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1 }}>
+                {submitting ? "Submitting…" : "Submit Request"}
+              </button>
+              <button onClick={() => { setShowForm(false); setErrors({}); }}
+                style={{ padding: "10px 18px", background: "transparent", color: T.muted, border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 13, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Success state */}
+        {showForm && submitDone && (
+          <div style={{ padding: "20px 24px", borderTop: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>✓</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#16a34a" }}>Request submitted successfully</div>
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                Your request is now in the approval queue. You can track its progress below.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Section title */}
-      <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: T.text }}>My Requests</h3>
-
-      {/* Gate submissions */}
+      {/* ── Gate Reviews In Progress ── */}
       {pendingGates.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 13,
-                       fontWeight: 700, 
-                       color: T.muted, 
-                       textTransform: "uppercase", 
-                       letterSpacing: "0.06em", 
-                       marginBottom: 10 }}>Gate Reviews In Progress</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Gate Reviews In Progress</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingGates.map(gs => <GateCard key={gs.id} gs={gs} />)}
           </div>
         </div>
       )}
 
-      {/* Active requests */}
+      {/* ── Active Requests ── */}
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-          Active Requests {pending.length > 0 && <span style={{ background: "#dbeafe", color: "#1d4ed8", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{pending.length}</span>}
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+          Active Requests
+          {pending.length > 0 && <span style={{ background: "#dbeafe", color: "#1d4ed8", padding: "1px 8px", borderRadius: 10, marginLeft: 8, fontSize: 11 }}>{pending.length}</span>}
         </div>
-        {pending.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 20px", color: T.muted, background: T.surface, borderRadius: 12, border: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>No active requests</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>Click "New Project Request" to start the intake process</div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pending.map(req => <RequestCard key={req.id} req={req} />)}
-          </div>
-        )}
+        {pending.length === 0
+          ? (
+            <div style={{ textAlign: "center", padding: "28px 20px", color: T.muted, background: T.surface, borderRadius: 12, border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>No active requests</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Click "Start New Request" above to begin</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pending.map(req => <RequestCard key={req.id} req={req} />)}
+            </div>
+          )}
       </div>
 
-      {/* Completed/rejected */}
+      {/* ── Completed ── */}
       {completed.length > 0 && (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Completed</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Completed</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {completed.map(req => <RequestCard key={req.id} req={req} />)}
           </div>
@@ -3947,6 +4043,13 @@ export default function App() {
   }, []);
 
   // ── Dynamic title ───────────────────────────────────────────────
+  // ── Intake: create request in SP then update local state ────────
+  const onCreateRequest = useCallback(async (formData) => {
+    const created = await SPService.createRequest(formData);
+    setRequests(prev => [created, ...prev]);
+    return created;
+  }, []);
+
   const getTitle = () => {
     if (route.view === "home")        return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
     if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${departments.length} departments`];
@@ -4007,7 +4110,7 @@ export default function App() {
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} route={route} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} submitUpdate={submitUpdate} />}
-          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} currentUserEmail={currentUserEmail} />}
+          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} onCreateRequest={onCreateRequest} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={projects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
           {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
           {route.view === "form"        && <ProjectForm        projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
