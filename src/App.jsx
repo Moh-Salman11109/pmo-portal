@@ -2384,64 +2384,25 @@ const ApprovalTimeline = ({ history }) => {
 };
 
 // ─── MY REQUESTS VIEW ────────────────────────────────────────────
-const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail, currentUserName, onCreateRequest }) => {
+const Lbl = ({ label, err, children, T }) => (
+  <div>
+    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: err ? "#dc2626" : T.muted, marginBottom: 5 }}>
+      {label}{err && <span style={{ marginLeft: 6, fontWeight: 400 }}>{err}</span>}
+    </label>
+    {children}
+  </div>
+);
+
+const MyRequestsView = ({ requests, gateSubmissions, setRoute }) => {
   const T = useT();
   const bp = useBp();
-  const { departments } = useDepts();
-  const [expandedId, setExpandedId]   = useState(null);
-  const [showForm,   setShowForm]     = useState(false);
-  const [submitting, setSubmitting]   = useState(false);
-  const [submitDone, setSubmitDone]   = useState(false);
-  const [errors,     setErrors]       = useState({});
-  const [form, setForm] = useState({ title: "", deptId: "", description: "", proposedSponsor: "", proposedPm: "" });
+  const [expandedId, setExpandedId] = useState(null);
   const pad = bp === "mobile" ? "16px" : "32px";
 
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
+  const intakeUrl   = FORM_URLS.intake;
   const pending      = (requests || []).filter(r => !["Approved", "Rejected"].includes(r.status));
   const completed    = (requests || []).filter(r =>  ["Approved", "Rejected"].includes(r.status));
   const pendingGates = (gateSubmissions || []).filter(g => !["Approved", "Rejected"].includes(g.status));
-
-  const validate = () => {
-    const e = {};
-    if (!form.title.trim())           e.title           = "Required";
-    if (!form.deptId)                 e.deptId          = "Required";
-    if (!form.description.trim())     e.description     = "Required";
-    if (!form.proposedSponsor.trim()) e.proposedSponsor = "Required";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    setSubmitting(true);
-    try {
-      await onCreateRequest({
-        ...form,
-        requestedBy:      currentUserName  || "Portal User",
-        requestedByEmail: currentUserEmail || "",
-      });
-      setSubmitDone(true);
-      setForm({ title: "", deptId: "", description: "", proposedSponsor: "", proposedPm: "" });
-      setErrors({});
-      setTimeout(() => { setSubmitDone(false); setShowForm(false); }, 2500);
-    } catch (err) {
-      setErrors({ _submit: err.message || "Failed to submit" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const inp  = (err) => ({ width: "100%", padding: "9px 12px", border: `1px solid ${err ? "#dc2626" : T.border}`, borderRadius: 8, fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box", outline: "none" });
-  const sel  = (err) => ({ ...inp(err), colorScheme: "light dark" });
-  const Lbl  = ({ label, err, children }) => (
-    <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: err ? "#dc2626" : T.muted, marginBottom: 5 }}>
-        {label}{err && <span style={{ marginLeft: 6, fontWeight: 400 }}>{err}</span>}
-      </label>
-      {children}
-    </div>
-  );
 
   // ── Request Card ─────────────────────────────────────────────────
   const RequestCard = ({ req }) => {
@@ -2517,9 +2478,8 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail,
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
 
-      {/* ── New Request card / form ── */}
-      <div style={{ background: T.surface, border: `1px solid ${showForm ? T.primary : T.border}`, borderRadius: 14, marginBottom: 28, overflow: "hidden", transition: "border-color 0.2s" }}>
-        {/* Header row — always visible */}
+      {/* ── New Request card ── */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, marginBottom: 28 }}>
         <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>New Project Request</div>
@@ -2527,91 +2487,11 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail,
               Submit a request — it goes through approval before becoming an active project
             </div>
           </div>
-          {!showForm && (
-            <button onClick={() => setShowForm(true)}
-              style={{ padding: "9px 20px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-              + Start New Request
-            </button>
-          )}
-          {showForm && (
-            <button onClick={() => { setShowForm(false); setErrors({}); }}
-              style={{ padding: "7px 14px", background: "transparent", color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-              Cancel
-            </button>
-          )}
+          <button onClick={() => window.open(intakeUrl, "_blank")}
+            style={{ padding: "9px 20px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            + Start New Request
+          </button>
         </div>
-
-        {/* Inline form */}
-        {showForm && !submitDone && (
-          <div style={{ padding: "0 24px 24px", borderTop: `1px solid ${T.border}` }}>
-            <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16, marginTop: 18 }}>
-              <div style={{ gridColumn: bp === "mobile" ? "1" : "1 / -1" }}>
-                <Lbl label="Project Name *" err={errors.title}>
-                  <input value={form.title} onChange={e => set("title", e.target.value)}
-                    placeholder="Enter the project or initiative name"
-                    style={inp(errors.title)} />
-                </Lbl>
-              </div>
-
-              <Lbl label="Department *" err={errors.deptId}>
-                <select value={form.deptId} onChange={e => set("deptId", e.target.value)} style={sel(errors.deptId)}>
-                  <option value="">Select department…</option>
-                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </Lbl>
-
-              <Lbl label="Proposed Sponsor *" err={errors.proposedSponsor}>
-                <input value={form.proposedSponsor} onChange={e => set("proposedSponsor", e.target.value)}
-                  placeholder="Project sponsor / owner name"
-                  style={inp(errors.proposedSponsor)} />
-              </Lbl>
-
-              <div style={{ gridColumn: bp === "mobile" ? "1" : "1 / -1" }}>
-                <Lbl label="Business Need *" err={errors.description}>
-                  <textarea value={form.description} onChange={e => set("description", e.target.value)}
-                    rows={4} placeholder="Describe the business problem or opportunity this project addresses…"
-                    style={{ ...inp(errors.description), resize: "vertical" }} />
-                </Lbl>
-              </div>
-
-              <Lbl label="Proposed PM" err={null}>
-                <input value={form.proposedPm} onChange={e => set("proposedPm", e.target.value)}
-                  placeholder="Proposed Project Manager (optional)"
-                  style={inp(null)} />
-              </Lbl>
-            </div>
-
-            {errors._submit && (
-              <div style={{ marginTop: 14, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, color: "#dc2626" }}>
-                {errors._submit}
-              </div>
-            )}
-
-            <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-              <button onClick={handleSubmit} disabled={submitting}
-                style={{ padding: "10px 24px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1 }}>
-                {submitting ? "Submitting…" : "Submit Request"}
-              </button>
-              <button onClick={() => { setShowForm(false); setErrors({}); }}
-                style={{ padding: "10px 18px", background: "transparent", color: T.muted, border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 13, cursor: "pointer" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Success state */}
-        {showForm && submitDone && (
-          <div style={{ padding: "20px 24px", borderTop: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>✓</div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#16a34a" }}>Request submitted successfully</div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
-                Your request is now in the approval queue. You can track its progress below.
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Gate Reviews In Progress ── */}
@@ -2788,6 +2668,21 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
 };
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────
+const Field = ({ label, field, type = "text", options, formData, setFormData, T, dark }) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 4 }}>{label}</label>
+    {options ? (
+      <select value={formData[field] || ""} onChange={e => setFormData(prev => ({ ...prev, [field]: e.target.value }))}
+        style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText, colorScheme: dark ? "dark" : "light" }}>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    ) : (
+      <input type={type} value={formData[field] || ""} onChange={e => setFormData(prev => ({ ...prev, [field]: type === "number" ? Number(e.target.value) : e.target.value }))}
+        style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+    )}
+  </div>
+);
+
 const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProject, deleteForever }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -2858,20 +2753,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
     showToast("Project archived");
   };
 
-  const Field = ({ label, field, type = "text", options }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 4 }}>{label}</label>
-      {options ? (
-        <select value={formData[field] || ""} onChange={e => setFormData(prev => ({ ...prev, [field]: e.target.value }))}
-          style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText, colorScheme: themeStore.dark ? "dark" : "light" }}>
-          {options.map(o => <option key={o}>{o}</option>)}
-        </select>
-      ) : (
-        <input type={type} value={formData[field] || ""} onChange={e => setFormData(prev => ({ ...prev, [field]: type === "number" ? Number(e.target.value) : e.target.value }))}
-          style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-      )}
-    </div>
-  );
+  const fp = { formData, setFormData, T, dark: themeStore.dark };
 
   return (
     <div style={{ padding: 32, maxWidth: 1400 }}>
@@ -2923,23 +2805,23 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                   <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.muted }}>×</button>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <Field label="Project Name *" field="name" />
-                  <Field label="Project Code *" field="code" />
-                  <Field label="Department" field="deptId" options={departments.map(d => d.id)} />
-                  <Field label="Project Manager" field="pm" />
-                  <Field label="Sponsor" field="sponsor" />
-                  <Field label="Phase" field="phase" options={["Initiation", "Planning", "Execution", "Monitoring", "Closure"]} />
-                  <Field label="Gate" field="gate" options={["Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5"]} />
-                  <Field label="Status" field="status" options={["Not Started", "On Track", "At Risk", "Delayed", "Completed"]} />
-                  <Field label="Priority" field="priority" options={["Low", "Medium", "High", "Critical"]} />
-                  <Field label="Risk Level" field="riskLevel" options={["Low", "Medium", "High", "Critical"]} />
-                  <Field label="Budget (SAR)" field="budget" type="number" />
-                  <Field label="Progress %" field="progress" type="number" />
-                  <Field label="Start Date" field="startDate" type="date" />
-                  <Field label="Planned End Date" field="plannedEnd" type="date" />
-                  <Field label="Budget Status" field="budgetStatus" options={["On Budget", "Over Budget", "Under Budget"]} />
-                  <Field label="Strategic Objective" field="strategic" />
-                  <Field label="Project Type" field="projectType" options={PROJECT_TYPES} />
+                  <Field label="Project Name *" field="name" {...fp} />
+                  <Field label="Project Code *" field="code" {...fp} />
+                  <Field label="Department" field="deptId" options={departments.map(d => d.id)} {...fp} />
+                  <Field label="Project Manager" field="pm" {...fp} />
+                  <Field label="Sponsor" field="sponsor" {...fp} />
+                  <Field label="Phase" field="phase" options={["Initiation", "Planning", "Execution", "Monitoring", "Closure"]} {...fp} />
+                  <Field label="Gate" field="gate" options={["Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5"]} {...fp} />
+                  <Field label="Status" field="status" options={["Not Started", "On Track", "At Risk", "Delayed", "Completed"]} {...fp} />
+                  <Field label="Priority" field="priority" options={["Low", "Medium", "High", "Critical"]} {...fp} />
+                  <Field label="Risk Level" field="riskLevel" options={["Low", "Medium", "High", "Critical"]} {...fp} />
+                  <Field label="Budget (SAR)" field="budget" type="number" {...fp} />
+                  <Field label="Progress %" field="progress" type="number" {...fp} />
+                  <Field label="Start Date" field="startDate" type="date" {...fp} />
+                  <Field label="Planned End Date" field="plannedEnd" type="date" {...fp} />
+                  <Field label="Budget Status" field="budgetStatus" options={["On Budget", "Over Budget", "Under Budget"]} {...fp} />
+                  <Field label="Strategic Objective" field="strategic" {...fp} />
+                  <Field label="Project Type" field="projectType" options={PROJECT_TYPES} {...fp} />
                 </div>
                 {/* Optional Documents Selector */}
                 <div style={{ marginBottom: 14 }}>
@@ -4110,7 +3992,7 @@ export default function App() {
           {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} route={route} />}
           {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} submitUpdate={submitUpdate} />}
-          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} onCreateRequest={onCreateRequest} />}
+          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={projects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
           {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
           {route.view === "form"        && <ProjectForm        projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
