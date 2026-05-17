@@ -8,7 +8,7 @@ export const SP_CONFIG = {
   siteUrl:               import.meta.env.VITE_SP_SITE_URL               || "",
   projectsListName:      import.meta.env.VITE_SP_PROJECTS_LIST          || "PMO_Projects",
   deptsListName:         import.meta.env.VITE_SP_DEPARTMENTS_LIST        || "PMO_Departments",
-  requestsListName:      import.meta.env.VITE_SP_REQUESTS_LIST          || "PMO_Requests",
+  requestsListName:      import.meta.env.VITE_SP_REQUESTS_LIST          || "New Project Request",
   gateSubmissionsListName: import.meta.env.VITE_SP_GATE_SUBMISSIONS_LIST || "PMO_GateSubmissions",
   pageSize:              Number(import.meta.env.VITE_SP_PAGE_SIZE)       || 500,
 };
@@ -241,11 +241,13 @@ export function mapProjectToSPItem(project) {
 
 // ─── PAGINATION HELPER ───────────────────────────────────────────
 // Uses Bearer token (MSAL) — no cookies, works from any origin.
-async function fetchAllItems(listName, selectFields = "") {
+async function fetchAllItems(listName, selectFields = "", expandFields = "") {
   const { siteUrl, pageSize } = SP_CONFIG;
   const token = await acquireSpToken();
   const selectParam = selectFields ? `&$select=${selectFields}` : "";
-  let url = `${siteUrl}/_api/web/lists/getbytitle('${listName}')/items?$top=${pageSize}${selectParam}`;
+  const expandParam = expandFields ? `&$expand=${expandFields}` : "";
+  const encodedName = encodeURIComponent(listName);
+  let url = `${siteUrl}/_api/web/lists/getbytitle('${encodedName}')/items?$top=${pageSize}${selectParam}${expandParam}`;
   const allItems = [];
 
   while (url) {
@@ -340,51 +342,82 @@ export const SPService = {
 export const isUsingMock = () => USE_MOCK;
 
 // ─── REQUESTS FIELD MAP ──────────────────────────────────────────
+// Maps app field names → actual SharePoint internal column names.
 export const SP_REQUESTS_FIELD_MAP = {
-  spId:                  "ID",
-  title:                 "Title",
-  requestedBy:           "RequestedBy",
-  requestedByEmail:      "RequestedByEmail",
-  requestDate:           "RequestDate",
-  description:           "Description",
-  deptId:                "DepartmentID",
-  proposedPm:            "ProposedPM",
-  proposedSponsor:       "ProposedSponsor",
-  status:                "Status",
-  currentStage:          "CurrentStage",
-  pendingWith:           "PendingWith",
-  pendingWithEmail:      "PendingWithEmail",
-  lastActionDate:        "LastActionDate",
-  daysInCurrentStage:    "DaysInCurrentStage",
-  returnReason:          "ReturnReason",
-  rejectionReason:       "RejectionReason",
-  approvalHistory:       "ApprovalHistoryJSON",
-  linkedProjectId:       "LinkedProjectID",
+  spId:             "ID",
+  title:            "Title",
+  status:           "OverallStatus",
+  pmoStatus:        "PMOApprovalStatus",
+  strategyStatus:   "StrategyApprovalStatus",
+  ownerStatus:      "OwnerApprovalStatus",
+  department:       "Department",
+  projectManager:   "ProjectManager",                   // User — expanded
+  projectOwner:     "ProjectOwner_x002f_Manager",       // User — expanded
+  description:      "ProjectDescription_x002f_Busines",
+  newProduct:       "Introducesnewproduct_x003f_",
+  newSalesChannel:  "Introducesnewsaleschannel_x003f_",
+  enterpriseWide:   "Enterprise_x002d_widesystem_x003",
+  regulatory:       "Regulatory_x002f_compliancedrive",
+  businessImpact:   "Primarybusinessimpact_x003f_",
+  scopeBreadth:     "Scopebreadth",
+  beneficiaries:    "Primarybeneficiaries",
+  estimatedCost:    "EstimatedTotalCost_x0028_SAR_x00",
+  duration:         "ProjectDuration_x0028_Execution_",
+  returnNotes:      "ReturnNotes",
+  projectCode:      "ProjectCode",
+  author:           "Author",                           // User — expanded (created by)
+  requestDate:      "Created",
 };
+
+// Fields to $select and $expand when querying the requests list.
+const REQUESTS_SELECT = [
+  "ID","Title","OverallStatus","PMOApprovalStatus","StrategyApprovalStatus","OwnerApprovalStatus",
+  "Department",
+  "ProjectManager/Title","ProjectManager/EMail",
+  "ProjectOwner_x002f_Manager/Title","ProjectOwner_x002f_Manager/EMail",
+  "ProjectDescription_x002f_Busines",
+  "Introducesnewproduct_x003f_","Introducesnewsaleschannel_x003f_",
+  "Enterprise_x002d_widesystem_x003","Regulatory_x002f_compliancedrive",
+  "Primarybusinessimpact_x003f_","Scopebreadth","Primarybeneficiaries",
+  "EstimatedTotalCost_x0028_SAR_x00","ProjectDuration_x0028_Execution_",
+  "ReturnNotes","ProjectCode",
+  "Author/Title","Author/EMail",
+  "Created",
+].join(",");
+const REQUESTS_EXPAND = "ProjectManager,ProjectOwner_x002f_Manager,Author";
 
 export function mapSPItemToRequest(item) {
   const f = SP_REQUESTS_FIELD_MAP;
   return {
-    id:                 `RQ${item[f.spId]}`,
-    spId:               item[f.spId]             || null,
-    title:              item[f.title]             || "",
-    requestedBy:        item[f.requestedBy]       || "",
-    requestedByEmail:   item[f.requestedByEmail]  || "",
-    requestDate:        safeDate(item[f.requestDate]),
-    description:        item[f.description]       || "",
-    deptId:             item[f.deptId]            || "",
-    proposedPm:         item[f.proposedPm]        || "",
-    proposedSponsor:    item[f.proposedSponsor]   || "",
-    status:             item[f.status]            || "Draft",
-    currentStage:       item[f.currentStage]      || "",
-    pendingWith:        item[f.pendingWith]        || "",
-    pendingWithEmail:   item[f.pendingWithEmail]   || "",
-    lastActionDate:     safeDate(item[f.lastActionDate]),
-    daysInCurrentStage: safeNum(item[f.daysInCurrentStage]),
-    returnReason:       item[f.returnReason]       || "",
-    rejectionReason:    item[f.rejectionReason]    || "",
-    approvalHistory:    safeJSON(item[f.approvalHistory], []),
-    linkedProjectId:    item[f.linkedProjectId]    || "",
+    id:              `RQ${item.ID}`,
+    spId:            item.ID                       || null,
+    title:           item[f.title]                 || "",
+    status:          item[f.status]                || "Opened",
+    pmoStatus:       item[f.pmoStatus]             || "",
+    strategyStatus:  item[f.strategyStatus]        || "",
+    ownerStatus:     item[f.ownerStatus]           || "",
+    department:      item[f.department]            || "",
+    deptId:          item[f.department]            || "",  // alias for existing card UI
+    projectManager:  item.ProjectManager?.Title    || "",
+    projectOwner:    item["ProjectOwner_x002f_Manager"]?.Title || "",
+    description:     item[f.description]           || "",
+    newProduct:      !!item[f.newProduct],
+    newSalesChannel: !!item[f.newSalesChannel],
+    enterpriseWide:  !!item[f.enterpriseWide],
+    regulatory:      !!item[f.regulatory],
+    businessImpact:  item[f.businessImpact]        || "",
+    scopeBreadth:    item[f.scopeBreadth]          || "",
+    beneficiaries:   item[f.beneficiaries]         || "",
+    estimatedCost:   item[f.estimatedCost]         || null,
+    duration:        item[f.duration]              || "",
+    returnNotes:     item[f.returnNotes]           || "",
+    returnReason:    item[f.returnNotes]           || "",  // alias used by RequestCard
+    projectCode:     item[f.projectCode]           || "",
+    requestedBy:     item.Author?.Title            || "",
+    requestedByEmail:item.Author?.EMail            || "",
+    requestDate:     safeDate(item[f.requestDate]),
+    approvalHistory: [],
+    linkedProjectId: "",
   };
 }
 
@@ -437,14 +470,17 @@ export function mapSPItemToGateSubmission(item) {
 
 // ─── EXTENDED SERVICE METHODS ────────────────────────────────────
 Object.assign(SPService, {
-  /** Fetch all project requests. */
+  /** Fetch all project requests from "New Project Request" list. */
   async getRequests() {
     if (USE_MOCK) return MOCK_REQUESTS;
     try {
-      const items = await fetchAllItems(SP_CONFIG.requestsListName);
+      const items = await fetchAllItems(
+        SP_CONFIG.requestsListName,
+        REQUESTS_SELECT,
+        REQUESTS_EXPAND,
+      );
       return items.map(mapSPItemToRequest);
     } catch (err) {
-      // List does not exist yet — return empty until IT creates it
       if (err.message?.includes("404")) return [];
       throw err;
     }
@@ -463,56 +499,4 @@ Object.assign(SPService, {
     }
   },
 
-  /** Create a new request submitted directly from the Portal form. */
-  async createRequest(request) {
-    const today = new Date().toISOString().split("T")[0];
-    if (USE_MOCK) {
-      return {
-        ...request,
-        id: `RQ${Date.now()}`,
-        spId: Date.now(),
-        status: "Submitted",
-        currentStage: "Project Owner / Sponsor Approval",
-        requestDate: today,
-        lastActionDate: today,
-        daysInCurrentStage: 0,
-        approvalHistory: [],
-      };
-    }
-    const { siteUrl, requestsListName } = SP_CONFIG;
-    const token = await acquireSpToken();
-    const f = SP_REQUESTS_FIELD_MAP;
-    const body = {
-      [f.title]:            request.title           || "",
-      [f.requestedBy]:      request.requestedBy     || "",
-      [f.requestedByEmail]: request.requestedByEmail|| "",
-      [f.description]:      request.description     || "",
-      [f.deptId]:           request.deptId          || "",
-      [f.proposedPm]:       request.proposedPm      || "",
-      [f.proposedSponsor]:  request.proposedSponsor || "",
-      [f.status]:           "Submitted",
-      [f.currentStage]:     "Project Owner / Sponsor Approval",
-      [f.requestDate]:      today,
-      [f.lastActionDate]:   today,
-      [f.daysInCurrentStage]: 0,
-      [f.approvalHistory]:  "[]",
-    };
-    const res = await fetch(
-      `${siteUrl}/_api/web/lists/getbytitle('${requestsListName}')/items`,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json;odata=nometadata",
-          "Content-Type": "application/json;odata=nometadata",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      }
-    );
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`SP create request failed: ${res.status} — ${text.slice(0, 300)}`);
-    }
-    return mapSPItemToRequest(await res.json());
-  },
 });
