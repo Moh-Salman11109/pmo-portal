@@ -2520,20 +2520,48 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute }) => {
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
 
-      {/* ── New Request card ── */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, marginBottom: 28 }}>
-        <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      {/* ── Action cards row ── */}
+      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+
+        {/* New Project Request */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 20 }}>📋</div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>New Project Request</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>
-              Submit a request — it goes through approval before becoming an active project
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>New Project Request</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit a new project idea for PMO review and approval</div>
           </div>
-          <button onClick={() => window.open(intakeUrl, "_blank")}
-            style={{ padding: "9px 20px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+          <button onClick={() => window.open(FORM_URLS.intake, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             + Start New Request
           </button>
         </div>
+
+        {/* Gate 1 — Project Initiation */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 20 }}>🚀</div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 1 — Project Initiation</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit Gate 1 for an approved project to kick off execution</div>
+          </div>
+          <button onClick={() => window.open(FORM_URLS.gate1, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: "#0891b2", color: "#fff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Submit Gate 1
+          </button>
+        </div>
+
+        {/* Project Closure */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 20 }}>✅</div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Project Closure</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the closure document for a completed project</div>
+          </div>
+          <button onClick={() => window.open(FORM_URLS.closure, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: "#15803d", color: "#fff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Submit Closure
+          </button>
+        </div>
+
       </div>
 
       {/* ── Gate Reviews In Progress ── */}
