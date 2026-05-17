@@ -2490,7 +2490,7 @@ const MyRequestsView = ({ requests, gateSubmissions, setRoute, currentUserEmail 
           </div>
         </div>
         <button
-          onClick={() => intakeUrl ? window.open(intakeUrl, "_blank") : null}
+          onClick={() => intakeUrl ? window.open(https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JABDKIaeBCPoS5HMUrzZi2zeASFvBkPx7cy0asCi2R7BHSU?nav=YTk2MmNmODAtNzJiMy00NmE2LWJiMmItOWJlZDNhMTdiNThk, "_blank") : null}
           disabled={!intakeUrl}
           style={{ padding: "11px 24px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: intakeUrl ? "pointer" : "default", opacity: intakeUrl ? 1 : 0.5, whiteSpace: "nowrap" }}>
           + New Request
