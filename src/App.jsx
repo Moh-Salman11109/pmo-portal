@@ -2569,7 +2569,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
       {/* ── Gate Reviews In Progress ── */}
       {pendingGates.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Gate Reviews In Progress</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Project Initiation In Progress</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingGates.map(gs => <GateCard key={gs.id} gs={gs} />)}
           </div>
