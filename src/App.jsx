@@ -4197,8 +4197,8 @@ export default function App() {
       return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
     }
     if (userRole === ROLE_DEPT_HEAD) {
-      // no DeptId configured → fall back to showing all (like Executive)
-      if (!userDeptId) return projects;
+      // "All" or empty DeptId → show full portfolio (like Executive)
+      if (!userDeptId || userDeptId === "All") return projects;
       return projects.filter(p => p.deptId === userDeptId);
     }
     return projects;
