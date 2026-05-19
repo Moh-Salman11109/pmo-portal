@@ -3,6 +3,10 @@ import React, { useState, useMemo, useCallback, createContext, useContext, useEf
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
+// Role constants — "pmo_admin" | "pm" | "executive"
+const ROLE_ADMIN = "pmo_admin";
+const ROLE_PM    = "pm";
+const ROLE_EXEC  = "executive";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -150,6 +154,7 @@ const ttStyle = () => {
 function getDeptStats(deptId, projects) {
   const dp = projects.filter(p => p.deptId === deptId);
   const total = dp.length;
+  const onTrack = dp.filter(p => p.status === "On Track").length;
   const active = dp.filter(p => p.status === "On Track" || p.status === "At Risk").length;
   const delayed = dp.filter(p => p.status === "Delayed").length;
   const completed = dp.filter(p => p.status === "Completed").length;
@@ -158,7 +163,7 @@ function getDeptStats(deptId, projects) {
   const totalBudget = dp.reduce((s, p) => s + p.budget, 0);
   const actualCost = dp.reduce((s, p) => s + p.actualCost, 0);
   const budgetUtil = totalBudget ? Math.round((actualCost / totalBudget) * 100) : 0;
-  return { total, active, delayed, completed, highRisk, health, totalBudget, actualCost, budgetUtil };
+  return { total, onTrack, active, delayed, completed, highRisk, health, totalBudget, actualCost, budgetUtil };
 }
 
 // ─── IPI CALCULATIONS ─────────────────────────────────────────────
@@ -191,7 +196,7 @@ function calcDeptIPI(deptId, projects) {
 // IPI colour band
 function ipiColor(score) {
   if (score >= 90) return { color: "#15803d", bg: "#dcfce7", label: "Excellent" };
-  if (score >= 70) return { color: themeStore.T.primary, bg: "#e8f5f0", label: "Good" };
+  if (score >= 70) return { color: "#005c4b", bg: "#e8f5f0", label: "Good" };
   if (score >= 55) return { color: "#854d0e", bg: "#fef9c3", label: "Fair" };
   return { color: "#991b1b", bg: "#fee2e2", label: "Poor" };
 }
@@ -447,8 +452,7 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
       <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 16 }}>Gate Progress</div>
       {/* Track */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 0, marginBottom: 12 }}>
-        {GATE_DEFS.map((def, i) => {
-          const g = gates?.find(x => x.id === def.id) || { status: "Pending" };
+        {_ordered.map(({ def, g }, i) => {
           const s = gateStyle[g.status] || gateStyle["Pending"];
           const isLast = i === GATE_DEFS.length - 1;
           return (
@@ -484,7 +488,7 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
       {/* Expanded detail */}
       {expanded && (() => {
         const def = GATE_DEFS.find(d => d.id === expanded);
-        const g = gates?.find(x => x.id === expanded) || { status: "Pending" };
+        const g = _ordered.find(o => o.def.id === expanded)?.g || { status: "Pending" };
         const s = gateStyle[g.status] || gateStyle["Pending"];
         return (
           <div style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: "14px 18px", marginTop: 8 }}>
@@ -638,7 +642,7 @@ const Tab = ({ tabs, active, onSelect }) => {
 };
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
-const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, open, onClose }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, open, onClose }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -685,7 +689,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
     { icon: "📋", label: "All Projects",         route: "projects", badge: attnCount },
     { icon: "📨", label: "New Request",          route: "requests", badge: myRequestsCount },
     { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
-    { icon: "⚙️", label: "Admin Panel",           route: "admin" },
+    ...(userRole === ROLE_ADMIN ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
   ];
 
   const sidebarStyle = isDesktop
@@ -754,10 +758,14 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
           })}
         </nav>
 
-        <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)` }}>
-          <div style={{ fontSize: 11, color: T.secondary }}>Logged in as</div>
-          <div style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>Mohammed</div>
-          <div style={{ fontSize: 11, color: T.secondary }}>Senior PMO</div>
+        <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, background: T.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#061210", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+            {(currentUserName || currentUserEmail || "?")[0].toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUserName || "PMO User"}</div>
+            <div style={{ fontSize: 10, color: T.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUserEmail || ""}</div>
+          </div>
         </div>
       </div>
     </>
@@ -765,7 +773,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 };
 
 // ─── HEADER ──────────────────────────────────────────────────────
-const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick, projects }) => {
+const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick, projects, currentUserName }) => {
   const T = useT();
   const bp = useBp();
   const { departments } = useDepts();
@@ -926,7 +934,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
           )}
         </button>
 
-        <div style={{ width: 34, height: 34, background: dark ? T.accent : "#003932", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: dark ? "#061210" : T.accent, fontWeight: 700, fontSize: 14, flexShrink: 0 }}>M</div>
+        <div style={{ width: 34, height: 34, background: dark ? T.accent : "#003932", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: dark ? "#061210" : T.accent, fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{(currentUserName || "?")[0].toUpperCase()}</div>
       </div>
     </div>
   );
@@ -1074,7 +1082,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
           </ResponsiveContainer>
           <div style={{ display: "flex", gap: 20, marginTop: 12, flexWrap: "wrap" }}>
             {[
-              { label: "Excellent 85+", color: "#15803d" },
+              { label: "Excellent 90+", color: "#15803d" },
               { label: "Good 70+",      color: "#003932" },
               { label: "Fair 55+",      color: "#854d0e" },
               { label: "Poor <55",      color: "#991b1b" },
@@ -1200,7 +1208,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 
       <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
         <KPICard label="Total Projects" value={stats.total} icon="📋" />
-        <KPICard label="On Track" value={stats.active} color="#16a34a" icon="✅" />
+        <KPICard label="On Track" value={stats.onTrack} color="#16a34a" icon="✅" />
         <KPICard label="Delayed" value={stats.delayed} color="#dc2626" icon="🔴" />
         <KPICard label="Completed" value={stats.completed} color="#3b82f6" icon="🏁" />
         <KPICard label="Portfolio Health" value={`${stats.health}%`} color={T.primary} icon="💪" />
@@ -1222,7 +1230,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
         </select>
         <button onClick={() => { const dm = Object.fromEntries([...(departments || [])].map(d => [d.id, d.name])); exportExcel(filtered, `${dept?.name?.replace(/\s+/g,"-") || "dept"}-${TODAY}.xls`, dm); }}
           style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>
-          ↓ Export CSV
+          ↓ Export XLS
         </button>
         <div style={{ display: "flex", gap: 4 }}>
           {["table", "card"].map(v => (
@@ -1254,7 +1262,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
                   style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", transition: "background 0.1s",
                     background: p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? "transparent" : T.bg) }}
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
-                  onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : themeStore.T.bg)}>
+                  onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>{p.code}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</div>
@@ -1320,134 +1328,250 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
   );
 };
 
-// ─── QUICK UPDATE PANEL ──────────────────────────────────────────
-const QuickUpdatePanel = ({ project, onClose, onSubmit }) => {
+// ─── UPDATE PANEL ────────────────────────────────────────────────
+const UpdatePanel = ({ project, onClose, onSubmit }) => {
   const T = useT();
-  const [status, setStatus]       = useState(project.status);
-  const [progress, setProgress]   = useState(project.progress);
-  const [milestones, setMilestones] = useState(project.milestones?.map(m => ({ ...m })) || []);
-  const [note, setNote]           = useState("");
-  const [saving, setSaving]       = useState(false);
-  const [saved, setSaved]         = useState(false);
+  const [tab, setTab]                 = useState("Status");
+  const [status, setStatus]           = useState(project.status);
+  const [phase, setPhase]             = useState(project.phase || "Execution");
+  const [gate, setGate]               = useState(project.gate || "");
+  const [priority, setPriority]       = useState(project.priority || "Medium");
+  const [progress, setProgress]       = useState(project.progress ?? 0);
+  const [plannedProgress, setPlanned] = useState(project.plannedProgress ?? 0);
+  const [startDate, setStartDate]     = useState(project.startDate || "");
+  const [plannedEnd, setPlannedEnd]   = useState(project.plannedEnd || "");
+  const [health, setHealthState]      = useState({ ...(project.health || {}) });
+  const [budget, setBudget]           = useState(project.budget ?? 0);
+  const [forecast, setForecast]       = useState(project.forecast ?? 0);
+  const [actualCost, setActualCost]   = useState(project.actualCost ?? 0);
+  const [spi, setSpi]                 = useState(project.spi ?? 1.0);
+  const [cpi, setCpi]                 = useState(project.cpi ?? 1.0);
+  const [daysRemaining, setDaysRemaining] = useState(project.daysRemaining ?? 0);
+  const [daysDelayed, setDaysDelayed] = useState(project.daysDelayed ?? 0);
+  const [milestones, setMilestones]   = useState(project.milestones?.map(m => ({ ...m })) || []);
+  const [risks, setRisks]             = useState(project.risks?.map(r => ({ ...r })) || []);
+  const [benefits, setBenefits]       = useState(project.benefits?.map(b => ({ ...b })) || []);
+  const [note, setNote]               = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [saved, setSaved]             = useState(false);
+  const [saveError, setSaveError]     = useState("");
 
+  const setH = (k, v) => setHealthState(prev => ({ ...prev, [k]: v }));
+  const ragClr     = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
+  const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
   const statusOpts = ["On Track","At Risk","Delayed","Completed","Not Started"];
-  const msOpts     = ["Upcoming","In Progress","Completed","Delayed"];
-  const msColor    = { "Completed": "#16a34a", "In Progress": "#eab308", "Delayed": "#dc2626", "Upcoming": "#9ca3af" };
-  const msIcon     = { "Completed": "✅", "In Progress": "🔄", "Delayed": "🔴", "Upcoming": "⏳" };
-
-  const setMsStatus = (id, val) =>
-    setMilestones(prev => prev.map(m => m.id === id ? { ...m, status: val } : m));
+  const TABS = [
+    { key: "Status",     icon: "📊" },
+    { key: "Health",     icon: "🩺" },
+    { key: "Financials", icon: "💰" },
+    { key: "Milestones", icon: "🎯" },
+    { key: "Risks",      icon: "⚠️" },
+    { key: "Benefits",   icon: "📈" },
+    { key: "Note",       icon: "📝" },
+  ];
 
   const handleSubmit = async () => {
     setSaving(true);
+    setSaveError("");
     try {
-      await onSubmit(project.id, { status, progress, milestones, note });
+      await onSubmit(project.id, {
+        status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+        health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
+        milestones, risks, benefits, note,
+      });
       setSaved(true);
       setTimeout(onClose, 900);
     } catch (err) {
-      alert("Save failed: " + err.message);
+      setSaveError(err.message || "Save failed");
       setSaving(false);
     }
   };
 
   const s = { width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13, border: `1px solid ${T.border}`, background: T.inputBg, color: T.text, outline: "none", boxSizing: "border-box" };
+  const ss = { ...s, background: T.selectBg };
+  const SL = ({ children }) => <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.07em", marginBottom: 10, paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>{children}</div>;
+  const FL = ({ children }) => <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 5 }}>{children}</div>;
+  const numInput = (val, setter, step = 1) => <input type="number" value={val} step={step} onChange={e => setter(Number(e.target.value))} style={s} />;
+
+  const renderTab = () => {
+    if (tab === "Status") return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div>
+          <SL>PROJECT STATUS</SL>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {statusOpts.map(o => {
+              const sc = statusColor[o];
+              return (
+                <button key={o} onClick={() => setStatus(o)}
+                  style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    background: status === o ? sc.bg : T.bg, color: status === o ? sc.text : T.muted,
+                    border: status === o ? `2px solid ${sc.dot}` : `1px solid ${T.border}` }}>
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <SL>CLASSIFICATION</SL>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div><FL>Phase</FL><select value={phase} onChange={e => setPhase(e.target.value)} style={ss}>{["Initiation","Planning","Execution","Monitoring","Closure"].map(o => <option key={o}>{o}</option>)}</select></div>
+            <div><FL>Current Gate</FL><select value={gate} onChange={e => setGate(e.target.value)} style={ss}>{["Gate 1","Gate 2","Gate 3","Gate 4","Gate 5"].map(o => <option key={o}>{o}</option>)}</select></div>
+            <div><FL>Priority</FL><select value={priority} onChange={e => setPriority(e.target.value)} style={ss}>{["Low","Medium","High","Critical"].map(o => <option key={o}>{o}</option>)}</select></div>
+          </div>
+        </div>
+        <div>
+          <SL>PROGRESS</SL>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 6 }}>
+              <span>Actual Progress</span><span style={{ color: T.primary, fontWeight: 900 }}>{progress}%</span>
+            </div>
+            <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} style={{ width: "100%", accentColor: T.primary, cursor: "pointer" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginTop: 3 }}><span>0%</span><span>50%</span><span>100%</span></div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 6 }}>
+              <span>Planned Progress</span><span style={{ color: T.muted, fontWeight: 700 }}>{plannedProgress}%</span>
+            </div>
+            <input type="range" min={0} max={100} value={plannedProgress} onChange={e => setPlanned(Number(e.target.value))} style={{ width: "100%", accentColor: T.muted, cursor: "pointer" }} />
+          </div>
+        </div>
+        <div>
+          <SL>DATES</SL>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div><FL>Start Date</FL><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={s} /></div>
+            <div><FL>Planned End Date</FL><input type="date" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} style={s} /></div>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (tab === "Health") return (
+      <div>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted }}>Set Green / Amber / Red for each dimension. Affects the IPI score.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          {healthDims.map(([k, l]) => {
+            const v = health[k];
+            return (
+              <div key={k}>
+                <div style={{ fontSize: 11, color: T.muted, marginBottom: 5, fontWeight: 600 }}>{l}</div>
+                <div style={{ display: "flex", gap: 5 }}>
+                  {["Green","Amber","Red"].map(o => (
+                    <button key={o} onClick={() => setH(k, o)}
+                      style={{ flex: 1, padding: "7px 3px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                        background: v === o ? ragClr[o].bg : T.bg,
+                        border: v === o ? `2px solid ${ragClr[o].b}` : `1px solid ${T.border}`,
+                        color: v === o ? ragClr[o].text : T.muted }}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    if (tab === "Financials") return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div>
+          <SL>BUDGET (SAR)</SL>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div><FL>Budget</FL>{numInput(budget, setBudget)}</div>
+            <div><FL>Forecast</FL>{numInput(forecast, setForecast)}</div>
+            <div><FL>Actual Cost</FL>{numInput(actualCost, setActualCost)}</div>
+          </div>
+        </div>
+        <div>
+          <SL>PERFORMANCE INDICES</SL>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div><FL>SPI</FL>{numInput(spi, setSpi, 0.01)}</div>
+            <div><FL>CPI</FL>{numInput(cpi, setCpi, 0.01)}</div>
+          </div>
+        </div>
+        <div>
+          <SL>SCHEDULE VARIANCE</SL>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div><FL>Days Remaining</FL>{numInput(daysRemaining, setDaysRemaining)}</div>
+            <div><FL>Days Delayed</FL>{numInput(daysDelayed, setDaysDelayed)}</div>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (tab === "Milestones") return <MilestoneListEditor items={milestones} onChange={setMilestones} />;
+    if (tab === "Risks")      return <RiskListEditor      items={risks}      onChange={setRisks} />;
+    if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
+
+    if (tab === "Note") return (
+      <div>
+        <SL>UPDATE NOTE</SL>
+        <textarea value={note} onChange={e => setNote(e.target.value)} rows={6}
+          placeholder="What's the current status? Key decisions, blockers, next steps..."
+          style={{ ...s, resize: "vertical" }} />
+        {project.updates?.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 10 }}>Recent Updates</div>
+            {[...project.updates].reverse().slice(0, 5).map(u => (
+              <div key={u.id} style={{ background: T.bg, borderRadius: 8, padding: 12, marginBottom: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.muted, marginBottom: 3 }}>{u.date} — {u.owner}</div>
+                <div style={{ fontSize: 13, color: T.text }}>{u.note}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
-      {/* Backdrop */}
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, animation: "pmo-fade-in 0.2s ease" }} />
-      {/* Panel */}
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(480px, 100vw)", background: T.surface, zIndex: 201, boxShadow: "-8px 0 40px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", animation: "slideInRight 0.25s ease" }}>
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(640px, 100vw)", background: T.surface, zIndex: 201, boxShadow: "-8px 0 40px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", animation: "slideInRight 0.25s ease" }}>
         <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
 
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
+        <div style={{ padding: "18px 24px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Submit Update</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{project.name}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Update Project</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{project.name} · {project.code}</div>
           </div>
           <button onClick={onClose} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.muted, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
 
-        {/* Body */}
+        {/* Tab bar */}
+        <div style={{ display: "flex", overflowX: "auto", borderBottom: `1px solid ${T.border}`, flexShrink: 0, padding: "0 8px" }}>
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              style={{ padding: "10px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                background: "transparent", border: "none",
+                borderBottom: tab === t.key ? `2px solid ${T.primary}` : "2px solid transparent",
+                color: tab === t.key ? T.primary : T.muted }}>
+              {t.icon} {t.key}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-
-          {/* Status */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8 }}>PROJECT STATUS</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {statusOpts.map(o => {
-                const sc = statusColor[o];
-                return (
-                  <button key={o} onClick={() => setStatus(o)}
-                    style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      background: status === o ? sc.bg : T.bg,
-                      color: status === o ? sc.text : T.muted,
-                      border: status === o ? `2px solid ${sc.dot}` : `1px solid ${T.border}` }}>
-                    {o}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Progress */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
-              <span>OVERALL PROGRESS</span>
-              <span style={{ color: T.primary, fontWeight: 900 }}>{progress}%</span>
-            </div>
-            <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))}
-              style={{ width: "100%", accentColor: T.primary, cursor: "pointer" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginTop: 3 }}>
-              <span>0%</span><span>50%</span><span>100%</span>
-            </div>
-          </div>
-
-          {/* Milestones */}
-          {milestones.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 10 }}>MILESTONES</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {milestones.map(m => (
-                  <div key={m.id} style={{ background: T.bg, borderRadius: 10, padding: "10px 14px", border: `1px solid ${T.border}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 16, flexShrink: 0 }}>{msIcon[m.status] || "⏳"}</span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
-                          {m.date && <div style={{ fontSize: 11, color: T.muted }}>{m.date}{m.owner ? ` · ${m.owner}` : ""}</div>}
-                        </div>
-                      </div>
-                      <select value={m.status} onChange={e => setMsStatus(m.id, e.target.value)}
-                        style={{ ...s, width: "auto", fontSize: 11, fontWeight: 700, padding: "5px 8px",
-                          color: msColor[m.status] || T.muted,
-                          background: T.surface, flexShrink: 0 }}>
-                        {msOpts.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Update Note */}
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 8 }}>UPDATE NOTE</div>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={4}
-              placeholder="What's the current status? Key decisions, blockers, next steps..."
-              style={{ ...s, resize: "none" }} />
-          </div>
+          {renderTab()}
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "16px 24px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 13, cursor: "pointer", color: T.text, fontWeight: 600 }}>Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || saved}
-            style={{ flex: 2, background: saved ? "#16a34a" : T.btnPrimBg, color: saved ? "#fff" : T.btnPrimText, border: "none", borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: saving || saved ? "default" : "pointer", transition: "background 0.3s" }}>
-            {saved ? "✓ Saved!" : saving ? "Saving…" : "Submit to SharePoint →"}
-          </button>
+        <div style={{ padding: "16px 24px", borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
+          {saveError && (
+            <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
+              ⚠ {saveError}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onClose} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 13, cursor: "pointer", color: T.text, fontWeight: 600 }}>Cancel</button>
+            <button onClick={handleSubmit} disabled={saving || saved}
+              style={{ flex: 2, background: saved ? "#16a34a" : T.btnPrimBg, color: saved ? "#fff" : T.btnPrimText, border: "none", borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: saving || saved ? "default" : "pointer", transition: "background 0.3s" }}>
+              {saved ? "✓ Saved!" : saving ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -1455,20 +1579,25 @@ const QuickUpdatePanel = ({ project, onClose, onSubmit }) => {
 };
 
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
-const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdate }) => {
+const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
+const PROJECT_TABS_PM    = ["Overview", "Health", "Milestones", "Risks & Issues", "Benefits", "Documents"];
+const PROJECT_TABS_EXEC  = ["Exec Summary"];
+
+const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
   const project = projects.find(p => p.id === projectId);
-  const [tab, setTab] = useState("Exec Summary");
+
+  const TABS = userRole === ROLE_PM ? PROJECT_TABS_PM : userRole === ROLE_EXEC ? PROJECT_TABS_EXEC : PROJECT_TABS_ADMIN;
+  const [tab, setTab] = useState(() => userRole === ROLE_PM ? "Overview" : "Exec Summary");
+  const activeTab = TABS.includes(tab) ? tab : TABS[0];
   const [showUpdate, setShowUpdate] = useState(false);
-  const TABS = ["Exec Summary", "Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
 
-  const budgetUtil = Math.round((project.actualCost / project.budget) * 100);
+  const budgetUtil = project.budget > 0 ? Math.round((project.actualCost / project.budget) * 100) : 0;
   const remaining = project.budget - project.actualCost;
-  const healthItems = Object.entries(project.health);
 
   // ── IPI ──────────────────────────────────────────────────────────
   const ipi = calcProjectIPI(project);
@@ -1501,14 +1630,18 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
           <div style={{ textAlign: "right" }}>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
               <Badge status={project.status} />
-              <button onClick={() => setShowUpdate(true)}
-                style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "4px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-                ↑ Submit Update
-              </button>
-              <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id })}
-                style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, padding: "4px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                ✏️ Edit
-              </button>
+              {userRole !== ROLE_EXEC && (
+                <button onClick={() => setShowUpdate(true)}
+                  style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                  ✏️ Update
+                </button>
+              )}
+              {userRole === ROLE_ADMIN && (
+                <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id, from: "project" })}
+                  style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Edit Fields
+                </button>
+              )}
             </div>
             <div style={{ fontSize: 32, fontWeight: 900, color: T.accent }}>{project.progress}%</div>
             <div style={{ fontSize: 12, opacity: 0.6 }}>Overall Progress</div>
@@ -1547,16 +1680,16 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
         </div>
       </div>
 
-      <Tab tabs={TABS} active={tab} onSelect={setTab} />
+      <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
 
       {/* ── GATE TRACKER — always visible ── */}
       <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
 
       {/* ── Submit Update Panel ─────────────────────────────────── */}
-      {showUpdate && <QuickUpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} />}
+      {showUpdate && <UpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} />}
 
       {/* EXEC SUMMARY TAB */}
-      {tab === "Exec Summary" && (() => {
+      {activeTab === "Exec Summary" && (() => {
         const nextMilestone = [...(project.milestones || [])].filter(m => m.status !== "Completed").sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
         const msOverdue = nextMilestone && nextMilestone.date && nextMilestone.date < TODAY;
         const riskOrder = { Critical: 4, High: 3, Medium: 2, Low: 1 };
@@ -1657,7 +1790,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       })()}
 
       {/* OVERVIEW TAB */}
-      {tab === "Overview" && (
+      {activeTab === "Overview" && (
         <div style={{ display: "grid", gridTemplateColumns: overviewCols, gap: 20 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
@@ -1732,7 +1865,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* HEALTH TAB */}
-      {tab === "Health" && (
+      {activeTab === "Health" && (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
             {healthItems.map(([area, status]) => (
@@ -1767,7 +1900,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* MILESTONES TAB */}
-      {tab === "Milestones" && (
+      {activeTab === "Milestones" && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
           <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Milestone Timeline</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -1808,7 +1941,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* BUDGET TAB */}
-      {tab === "Budget" && (
+      {activeTab === "Budget" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Financial Summary</h3>
@@ -1855,7 +1988,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* RISKS & ISSUES TAB */}
-      {tab === "Risks & Issues" && (
+      {activeTab === "Risks & Issues" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {project.risks.length > 0 && <RiskMatrix risks={project.risks} />}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
@@ -1920,7 +2053,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* APPROVALS TAB */}
-      {tab === "Approvals" && (
+      {activeTab === "Approvals" && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
           <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
             {[
@@ -1957,7 +2090,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* BENEFITS TAB */}
-      {tab === "Benefits" && (
+      {activeTab === "Benefits" && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
           <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Benefits Realization Tracker</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1991,7 +2124,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* DOCUMENTS TAB */}
-      {tab === "Documents" && (
+      {activeTab === "Documents" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Compliance Summary */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
@@ -2088,7 +2221,7 @@ const ProjectView = ({ projects, projectId, setRoute, updateProject, submitUpdat
       )}
 
       {/* UPDATES TAB */}
-      {tab === "Updates" && (
+      {activeTab === "Updates" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
@@ -2743,7 +2876,7 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
                 subtitle={`Submitted by ${gs.submittedBy} · ${gs.daysAtGate} day${gs.daysAtGate !== 1 ? "s" : ""} at gate`}
                 rightContent={<RequestStatusBadge status={gs.status} />}
                 urgency={gs.daysAtGate > 5 ? "medium" : null}
-                onClick={() => setRoute({ view: "project", projectId: gs.projectId })}
+                onClick={() => setRoute({ view: "project", projectId: gs.projectId, from: "actions" })}
               />
             ))}
           </div>
@@ -2764,7 +2897,7 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
                 title={m.name}
                 subtitle={`${m.projectName} · Due ${m.date} · Owner: ${m.owner}`}
                 urgency="high"
-                onClick={() => setRoute({ view: "project", projectId: m.projectId })}
+                onClick={() => setRoute({ view: "project", projectId: m.projectId, from: "actions" })}
               />
             ))}
           </div>
@@ -2913,7 +3046,13 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <Field label="Project Name *" field="name" {...fp} />
                   <Field label="Project Code *" field="code" {...fp} />
-                  <Field label="Department" field="deptId" options={departments.map(d => d.id)} {...fp} />
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Department</label>
+                    <select value={formData.deptId || ""} onChange={e => setFormData(prev => ({ ...prev, deptId: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", background: T.selectBg, color: T.inputText, colorScheme: themeStore.dark ? "dark" : "light" }}>
+                      {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
                   <Field label="Project Manager" field="pm" {...fp} />
                   <Field label="Sponsor" field="sponsor" {...fp} />
                   <Field label="Phase" field="phase" options={["Initiation", "Planning", "Execution", "Monitoring", "Closure"]} {...fp} />
@@ -3373,7 +3512,7 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
         </button>
         <button onClick={() => { const dm = Object.fromEntries(departments.map(d => [d.id, d.name])); exportExcel(filtered, `all-projects-${TODAY}.xls`, dm); }}
           style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", color: T.text, whiteSpace: "nowrap", fontWeight: 600 }}>
-          ↓ Export CSV
+          ↓ Export XLS
         </button>
         <div style={{ display: "flex", alignItems: "center", fontSize: 13, color: T.muted, whiteSpace: "nowrap" }}>{filtered.length} results</div>
       </div>
@@ -3393,7 +3532,7 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
                   style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", transition: "background 0.1s",
                     background: p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? "transparent" : T.bg) }}
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
-                  onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : themeStore.T.bg)}>
+                  onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
                   <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
@@ -3651,6 +3790,98 @@ const IssueListEditor = ({ items, onChange }) => {
   );
 };
 
+// ─── BENEFIT LIST EDITOR ──────────────────────────────────────────
+const BenefitListEditor = ({ items, onChange }) => {
+  const T = useT();
+  const s = fInputStyle(T, false);
+  const ss = { ...s, background: T.selectBg };
+  const blank = { kpi: "", category: "Financial", owner: "", baseline: "0", target: "0", current: "0", realization: 0, contribution: "Medium" };
+  const [draft, setDraft] = useState(blank);
+  const [adding, setAdding] = useState(false);
+  const add = () => {
+    if (!draft.kpi.trim()) return;
+    onChange([...items, { ...draft, id: `B${Date.now()}` }]);
+    setDraft(blank);
+    setAdding(false);
+  };
+  const remove = id => onChange(items.filter(b => b.id !== id));
+  const upd = (id, k, v) => onChange(items.map(b => b.id === id ? { ...b, [k]: v } : b));
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Benefits</div>
+        {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add</button>}
+      </div>
+      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No benefits yet</div>}
+      {items.map(b => (
+        <div key={b.id} style={{ background: T.bg, borderRadius: 10, padding: "12px 14px", marginBottom: 8, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div>
+              <span style={{ fontSize: 10, background: "#e8f5f0", color: "#166534", fontWeight: 700, padding: "1px 7px", borderRadius: 10, marginRight: 6 }}>{b.category}</span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: T.text }}>{b.kpi}</span>
+            </div>
+            <button onClick={() => remove(b.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 4, cursor: "pointer", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px" }}>Remove</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Current</div>
+              <input value={b.current} onChange={e => upd(b.id, "current", e.target.value)} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Realization %</div>
+              <input type="number" min={0} max={100} value={b.realization} onChange={e => upd(b.id, "realization", Number(e.target.value))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Owner</div>
+              <input value={b.owner || ""} onChange={e => upd(b.id, "owner", e.target.value)} style={s} />
+            </div>
+          </div>
+        </div>
+      ))}
+      {adding && (
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 14, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>KPI / Benefit Name *</div>
+              <input autoFocus value={draft.kpi} onChange={e => setDraft(p => ({ ...p, kpi: e.target.value }))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Category</div>
+              <select value={draft.category} onChange={e => setDraft(p => ({ ...p, category: e.target.value }))} style={ss}>
+                {["Financial","Operational","Strategic","Risk Reduction"].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Owner</div>
+              <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} style={s} />
+            </div>
+            {[["Baseline", "baseline"], ["Target", "target"], ["Current", "current"]].map(([l, k]) => (
+              <div key={k}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>{l}</div>
+                <input value={draft[k]} onChange={e => setDraft(p => ({ ...p, [k]: e.target.value }))} style={s} />
+              </div>
+            ))}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Realization %</div>
+              <input type="number" min={0} max={100} value={draft.realization} onChange={e => setDraft(p => ({ ...p, realization: Number(e.target.value) }))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Contribution</div>
+              <select value={draft.contribution} onChange={e => setDraft(p => ({ ...p, contribution: e.target.value }))} style={ss}>
+                {["Low","Medium","High"].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add</button>
+            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── PROJECT FORM ─────────────────────────────────────────────────
 const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   const T = useT();
@@ -3884,6 +4115,7 @@ export default function App() {
   const toggleDark = () => { themeStore.toggle(); rerenderDark(n => n + 1); };
   const activeT = themeStore.T;
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
+  const [userRole, setUserRole] = useState(ROLE_ADMIN); // fail-open default during setup
   const [projects, setProjects] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -3920,12 +4152,28 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, []);
+  // ── Role lookup: fires once email is available ────────────────
+  useEffect(() => {
+    if (!currentUserEmail) return;
+    SPService.getUserRole(currentUserEmail)
+      .then(role => setUserRole(role))
+      .catch(() => {}); // fail-open: keep pmo_admin default
+  }, [currentUserEmail]);
+
   const addDept    = useCallback((d) => setDepartments(prev => [...prev, d]), []);
   const updateDept = useCallback((id, data) => setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...data } : d)), []);
   const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
   const deptCtx = { departments, addDept, updateDept, deleteDept };
 
   // theme handled by themeStore pub/sub
+
+  // PM role: filter projects to only those assigned to the current user.
+  // All other roles see the full list.
+  const visibleProjects = useMemo(() => {
+    if (userRole !== ROLE_PM || !currentUserName) return projects;
+    const name = currentUserName.trim().toLowerCase();
+    return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
+  }, [projects, userRole, currentUserName]);
 
   const updateProject = useCallback((id, data) => {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data, lastUpdate: new Date().toISOString().split("T")[0] } : p));
@@ -3955,15 +4203,25 @@ export default function App() {
     setProjects(prev => prev.filter(p => p.id !== id));
   }, [projects]);
 
-  // ── Quick update: status + progress + milestones + note → SP ───
-  const submitUpdate = useCallback(async (projectId, { status, progress, milestones, note }) => {
+  // ── Update panel: all project fields → SP ───────────────────────
+  const submitUpdate = useCallback(async (projectId, {
+    status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+    health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
+    milestones, risks, benefits, note,
+  }) => {
     const today = new Date().toISOString().split("T")[0];
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
     const newUpdates = note?.trim()
       ? [...(project.updates || []), { id: `U${Date.now()}`, date: today, owner: project.pm, note: note.trim() }]
       : project.updates || [];
-    const updated = { ...project, status, progress, milestones, updates: newUpdates, lastUpdate: today };
+    const updated = {
+      ...project,
+      status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+      health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
+      milestones, risks, benefits,
+      updates: newUpdates, lastUpdate: today,
+    };
     if (!isUsingMock() && project.spId) {
       await SPService.updateProject(project.spId, updated);
     }
@@ -4049,19 +4307,19 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={projects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} />
+        <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} currentUserName={currentUserName} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
-          {route.view === "home"        && <HomeView          projects={projects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
-          {route.view === "departments" && <DepartmentsOverview projects={projects} setRoute={setRoute} />}
-          {route.view === "projects"    && <AllProjectsView    projects={projects} setRoute={setRoute} route={route} />}
-          {route.view === "department"  && <DepartmentView     projects={projects} deptId={route.deptId} setRoute={setRoute} />}
-          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} updateProject={updateProject} submitUpdate={submitUpdate} />}
+          {route.view === "home"        && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
+          {route.view === "departments" && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
+          {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} />}
+          {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} />}
+          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} />}
-          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={projects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
-          {route.view === "admin"       && <AdminView          projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
-          {route.view === "form"        && <ProjectForm        projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
+          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
+          {route.view === "admin"       && userRole === ROLE_ADMIN && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
+          {route.view === "form"        && userRole === ROLE_ADMIN && <ProjectForm projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
         </main>
       </div>
     </div>

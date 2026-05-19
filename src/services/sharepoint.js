@@ -1,4 +1,4 @@
-import { MOCK_PROJECTS, MOCK_DEPARTMENTS, MOCK_REQUESTS, MOCK_GATE_SUBMISSIONS, MOCK_CLOSURE_SUBMISSIONS } from "../data/mockData.js";
+import { MOCK_PROJECTS, MOCK_DEPARTMENTS, MOCK_REQUESTS, MOCK_GATE_SUBMISSIONS, MOCK_CLOSURE_SUBMISSIONS, MOCK_USERS } from "../data/mockData.js";
 import { acquireSpToken } from "./auth.js";
 
 // ─── CONFIGURATION ───────────────────────────────────────────────
@@ -11,6 +11,7 @@ export const SP_CONFIG = {
   requestsListName:      import.meta.env.VITE_SP_REQUESTS_LIST          || "New Project Request",
   gateSubmissionsListName: import.meta.env.VITE_SP_GATE_SUBMISSIONS_LIST || "G1 - Project Initiation",
   closureListName:         import.meta.env.VITE_SP_CLOSURE_LIST          || "Project Closure - E-Signoff",
+  usersListName:           import.meta.env.VITE_SP_USERS_LIST            || "PMO_Users",
   pageSize:              Number(import.meta.env.VITE_SP_PAGE_SIZE)       || 500,
 };
 
@@ -557,6 +558,35 @@ Object.assign(SPService, {
     } catch (err) {
       console.warn("getClosureSubmissions failed (non-fatal):", err.message);
       return [];
+    }
+  },
+
+  /** Look up the current user's role from PMO_Users SP list.
+   *  Returns: "pmo_admin" | "pm" | "executive"
+   *  Defaults to "pmo_admin" on any error or missing record (fail-open). */
+  async getUserRole(email) {
+    if (!email) return "pmo_admin";
+    if (USE_MOCK) {
+      const found = MOCK_USERS.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      return found?.role || "pmo_admin";
+    }
+    try {
+      const token = await acquireSpToken();
+      const escaped = email.replace(/'/g, "''");
+      const url = `${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${SP_CONFIG.usersListName}')/items?$select=ID,Title,Role&$filter=Title eq '${escaped}'&$top=1`;
+      const res = await fetch(url, {
+        headers: { Accept: "application/json;odata=verbose", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return "pmo_admin";
+      const data = await res.json();
+      const items = data?.d?.results || [];
+      if (!items.length) return "pmo_admin";
+      const raw = (items[0].Role || "").trim().toLowerCase();
+      if (raw === "pm")        return "pm";
+      if (raw === "executive") return "executive";
+      return "pmo_admin";
+    } catch {
+      return "pmo_admin";
     }
   },
 

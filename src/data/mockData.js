@@ -795,3 +795,8 @@ export const MOCK_GATE_SUBMISSIONS = [
 
 // ─── MOCK CLOSURE SUBMISSIONS ─────────────────────────────────────
 export const MOCK_CLOSURE_SUBMISSIONS = [];
+
+// ─── MOCK USERS (role lookup) ─────────────────────────────────────
+// Shape mirrors PMO_Users SP list: email (Title) + Role
+// Role values: "pmo_admin" | "pm" | "executive"
+export const MOCK_USERS = [];
