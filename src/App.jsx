@@ -3,10 +3,11 @@ import React, { useState, useMemo, useCallback, createContext, useContext, useEf
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
-// Role constants — "pmo_admin" | "pm" | "executive"
-const ROLE_ADMIN = "pmo_admin";
-const ROLE_PM    = "pm";
-const ROLE_EXEC  = "executive";
+// Role constants
+const ROLE_ADMIN     = "pmo_admin";
+const ROLE_PM        = "pm";
+const ROLE_EXEC      = "executive";
+const ROLE_DEPT_HEAD = "dept_head";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -1589,8 +1590,11 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
   const bp = useBp();
   const project = projects.find(p => p.id === projectId);
 
-  const TABS = userRole === ROLE_PM ? PROJECT_TABS_PM : userRole === ROLE_EXEC ? PROJECT_TABS_EXEC : PROJECT_TABS_ADMIN;
+  const TABS = userRole === ROLE_PM ? PROJECT_TABS_PM
+             : (userRole === ROLE_EXEC || userRole === ROLE_DEPT_HEAD) ? PROJECT_TABS_EXEC
+             : PROJECT_TABS_ADMIN;
   const [tab, setTab] = useState(() => userRole === ROLE_PM ? "Overview" : "Exec Summary");
+
   const activeTab = TABS.includes(tab) ? tab : TABS[0];
   const [showUpdate, setShowUpdate] = useState(false);
 
@@ -1630,7 +1634,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
           <div style={{ textAlign: "right" }}>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
               <Badge status={project.status} />
-              {userRole !== ROLE_EXEC && (
+              {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && (
                 <button onClick={() => setShowUpdate(true)}
                   style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                   ✏️ Update
@@ -2548,17 +2552,32 @@ const Lbl = ({ label, err, children, T }) => (
   </div>
 );
 
-const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute }) => {
+const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute, currentUserName, currentUserEmail, userRole }) => {
   const T = useT();
   const bp = useBp();
   const [expandedId, setExpandedId] = useState(null);
   const pad = bp === "mobile" ? "16px" : "32px";
 
+  // For non-admin roles: only show submissions where the user is involved
+  const filterByUser = (list, nameFields, emailFields = []) => {
+    if (userRole === ROLE_ADMIN) return list || [];
+    const name  = (currentUserName  || "").trim().toLowerCase();
+    const email = (currentUserEmail || "").trim().toLowerCase();
+    return (list || []).filter(item =>
+      nameFields.some(f  => (item[f]  || "").trim().toLowerCase() === name) ||
+      emailFields.some(f => (item[f]  || "").trim().toLowerCase() === email)
+    );
+  };
+
+  const myRequests  = filterByUser(requests,         ["projectManager","projectOwner","requestedBy"], ["submittedByEmail"]);
+  const myGates     = filterByUser(gateSubmissions,  ["projectManager"],                             ["submittedByEmail"]);
+  const myClosures  = filterByUser(closureSubmissions,["projectManager"],                            ["submittedByEmail"]);
+
   const isClosedReq    = (r) => r.status?.startsWith("Approved") || r.status?.startsWith("Rejected");
-  const pending        = (requests || []).filter(r => !isClosedReq(r));
-  const completed      = (requests || []).filter(r =>  isClosedReq(r));
-  const pendingGates   = (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
-  const pendingClosures = (closureSubmissions || []).filter(c => c.status !== "Closed");
+  const pending        = myRequests.filter(r => !isClosedReq(r));
+  const completed      = myRequests.filter(r =>  isClosedReq(r));
+  const pendingGates   = myGates.filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
+  const pendingClosures = myClosures.filter(c => c.status !== "Closed");
 
   // ── Request Card ─────────────────────────────────────────────────
   const RequestCard = ({ req }) => {
@@ -4115,7 +4134,8 @@ export default function App() {
   const toggleDark = () => { themeStore.toggle(); rerenderDark(n => n + 1); };
   const activeT = themeStore.T;
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
-  const [userRole, setUserRole] = useState(ROLE_ADMIN); // fail-open default during setup
+  const [userRole, setUserRole] = useState(ROLE_ADMIN);   // fail-open default during setup
+  const [userDeptId, setUserDeptId] = useState(null);
   const [projects, setProjects] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -4156,7 +4176,7 @@ export default function App() {
   useEffect(() => {
     if (!currentUserEmail) return;
     SPService.getUserRole(currentUserEmail)
-      .then(role => setUserRole(role))
+      .then(({ role, deptId }) => { setUserRole(role); setUserDeptId(deptId); })
       .catch(() => {}); // fail-open: keep pmo_admin default
   }, [currentUserEmail]);
 
@@ -4167,13 +4187,20 @@ export default function App() {
 
   // theme handled by themeStore pub/sub
 
-  // PM role: filter projects to only those assigned to the current user.
-  // All other roles see the full list.
+  // Role-based project filtering:
+  // PM        → only projects where they are the assigned PM
+  // Dept Head → only projects in their department
+  // Others    → full list
   const visibleProjects = useMemo(() => {
-    if (userRole !== ROLE_PM || !currentUserName) return projects;
-    const name = currentUserName.trim().toLowerCase();
-    return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
-  }, [projects, userRole, currentUserName]);
+    if (userRole === ROLE_PM && currentUserName) {
+      const name = currentUserName.trim().toLowerCase();
+      return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
+    }
+    if (userRole === ROLE_DEPT_HEAD && userDeptId) {
+      return projects.filter(p => p.deptId === userDeptId);
+    }
+    return projects;
+  }, [projects, userRole, currentUserName, userDeptId]);
 
   const updateProject = useCallback((id, data) => {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data, lastUpdate: new Date().toISOString().split("T")[0] } : p));
@@ -4316,7 +4343,7 @@ export default function App() {
           {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} />}
           {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
-          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} />}
+          {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
           {route.view === "admin"       && userRole === ROLE_ADMIN && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
           {route.view === "form"        && userRole === ROLE_ADMIN && <ProjectForm projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}

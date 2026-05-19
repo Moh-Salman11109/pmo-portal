@@ -562,31 +562,34 @@ Object.assign(SPService, {
   },
 
   /** Look up the current user's role from PMO_Users SP list.
-   *  Returns: "pmo_admin" | "pm" | "executive"
-   *  Defaults to "pmo_admin" on any error or missing record (fail-open). */
+   *  Returns: { role: "pmo_admin"|"pm"|"executive"|"dept_head", deptId: string|null }
+   *  Defaults to { role: "pmo_admin", deptId: null } on any error or missing record (fail-open). */
   async getUserRole(email) {
-    if (!email) return "pmo_admin";
+    const fallback = { role: "pmo_admin", deptId: null };
+    if (!email) return fallback;
     if (USE_MOCK) {
       const found = MOCK_USERS.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      return found?.role || "pmo_admin";
+      return found ? { role: found.role || "pmo_admin", deptId: found.deptId || null } : fallback;
     }
     try {
       const token = await acquireSpToken();
       const escaped = email.replace(/'/g, "''");
-      const url = `${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${SP_CONFIG.usersListName}')/items?$select=ID,Title,Role&$filter=Title eq '${escaped}'&$top=1`;
+      const url = `${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${SP_CONFIG.usersListName}')/items?$select=ID,Title,Role,DeptId&$filter=Title eq '${escaped}'&$top=1`;
       const res = await fetch(url, {
         headers: { Accept: "application/json;odata=verbose", Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return "pmo_admin";
+      if (!res.ok) return fallback;
       const data = await res.json();
       const items = data?.d?.results || [];
-      if (!items.length) return "pmo_admin";
-      const raw = (items[0].Role || "").trim().toLowerCase();
-      if (raw === "pm")        return "pm";
-      if (raw === "executive") return "executive";
-      return "pmo_admin";
+      if (!items.length) return fallback;
+      const raw = (items[0].Role || "").trim().toLowerCase().replace(/\s+/g, "_");
+      const deptId = items[0].DeptId || null;
+      if (raw === "pm")         return { role: "pm",        deptId };
+      if (raw === "executive")  return { role: "executive",  deptId };
+      if (raw === "dept_head" || raw === "department_head") return { role: "dept_head", deptId };
+      return fallback;
     } catch {
-      return "pmo_admin";
+      return fallback;
     }
   },
 
