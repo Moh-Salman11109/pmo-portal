@@ -19,6 +19,7 @@ export const SP_CONFIG = {
 export const FORM_URLS = {
   intake:  import.meta.env.VITE_SP_INTAKE_FORM_URL  || "",
   gate1:   import.meta.env.VITE_SP_GATE1_FORM_URL   || "",
+  gate3:   import.meta.env.VITE_SP_GATE3_FORM_URL   || "",
   closure: import.meta.env.VITE_SP_CLOSURE_FORM_URL || "",
 };
 

@@ -508,10 +508,12 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
             {(() => {
               const formUrl = def.id === "G1" ? FORM_URLS.intake
                             : def.id === "G2" ? FORM_URLS.gate1
+                            : def.id === "G3" ? FORM_URLS.gate3
                             : def.id === "G5" ? FORM_URLS.closure
                             : null;
               const formLabel = def.id === "G1" ? "→ New Project Request"
                               : def.id === "G2" ? "→ G1 Initiation Form"
+                              : def.id === "G3" ? "→ Submit Plan"
                               : "→ Closure Form";
               return formUrl ? (
                 <div style={{ marginTop: 12 }}>
