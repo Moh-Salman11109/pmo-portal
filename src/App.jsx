@@ -505,6 +505,17 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
               {g.approver && <div>👤 Approver: <strong>{g.approver}</strong></div>}
               {g.notes    && <div>💬 Notes: <strong>{g.notes}</strong></div>}
             </div>
+            {(() => {
+              const formUrl = def.id === "G1" ? FORM_URLS.gate1 : def.id === "G5" ? FORM_URLS.closure : null;
+              return formUrl ? (
+                <div style={{ marginTop: 12 }}>
+                  <a href={formUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: s.border, color: "#fff", fontSize: 12, fontWeight: 700, padding: "7px 16px", borderRadius: 8, textDecoration: "none" }}>
+                    {def.id === "G1" ? "→ G1 Initiation Form" : "→ Closure Form"}
+                  </a>
+                </div>
+              ) : null;
+            })()}
             {def.id === _currentGateDef?.id && _slaDays != null && g.status !== "Approved" && (
               <div style={{ marginTop: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 8, background: _slaDays > 30 ? "#fee2e2" : _slaDays > 14 ? "#fef9c3" : "#dcfce7", color: _slaDays > 30 ? "#991b1b" : _slaDays > 14 ? "#854d0e" : "#15803d" }}>
