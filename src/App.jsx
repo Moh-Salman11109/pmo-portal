@@ -506,12 +506,18 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
               {g.notes    && <div>💬 Notes: <strong>{g.notes}</strong></div>}
             </div>
             {(() => {
-              const formUrl = def.id === "G1" ? FORM_URLS.gate1 : def.id === "G5" ? FORM_URLS.closure : null;
+              const formUrl = def.id === "G1" ? FORM_URLS.intake
+                            : def.id === "G2" ? FORM_URLS.gate1
+                            : def.id === "G5" ? FORM_URLS.closure
+                            : null;
+              const formLabel = def.id === "G1" ? "→ New Project Request"
+                              : def.id === "G2" ? "→ G1 Initiation Form"
+                              : "→ Closure Form";
               return formUrl ? (
                 <div style={{ marginTop: 12 }}>
                   <a href={formUrl} target="_blank" rel="noopener noreferrer"
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, background: s.border, color: "#fff", fontSize: 12, fontWeight: 700, padding: "7px 16px", borderRadius: 8, textDecoration: "none" }}>
-                    {def.id === "G1" ? "→ G1 Initiation Form" : "→ Closure Form"}
+                    {formLabel}
                   </a>
                 </div>
               ) : null;
