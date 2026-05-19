@@ -4196,7 +4196,9 @@ export default function App() {
       const name = currentUserName.trim().toLowerCase();
       return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
     }
-    if (userRole === ROLE_DEPT_HEAD && userDeptId) {
+    if (userRole === ROLE_DEPT_HEAD) {
+      // no DeptId configured → fall back to showing all (like Executive)
+      if (!userDeptId) return projects;
       return projects.filter(p => p.deptId === userDeptId);
     }
     return projects;
