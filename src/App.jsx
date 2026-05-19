@@ -4197,9 +4197,10 @@ export default function App() {
       return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
     }
     if (userRole === ROLE_DEPT_HEAD) {
-      // "All" or empty DeptId → show full portfolio (like Executive)
-      if (!userDeptId || userDeptId === "All") return projects;
-      return projects.filter(p => p.deptId === userDeptId);
+      if (!userDeptId) return projects;
+      const ids = userDeptId.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (!ids.length || ids.includes("all")) return projects;
+      return projects.filter(p => ids.includes((p.deptId || "").toLowerCase()));
     }
     return projects;
   }, [projects, userRole, currentUserName, userDeptId]);
