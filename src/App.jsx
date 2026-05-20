@@ -1535,10 +1535,12 @@ const GRCDashboard = ({ canEdit = false }) => {
   const bp  = useBp();
   const [loading, setLoading]       = useState(true);
   const [error,   setError]         = useState("");
-  const [kriMaster,   setKriMaster]   = useState([]);
-  const [kriReadings, setKriReadings] = useState([]);
-  const [riskReg,     setRiskReg]     = useState([]);
-  const [appetite,    setAppetite]    = useState([]);
+  const [kriMaster,        setKriMaster]        = useState([]);
+  const [kriReadings,      setKriReadings]      = useState([]);
+  const [riskReg,          setRiskReg]          = useState([]);
+  const [appetite,         setAppetite]         = useState([]);
+  const [auditFindings,    setAuditFindings]    = useState([]);
+  const [correctiveActions,setCorrectiveActions]= useState([]);
   const [selectedKRI, setSelectedKRI] = useState(null);
   // Edit modals
   const [readingModal,    setReadingModal]    = useState(null);
@@ -1558,17 +1560,21 @@ const GRCDashboard = ({ canEdit = false }) => {
       const token   = await acquireSpToken();
       const headers = { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" };
       const base    = `${GRC_SP_SITE}/_api/web/lists/getbytitle`;
-      const [mR, rR, rrR, aR] = await Promise.all([
+      const [mR, rR, rrR, aR, afR, caR] = await Promise.all([
         fetch(`${base}('GRC_KRI_Master')/items?$select=Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive&$expand=KRIOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_KRI_Readings')/items?$select=Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskRegister')/items?$select=Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskAppetite')/items?$select=Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
+        fetch(`${base}('GRC_AuditFindings')/items?$select=Title,FindingSeverity,BusinessUnit,Status,DueDate&$top=500`, { headers }),
+        fetch(`${base}('GRC_CorrectiveActions')/items?$select=Title,Status,CompletionPercentage,TargetDate,LinkedFindingID&$top=500`, { headers }),
       ]);
-      const [m, r, rr, a] = await Promise.all([mR.json(), rR.json(), rrR.json(), aR.json()]);
-      setKriMaster(m.value   || []);
-      setKriReadings(r.value || []);
-      setRiskReg(rr.value    || []);
-      setAppetite(a.value    || []);
+      const [m, r, rr, a, af, ca] = await Promise.all([mR.json(), rR.json(), rrR.json(), aR.json(), afR.json(), caR.json()]);
+      setKriMaster(m.value          || []);
+      setKriReadings(r.value        || []);
+      setRiskReg(rr.value           || []);
+      setAppetite(a.value           || []);
+      setAuditFindings(af.value     || []);
+      setCorrectiveActions(ca.value || []);
     } catch(e) { setError(e.message); }
     finally    { setLoading(false); }
   }, []);
@@ -2159,6 +2165,140 @@ const GRCDashboard = ({ canEdit = false }) => {
           )}
         </div>
       </div>
+
+      {/* ── Audit Findings + Corrective Actions ── */}
+      {(() => {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const isOverdue = (dateStr, status) =>
+          status !== "Closed" && status !== "Completed" && dateStr && new Date(dateStr) < today;
+
+        // ── Audit Findings stats ──
+        const afOpen     = auditFindings.filter(f => f.Status !== "Closed").length;
+        const afCritHigh = auditFindings.filter(f => f.Status !== "Closed" && (f.FindingSeverity === "Critical" || f.FindingSeverity === "High")).length;
+        const afOverdue  = auditFindings.filter(f => isOverdue(f.DueDate, f.Status)).length;
+        const afClosed   = auditFindings.filter(f => f.Status === "Closed").length;
+
+        const sevColor = (sev) => sev === "Critical" ? "#490300" : sev === "High" ? "#ff5000" : sev === "Medium" ? "#f5a623" : "#5a7a6e";
+        const statusBadge = (status, dueDate) => {
+          const over = isOverdue(dueDate, status);
+          if (over || status === "Overdue") return { bg: "#49030022", text: "#490300", label: "Overdue" };
+          if (status === "Open")            return { bg: "#dc262622", text: "#dc2626", label: "Open" };
+          if (status === "In Progress")     return { bg: "#d9770622", text: "#d97706", label: "In Progress" };
+          if (status === "Closed")          return { bg: "#16a34a22", text: "#16a34a", label: "Closed" };
+          return { bg: T.border, text: T.muted, label: status || "—" };
+        };
+
+        // ── Corrective Actions stats ──
+        const caTotal     = correctiveActions.length;
+        const caCompleted = correctiveActions.filter(a => a.Status === "Completed" || Number(a.CompletionPercentage) === 100).length;
+        const caOverdue   = correctiveActions.filter(a => isOverdue(a.TargetDate, a.Status)).length;
+        const caAvgPct    = caTotal > 0
+          ? Math.round(correctiveActions.reduce((s, a) => s + (Number(a.CompletionPercentage) || 0), 0) / caTotal)
+          : 0;
+
+        const pctColor = (p) => p >= 70 ? "#00c48c" : p >= 30 ? "#f5a623" : "#dc2626";
+
+        const caStatusBadge = (status, targetDate) => {
+          const over = isOverdue(targetDate, status);
+          if (over)                        return { bg: "#49030022", text: "#490300", label: "Overdue" };
+          if (status === "Completed")      return { bg: "#16a34a22", text: "#16a34a", label: "Completed" };
+          if (status === "In Progress")    return { bg: "#d9770622", text: "#d97706", label: "In Progress" };
+          if (status === "Not Started")    return { bg: "#6b728022", text: "#374151", label: "Not Started" };
+          return { bg: T.border, text: T.muted, label: status || "—" };
+        };
+
+        const miniStat = (value, label, color = T.text, accent = T.primary) => (
+          <div key={label} style={{ background: T.bg, border: `1px solid ${accent}33`, borderLeft: `3px solid ${accent}`, borderRadius: 8, padding: "10px 14px", flex: 1, minWidth: 80 }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 10, color: T.muted, marginTop: 4, fontWeight: 600 }}>{label}</div>
+          </div>
+        );
+
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 20, marginBottom: 24 }}>
+
+            {/* ── Audit Findings ── */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
+              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: T.text }}>🔍 Audit Findings Summary</h3>
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                {miniStat(afOpen,     "Open",          "#dc2626", "#dc2626")}
+                {miniStat(afCritHigh, "Critical / High","#490300", "#490300")}
+                {miniStat(afOverdue,  "Overdue",       "#ff5000", "#ff5000")}
+                {miniStat(afClosed,   "Closed",        "#16a34a", "#16a34a")}
+              </div>
+              {auditFindings.length === 0
+                ? <p style={{ color: T.muted, fontSize: 13 }}>No audit findings.</p>
+                : <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {[...auditFindings]
+                      .sort((a, b) => {
+                        const order = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+                        return (order[a.FindingSeverity] ?? 4) - (order[b.FindingSeverity] ?? 4);
+                      })
+                      .map((f, idx) => {
+                        const badge = statusBadge(f.Status, f.DueDate);
+                        const sc    = sevColor(f.FindingSeverity);
+                        return (
+                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: T.bg, borderRadius: 8, borderLeft: `4px solid ${sc}`, border: `1px solid ${T.border}`, borderLeftColor: sc }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.Title}</div>
+                              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{f.BusinessUnit || "—"}{f.DueDate ? ` · Due ${new Date(f.DueDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}` : ""}</div>
+                            </div>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: badge.bg, color: badge.text, whiteSpace: "nowrap", flexShrink: 0 }}>{badge.label}</span>
+                          </div>
+                        );
+                      })
+                    }
+                  </div>
+              }
+            </div>
+
+            {/* ── Corrective Actions ── */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
+              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: T.text }}>✅ Corrective Actions Progress</h3>
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                {miniStat(caTotal,     "Total",          T.text,     T.primary)}
+                {miniStat(caCompleted, "Completed",      "#16a34a",  "#16a34a")}
+                {miniStat(caOverdue,   "Overdue",        "#ff5000",  "#ff5000")}
+                <div style={{ background: T.bg, border: `1px solid ${pctColor(caAvgPct)}33`, borderLeft: `3px solid ${pctColor(caAvgPct)}`, borderRadius: 8, padding: "10px 14px", flex: 1, minWidth: 80 }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: pctColor(caAvgPct), lineHeight: 1 }}>{caAvgPct}%</div>
+                  <div style={{ fontSize: 10, color: T.muted, marginTop: 4, fontWeight: 600 }}>Overall Completion</div>
+                </div>
+              </div>
+              {correctiveActions.length === 0
+                ? <p style={{ color: T.muted, fontSize: 13 }}>No corrective actions.</p>
+                : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[...correctiveActions]
+                      .sort((a, b) => (Number(b.CompletionPercentage) || 0) - (Number(a.CompletionPercentage) || 0))
+                      .map((a, idx) => {
+                        const pct   = Math.min(100, Math.max(0, Number(a.CompletionPercentage) || 0));
+                        const pc    = pctColor(pct);
+                        const badge = caStatusBadge(a.Status, a.TargetDate);
+                        return (
+                          <div key={idx} style={{ padding: "10px 12px", background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 7 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.Title}</div>
+                                {a.TargetDate && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Target: {new Date(a.TargetDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}</div>}
+                              </div>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: badge.bg, color: badge.text, whiteSpace: "nowrap", flexShrink: 0 }}>{badge.label}</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ flex: 1, background: T.border, borderRadius: 4, height: 7, overflow: "hidden" }}>
+                                <div style={{ width: `${pct}%`, height: "100%", background: pc, borderRadius: 4, transition: "width 0.4s" }} />
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: pc, minWidth: 34, textAlign: "right" }}>{pct}%</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    }
+                  </div>
+              }
+            </div>
+
+          </div>
+        );
+      })()}
 
       {/* ── MODALS ── */}
       {readingModal && (
