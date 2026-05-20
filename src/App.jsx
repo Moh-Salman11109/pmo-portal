@@ -2082,7 +2082,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 
   if (deptId === "grc") {
     const isGRCDeptHead = userRole === ROLE_DEPT_HEAD && (userDeptId || "").split(",").map(s => s.trim().toLowerCase()).includes("grc");
-    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN || isGRCDeptHead;
+    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN || userRole === ROLE_EXEC || isGRCDeptHead;
     if (!canViewGRC) return (
       <div style={{ padding: 64, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
