@@ -2080,7 +2080,17 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN }) =
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
-  if (deptId === "grc") return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_DEPT_HEAD || userRole === ROLE_GRC_ADMIN} />;
+  if (deptId === "grc") {
+    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN;
+    if (!canViewGRC) return (
+      <div style={{ padding: 64, textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>Access Restricted</div>
+        <div style={{ fontSize: 13, color: T.muted }}>GRC Dashboard is only available to authorized GRC personnel.</div>
+      </div>
+    );
+    return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_GRC_ADMIN} />;
+  }
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
