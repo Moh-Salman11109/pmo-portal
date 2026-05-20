@@ -418,16 +418,21 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
 
   const _ordered = GATE_DEFS.map(def => {
     const fromJson = gates?.find(x => x.id === def.id);
-    if (fromJson) return { def, g: fromJson };
-    // Fallback: derive status from CurrentGate field
-    const defIdx  = GATE_DEFS.findIndex(d => d.id === def.id);
-    const curIdx  = GATE_DEFS.findIndex(d => d.id === _currentGateId);
-    let status = "Pending";
+    const defIdx   = GATE_DEFS.findIndex(d => d.id === def.id);
+    const curIdx   = GATE_DEFS.findIndex(d => d.id === _currentGateId);
+
+    // Derive status from CurrentGate (source of truth)
+    let derivedStatus = "Pending";
     if (curIdx >= 0) {
-      if (defIdx < curIdx)  status = "Approved";
-      if (defIdx === curIdx) status = "In Progress";
+      if (defIdx < curIdx)   derivedStatus = "Approved";
+      if (defIdx === curIdx) derivedStatus = "In Progress";
     }
-    return { def, g: { status } };
+
+    // Only override with GatesJSON status for special cases (Returned / Rejected)
+    const jsonStatus   = fromJson?.status;
+    const useJsonStatus = jsonStatus === "Returned" || jsonStatus === "Rejected";
+
+    return { def, g: { ...(fromJson || {}), status: useJsonStatus ? jsonStatus : derivedStatus } };
   });
 
   const _lastApprovedIdx = _ordered.reduce((idx, x, i) => x.g.status === "Approved" ? i : idx, -1);
@@ -1789,25 +1794,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
               </div>
             </div>
 
-            {/* Decisions Required + Blockers */}
-            <div style={{ display: "grid", gridTemplateColumns: twoCol, gap: 16 }}>
-              <div style={{ background: T.surface, border: `1px solid ${latestUpdate?.decisionsRequired ? "rgba(234,179,8,0.45)" : T.border}`, borderRadius: 14, padding: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#854d0e", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Decisions Required</div>
-                {latestUpdate?.decisionsRequired ? (
-                  <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{latestUpdate.decisionsRequired}</p>
-                ) : (
-                  <p style={{ margin: 0, fontSize: 13, color: T.muted, fontStyle: "italic" }}>No decisions flagged in latest update</p>
-                )}
-              </div>
-              <div style={{ background: T.surface, border: `1px solid ${latestUpdate?.blockers ? "rgba(220,38,38,0.3)" : T.border}`, borderRadius: 14, padding: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#991b1b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Blockers</div>
-                {latestUpdate?.blockers ? (
-                  <p style={{ margin: 0, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{latestUpdate.blockers}</p>
-                ) : (
-                  <p style={{ margin: 0, fontSize: 13, color: T.muted, fontStyle: "italic" }}>No blockers reported</p>
-                )}
-              </div>
-            </div>
           </div>
         );
       })()}
@@ -1888,7 +1874,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
       )}
 
       {/* HEALTH TAB */}
-      {activeTab === "Health" && (
+      {activeTab === "Health" && (() => {
+        const healthItems = Object.entries(project.health || {});
+        return (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
             {healthItems.map(([area, status]) => (
@@ -1920,7 +1908,8 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* MILESTONES TAB */}
       {activeTab === "Milestones" && (
@@ -3540,10 +3529,12 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
           <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>All Projects</h1>
           <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
         </div>
-        <button onClick={() => setRoute({ view: "form", mode: "create" })}
-          style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-          + New Project
-        </button>
+        {userRole === ROLE_ADMIN && (
+          <button onClick={() => setRoute({ view: "form", mode: "create" })}
+            style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+            + New Project
+          </button>
+        )}
       </div>
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, codes, or PMs..." style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", flex: 1, minWidth: 160, background: T.inputBg, color: T.inputText }} />
@@ -3996,6 +3987,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     { label: "Health", icon: "🩺" },
     { label: "Milestones", icon: "🎯" },
     { label: "Risks & Issues", icon: "⚠️" },
+    { label: "Documents", icon: "📄" },
     { label: "Updates", icon: "📝" },
   ];
 
@@ -4084,6 +4076,34 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
       </div>
     );
     if (step === 5) return (
+      <div>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted }}>
+          Update document status. Required documents affect the IPI score.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(form.documents || []).map((doc, i) => (
+            <div key={doc.id || i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "center", background: T.bg, borderRadius: 10, padding: "12px 16px", border: `1px solid ${T.border}` }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{doc.name}</div>
+                <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · ⭐ Required (affects IPI)" : " · Optional"}</div>
+              </div>
+              <select
+                value={doc.status || "Pending"}
+                onChange={e => {
+                  const updated = form.documents.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d);
+                  set("documents", updated);
+                }}
+                style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, background: T.inputBg, color: T.inputText, cursor: "pointer" }}
+              >
+                {["Pending","Draft","Submitted","Under Review","Approved","Final","Received","Current"].map(s => <option key={s}>{s}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>{doc.lastUpdated || "—"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+    if (step === 6) return (
       <div>
         <FField label="Add Update Note (optional)">
           <textarea value={form._newUpdate || ""} onChange={e => set("_newUpdate", e.target.value)} rows={4} placeholder="What's the latest status? Key decisions, blockers, progress..." style={{ ...s, resize: "vertical" }} />
