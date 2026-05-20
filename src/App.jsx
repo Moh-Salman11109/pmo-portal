@@ -11,6 +11,7 @@ const ROLE_EXEC      = "executive";
 const ROLE_DEPT_HEAD = "dept_head";
 const ROLE_GRC       = "grc";        // view GRC dashboard only
 const ROLE_GRC_ADMIN = "grc_admin";  // view + full edit GRC dashboard
+const ROLE_PMO_HEAD  = "pmo_head";   // all pmo_admin permissions except GRC dashboard
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -717,7 +718,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
     { icon: "📋", label: "All Projects",         route: "projects", badge: attnCount },
     { icon: "📨", label: "New Request",          route: "requests"},
     { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
-    ...(userRole === ROLE_ADMIN ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
+    ...((userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
   ];
 
   const sidebarStyle = isDesktop
@@ -2539,7 +2540,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
                   ✏️ Update
                 </button>
               )}
-              {userRole === ROLE_ADMIN && (
+              {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
                 <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id, from: "project" })}
                   style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   Edit Fields
@@ -3443,7 +3444,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
   // For non-admin roles: only show submissions where the user is involved
   const filterByUser = (list, nameFields, emailFields = []) => {
-    if (userRole === ROLE_ADMIN) return list || [];
+    if (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) return list || [];
     const name  = (currentUserName  || "").trim().toLowerCase();
     const email = (currentUserEmail || "").trim().toLowerCase();
     return (list || []).filter(item =>
@@ -4404,7 +4405,7 @@ const AllProjectsView = ({ projects, setRoute, route }) => {
           <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>All Projects</h1>
           <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
         </div>
-        {userRole === ROLE_ADMIN && (
+        {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
           <button onClick={() => setRoute({ view: "form", mode: "create" })}
             style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
             + New Project
@@ -5302,8 +5303,8 @@ export default function App() {
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
-          {route.view === "admin"       && userRole === ROLE_ADMIN && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
-          {route.view === "form"        && userRole === ROLE_ADMIN && <ProjectForm projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
+          {route.view === "admin"       && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
+          {route.view === "form"        && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <ProjectForm projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
         </main>
       </div>
     </div>
