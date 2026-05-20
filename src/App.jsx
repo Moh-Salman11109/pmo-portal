@@ -5251,6 +5251,27 @@ export default function App() {
     );
   }
 
+  // GRC-only users see nothing but the GRC dashboard
+  if (userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN) {
+    return (
+      <DeptContext.Provider value={deptCtx}>
+      <div style={{ height: "100vh", overflowY: "auto", fontFamily: "'Segoe UI', system-ui, sans-serif", background: activeT.bg, color: activeT.text }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: activeT.headerBg, borderBottom: `1px solid ${activeT.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>🛡️</span>
+            <span style={{ fontWeight: 900, fontSize: 15, color: activeT.headerText }}>GRC Portal</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 12, color: activeT.headerText, opacity: 0.7 }}>{currentUserName || currentUserEmail}</span>
+            <button onClick={toggleDark} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", color: activeT.headerText }}>{dark ? "☀️" : "🌙"}</button>
+          </div>
+        </div>
+        <GRCDashboard canEdit={userRole === ROLE_GRC_ADMIN} />
+      </div>
+      </DeptContext.Provider>
+    );
+  }
+
   return (
     <DeptContext.Provider value={deptCtx}>
     <div style={{
