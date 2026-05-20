@@ -1287,7 +1287,7 @@ const GRCDashboard = () => {
     <div style={{ padding: pad, maxWidth: 1400 }}>
 
       {/* ── Header ── */}
-      <div style={{ background: "linear-gradient(135deg,#1e3a5f 0%,#0f2340 100%)", borderRadius: 16, padding: "22px 28px", marginBottom: 24, color: "#fff" }}>
+      <div style={{ background: T.headerBg, borderRadius: 16, padding: "22px 28px", marginBottom: 24, color: T.headerText }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
@@ -1307,11 +1307,11 @@ const GRCDashboard = () => {
       {/* ── KPI Strip ── */}
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "Total KRIs",          value: kriWithLatest.length, color: "#1e3a5f", bg: T.surface },
+          { label: "Total KRIs",          value: kriWithLatest.length, color: T.primary,  bg: T.surface },
           { label: "Breaching — Red",     value: redCount,   color: "#dc2626", bg: "#fee2e2" },
           { label: "At Risk — Amber",     value: amberCount, color: "#d97706", bg: "#fef9c3" },
           { label: "Within Limits",       value: greenCount, color: "#16a34a", bg: "#dcfce7" },
-          { label: "Escalations Required",value: escalCount, color: "#7c3aed", bg: "#ede9fe" },
+          { label: "Escalations Required",value: escalCount, color: T.primary,  bg: T.bg },
         ].map(({ label, value, color, bg }) => (
           <div key={label} style={{ background: bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 18px" }}>
             <div style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
@@ -1365,7 +1365,7 @@ const GRCDashboard = () => {
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{r?.Period || "—"}</td>
                       <td style={{ padding: "11px 12px" }}>
                         {r?.EscalationRequired
-                          ? <span style={{ background: "#ede9fe", color: "#7c3aed", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 10 }}>⚠ Yes</span>
+                          ? <span style={{ background: T.bg, color: T.primary, border: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 10 }}>⚠ Yes</span>
                           : <span style={{ color: T.muted, fontSize: 12 }}>—</span>}
                       </td>
                     </tr>
@@ -1399,7 +1399,7 @@ const GRCDashboard = () => {
                 {kri?.GreenThreshold != null && <ReferenceLine y={kri.GreenThreshold} stroke="#16a34a" strokeDasharray="4 2" label={{ value: "Green", position: "right", fontSize: 10, fill: "#16a34a" }} />}
                 {kri?.AmberThreshold != null && <ReferenceLine y={kri.AmberThreshold} stroke="#eab308" strokeDasharray="4 2" label={{ value: "Amber", position: "right", fontSize: 10, fill: "#d97706" }} />}
                 {kri?.RedThreshold   != null && <ReferenceLine y={kri.RedThreshold}   stroke="#dc2626" strokeDasharray="4 2" label={{ value: "Red",   position: "right", fontSize: 10, fill: "#dc2626" }} />}
-                <Line type="monotone" dataKey="value" stroke="#1e3a5f" strokeWidth={2.5} dot={{ r: 4, fill: "#1e3a5f" }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="value" stroke={T.primary} strokeWidth={2.5} dot={{ r: 4, fill: T.primary }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
