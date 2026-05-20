@@ -1,8 +1,9 @@
 ﻿
 import React, { useState, useMemo, useCallback, createContext, useContext, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, ReferenceLine } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
+import { acquireSpToken } from "./services/auth.js";
 // Role constants
 const ROLE_ADMIN     = "pmo_admin";
 const ROLE_PM        = "pm";
@@ -1194,6 +1195,281 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
   );
 };
 
+// ─── GRC KRI DASHBOARD ───────────────────────────────────────────
+const GRC_SP_SITE = "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
+
+const RAG_COLOR = {
+  Green: { bg: "#dcfce7", text: "#15803d", border: "#16a34a" },
+  Amber: { bg: "#fef9c3", text: "#854d0e", border: "#eab308" },
+  Red:   { bg: "#fee2e2", text: "#991b1b", border: "#dc2626" },
+};
+const trendIcon  = t => t === "Improving" ? "↑" : t === "Worsening" ? "↓" : "→";
+const trendColor = t => t === "Improving" ? "#15803d" : t === "Worsening" ? "#dc2626" : "#d97706";
+
+const GRCDashboard = () => {
+  const T   = useT();
+  const bp  = useBp();
+  const [loading, setLoading]       = useState(true);
+  const [error,   setError]         = useState("");
+  const [kriMaster,   setKriMaster]   = useState([]);
+  const [kriReadings, setKriReadings] = useState([]);
+  const [riskReg,     setRiskReg]     = useState([]);
+  const [appetite,    setAppetite]    = useState([]);
+  const [selectedKRI, setSelectedKRI] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const token   = await acquireSpToken();
+      const headers = { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" };
+      const base    = `${GRC_SP_SITE}/_api/web/lists/getbytitle`;
+      const [mR, rR, rrR, aR] = await Promise.all([
+        fetch(`${base}('GRC_KRI_Master')/items?$select=Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive&$expand=KRIOwner&$top=500`, { headers }),
+        fetch(`${base}('GRC_KRI_Readings')/items?$select=Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
+        fetch(`${base}('GRC_RiskRegister')/items?$select=Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
+        fetch(`${base}('GRC_RiskAppetite')/items?$select=Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
+      ]);
+      const [m, r, rr, a] = await Promise.all([mR.json(), rR.json(), rrR.json(), aR.json()]);
+      setKriMaster(m.value   || []);
+      setKriReadings(r.value || []);
+      setRiskReg(rr.value    || []);
+      setAppetite(a.value    || []);
+    } catch(e) { setError(e.message); }
+    finally    { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const activeKRIs = useMemo(() => kriMaster.filter(k => k.IsActive !== false), [kriMaster]);
+
+  const latestByKRI = useMemo(() => {
+    const map = {};
+    kriReadings.forEach(r => {
+      if (!map[r.KRIID] || r.ReadingDate > map[r.KRIID].ReadingDate) map[r.KRIID] = r;
+    });
+    return map;
+  }, [kriReadings]);
+
+  const kriWithLatest = useMemo(() =>
+    activeKRIs.map(k => ({ ...k, latest: latestByKRI[k.KRIID] || null })),
+    [activeKRIs, latestByKRI]
+  );
+
+  const redCount    = kriWithLatest.filter(k => k.latest?.RAGStatus === "Red").length;
+  const amberCount  = kriWithLatest.filter(k => k.latest?.RAGStatus === "Amber").length;
+  const greenCount  = kriWithLatest.filter(k => k.latest?.RAGStatus === "Green").length;
+  const escalCount  = kriWithLatest.filter(k => k.latest?.EscalationRequired).length;
+  const appBreaches = riskReg.filter(r => r.RiskAppetiteBreached && r.RiskStatus !== "Closed").length;
+
+  const kriHistory = useMemo(() => {
+    if (!selectedKRI) return [];
+    return [...kriReadings.filter(r => r.KRIID === selectedKRI)]
+      .sort((a, b) => (a.ReadingDate || "").localeCompare(b.ReadingDate || ""))
+      .slice(-12);
+  }, [kriReadings, selectedKRI]);
+
+  const pad = bp === "mobile" ? "16px" : "32px";
+
+  if (loading) return (
+    <div style={{ padding: 64, textAlign: "center", color: T.muted }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>🛡️</div>
+      <div style={{ fontWeight: 700, fontSize: 15 }}>Loading GRC Dashboard…</div>
+    </div>
+  );
+  if (error) return (
+    <div style={{ padding: 48, textAlign: "center" }}>
+      <div style={{ color: "#dc2626", fontSize: 14, marginBottom: 12 }}>Failed to load: {error}</div>
+      <button onClick={load} style={{ background: T.primary, color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer" }}>Retry</button>
+    </div>
+  );
+
+  return (
+    <div style={{ padding: pad, maxWidth: 1400 }}>
+
+      {/* ── Header ── */}
+      <div style={{ background: "linear-gradient(135deg,#1e3a5f 0%,#0f2340 100%)", borderRadius: 16, padding: "22px 28px", marginBottom: 24, color: "#fff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <span style={{ fontSize: 22 }}>🛡️</span>
+              <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 17 : 21, fontWeight: 900 }}>GRC Risk Intelligence Dashboard</h1>
+            </div>
+            <p style={{ margin: 0, opacity: 0.65, fontSize: 12 }}>Key Risk Indicators · Risk Register · Appetite Monitoring</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 2 }}>Last refreshed</div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</div>
+            <button onClick={load} style={{ marginTop: 8, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>↻ Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── KPI Strip ── */}
+      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
+        {[
+          { label: "Total KRIs",          value: kriWithLatest.length, color: "#1e3a5f", bg: T.surface },
+          { label: "Breaching — Red",     value: redCount,   color: "#dc2626", bg: "#fee2e2" },
+          { label: "At Risk — Amber",     value: amberCount, color: "#d97706", bg: "#fef9c3" },
+          { label: "Within Limits",       value: greenCount, color: "#16a34a", bg: "#dcfce7" },
+          { label: "Escalations Required",value: escalCount, color: "#7c3aed", bg: "#ede9fe" },
+        ].map(({ label, value, color, bg }) => (
+          <div key={label} style={{ background: bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 18px" }}>
+            <div style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 5, fontWeight: 600 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── KRI Status Board ── */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: T.text }}>KRI Status Board</h2>
+        {kriWithLatest.length === 0 ? (
+          <p style={{ color: T.muted, fontSize: 13 }}>No active KRIs found.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+              <thead>
+                <tr style={{ background: T.bg }}>
+                  {["KRI Name / Owner","Category","Current Value","RAG","Trend","Period","Escalate"].map(h => (
+                    <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {kriWithLatest.map(kri => {
+                  const r  = kri.latest;
+                  const rc = RAG_COLOR[r?.RAGStatus];
+                  const isSelected = selectedKRI === kri.KRIID;
+                  return (
+                    <tr key={kri.KRIID}
+                      onClick={() => setSelectedKRI(isSelected ? null : kri.KRIID)}
+                      style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: isSelected ? "#f0f7ff" : "transparent", transition: "background 0.12s" }}>
+                      <td style={{ padding: "11px 12px" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{kri.Title}</div>
+                        <div style={{ fontSize: 11, color: T.muted }}>{kri.KRIOwner?.Title || "—"}</div>
+                      </td>
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{kri.KRICategory || "—"}</td>
+                      <td style={{ padding: "11px 12px" }}>
+                        {r ? (
+                          <span style={{ fontSize: 15, fontWeight: 900, color: rc?.text || T.text }}>
+                            {r.ActualValue} <span style={{ fontSize: 11, fontWeight: 400, color: T.muted }}>{kri.MeasurementUnit}</span>
+                          </span>
+                        ) : <span style={{ fontSize: 12, color: T.muted }}>No reading</span>}
+                      </td>
+                      <td style={{ padding: "11px 12px" }}>
+                        {rc ? (
+                          <span style={{ background: rc.bg, color: rc.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{r.RAGStatus}</span>
+                        ) : <span style={{ color: T.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding: "11px 12px", fontSize: 18, fontWeight: 900, color: trendColor(r?.Trend) }}>{r?.Trend ? trendIcon(r.Trend) : "—"}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{r?.Period || "—"}</td>
+                      <td style={{ padding: "11px 12px" }}>
+                        {r?.EscalationRequired
+                          ? <span style={{ background: "#ede9fe", color: "#7c3aed", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 10 }}>⚠ Yes</span>
+                          : <span style={{ color: T.muted, fontSize: 12 }}>—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {kriWithLatest.length > 0 && <p style={{ margin: "10px 0 0", fontSize: 11, color: T.muted }}>Click any row to view trend chart</p>}
+      </div>
+
+      {/* ── KRI Trend Chart ── */}
+      {selectedKRI && kriHistory.length > 0 && (() => {
+        const kri = kriMaster.find(k => k.KRIID === selectedKRI);
+        const chartData = kriHistory.map(r => ({
+          period: r.Period || (r.ReadingDate || "").substring(0, 7),
+          value: r.ActualValue,
+        }));
+        return (
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text }}>📈 Trend — {kri?.Title}</h3>
+              <button onClick={() => setSelectedKRI(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer", color: T.muted }}>✕ Close</button>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                {kri?.GreenThreshold != null && <ReferenceLine y={kri.GreenThreshold} stroke="#16a34a" strokeDasharray="4 2" label={{ value: "Green", position: "right", fontSize: 10, fill: "#16a34a" }} />}
+                {kri?.AmberThreshold != null && <ReferenceLine y={kri.AmberThreshold} stroke="#eab308" strokeDasharray="4 2" label={{ value: "Amber", position: "right", fontSize: 10, fill: "#d97706" }} />}
+                {kri?.RedThreshold   != null && <ReferenceLine y={kri.RedThreshold}   stroke="#dc2626" strokeDasharray="4 2" label={{ value: "Red",   position: "right", fontSize: 10, fill: "#dc2626" }} />}
+                <Line type="monotone" dataKey="value" stroke="#1e3a5f" strokeWidth={2.5} dot={{ r: 4, fill: "#1e3a5f" }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
+
+      {/* ── Bottom: Appetite + Top Risks ── */}
+      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 20 }}>
+
+        {/* Risk Appetite */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
+          <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 800, color: T.text }}>🎯 Risk Appetite by Category</h3>
+          {appetite.length === 0
+            ? <p style={{ color: T.muted, fontSize: 13 }}>No appetite data.</p>
+            : appetite.map(a => {
+                const pct = a.MaxTolerableScore > 0 ? Math.min(100, Math.round((a.CurrentExposureScore / a.MaxTolerableScore) * 100)) : 0;
+                const sc  = a.AppetiteStatus === "Breached" ? "#dc2626" : a.AppetiteStatus === "Near Limit" ? "#d97706" : "#16a34a";
+                return (
+                  <div key={a.Title} style={{ marginBottom: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.RiskCategory}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: sc, background: sc + "22", padding: "2px 8px", borderRadius: 10 }}>{a.AppetiteStatus}</span>
+                    </div>
+                    <div style={{ background: T.border, borderRadius: 6, height: 8, overflow: "hidden", marginBottom: 4 }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: sc, borderRadius: 6, transition: "width 0.4s" }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: T.muted }}>Exposure: {a.CurrentExposureScore} / Limit: {a.MaxTolerableScore} ({pct}%)</div>
+                  </div>
+                );
+              })
+          }
+        </div>
+
+        {/* Top Risks */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
+          <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 800, color: T.text }}>⚠️ Top Risks by Score</h3>
+          {riskReg.length === 0
+            ? <p style={{ color: T.muted, fontSize: 13 }}>No risk data.</p>
+            : [...riskReg]
+                .filter(r => r.RiskStatus !== "Closed")
+                .sort((a, b) => (b.LikelihoodScore * b.ImpactScore) - (a.LikelihoodScore * a.ImpactScore))
+                .slice(0, 6)
+                .map(r => {
+                  const score = (r.LikelihoodScore || 0) * (r.ImpactScore || 0);
+                  const sc    = score >= 15 ? "#dc2626" : score >= 9 ? "#d97706" : "#16a34a";
+                  return (
+                    <div key={r.RiskID || r.Title} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 12px", marginBottom: 8, background: T.bg, borderRadius: 8, border: r.RiskAppetiteBreached ? "1px solid rgba(220,38,38,0.35)" : `1px solid ${T.border}` }}>
+                      <div style={{ background: sc, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 14, fontWeight: 900, minWidth: 34, textAlign: "center", flexShrink: 0 }}>{score}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.Title}</div>
+                        <div style={{ fontSize: 11, color: T.muted }}>{r.RiskCategory} · {r.RiskOwner?.Title || "—"}</div>
+                      </div>
+                      {r.RiskAppetiteBreached && (
+                        <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 8, flexShrink: 0 }}>Breached</span>
+                      )}
+                    </div>
+                  );
+                })
+          }
+          {appBreaches > 0 && (
+            <div style={{ marginTop: 12, padding: "8px 12px", background: "#fee2e2", borderRadius: 8, fontSize: 12, color: "#991b1b", fontWeight: 700 }}>
+              ⚠ {appBreaches} risk{appBreaches > 1 ? "s" : ""} breaching risk appetite
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── DEPARTMENT VIEW ──────────────────────────────────────────────
 const DepartmentView = ({ projects, deptId, setRoute }) => {
   const { departments } = useDepts();
@@ -1217,6 +1493,8 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
   }), [deptProjects, search, filterStatus, filterRisk, filterType]);
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
+
+  if (deptId === "grc") return <GRCDashboard />;
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
