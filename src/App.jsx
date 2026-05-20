@@ -2057,7 +2057,7 @@ const GRCDashboard = ({ canEdit = false }) => {
 };
 
 // ─── DEPARTMENT VIEW ──────────────────────────────────────────────
-const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN }) => {
+const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, userDeptId = null }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -2081,7 +2081,8 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN }) =
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
   if (deptId === "grc") {
-    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN;
+    const isGRCDeptHead = userRole === ROLE_DEPT_HEAD && (userDeptId || "").split(",").map(s => s.trim().toLowerCase()).includes("grc");
+    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN || isGRCDeptHead;
     if (!canViewGRC) return (
       <div style={{ padding: 64, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
@@ -5297,7 +5298,7 @@ export default function App() {
           {route.view === "home"        && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
           {route.view === "departments" && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} />}
-          {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} />}
+          {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
