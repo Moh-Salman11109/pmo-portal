@@ -1571,13 +1571,13 @@ const GRCDashboard = ({ canEdit = false }) => {
       {/* ── KPI Strip ── */}
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "Total KRIs",          value: kriWithLatest.length, color: T.primary,  bg: T.surface },
-          { label: "Breaching — Red",     value: redCount,   color: "#dc2626", bg: "#fee2e2" },
-          { label: "At Risk — Amber",     value: amberCount, color: "#d97706", bg: "#fef9c3" },
-          { label: "Within Limits",       value: greenCount, color: "#16a34a", bg: "#dcfce7" },
-          { label: "Escalations Required",value: escalCount, color: T.primary,  bg: T.bg },
-        ].map(({ label, value, color, bg }) => (
-          <div key={label} style={{ background: bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 18px" }}>
+          { label: "Total KRIs",           value: kriWithLatest.length, color: T.text,     accent: T.primary },
+          { label: "Breaching — Red",      value: redCount,             color: "#dc2626",  accent: "#dc2626" },
+          { label: "At Risk — Amber",      value: amberCount,           color: "#d97706",  accent: "#d97706" },
+          { label: "Within Limits",        value: greenCount,           color: "#16a34a",  accent: "#16a34a" },
+          { label: "Escalations Required", value: escalCount,           color: T.text,     accent: T.primary },
+        ].map(({ label, value, color, accent }) => (
+          <div key={label} style={{ background: T.surface, border: `2px solid ${accent}22`, borderLeft: `4px solid ${accent}`, borderRadius: 12, padding: "16px 18px" }}>
             <div style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
             <div style={{ fontSize: 11, color: T.muted, marginTop: 5, fontWeight: 600 }}>{label}</div>
           </div>
