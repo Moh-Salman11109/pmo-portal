@@ -707,7 +707,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
     { icon: "🏠", label: "Portfolio Overview", route: "home" },
     { icon: "📁", label: "Departments",         route: "departments" },
     { icon: "📋", label: "All Projects",         route: "projects", badge: attnCount },
-    { icon: "📨", label: "New Request",          route: "requests", badge: myRequestsCount },
+    { icon: "📨", label: "New Request",          route: "requests"},
     { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
     ...(userRole === ROLE_ADMIN ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
   ];
