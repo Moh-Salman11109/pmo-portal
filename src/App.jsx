@@ -9,6 +9,8 @@ const ROLE_ADMIN     = "pmo_admin";
 const ROLE_PM        = "pm";
 const ROLE_EXEC      = "executive";
 const ROLE_DEPT_HEAD = "dept_head";
+const ROLE_GRC       = "grc";        // view GRC dashboard only
+const ROLE_GRC_ADMIN = "grc_admin";  // view + full edit GRC dashboard
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
@@ -2078,7 +2080,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN }) =
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
-  if (deptId === "grc") return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_DEPT_HEAD} />;
+  if (deptId === "grc") return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_DEPT_HEAD || userRole === ROLE_GRC_ADMIN} />;
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -5090,7 +5092,13 @@ export default function App() {
   useEffect(() => {
     if (!currentUserEmail) return;
     SPService.getUserRole(currentUserEmail)
-      .then(({ role, deptId }) => { setUserRole(role); setUserDeptId(deptId); })
+      .then(({ role, deptId }) => {
+        setUserRole(role);
+        setUserDeptId(deptId);
+        if (role === ROLE_GRC || role === ROLE_GRC_ADMIN) {
+          setRoute({ view: "department", deptId: "grc" });
+        }
+      })
       .catch(() => {}); // fail-open: keep pmo_admin default
   }, [currentUserEmail]);
 

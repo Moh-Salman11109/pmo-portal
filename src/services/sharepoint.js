@@ -585,9 +585,11 @@ Object.assign(SPService, {
       if (!items.length) return fallback;
       const raw = (items[0].Role || "").trim().toLowerCase().replace(/\s+/g, "_");
       const deptId = items[0].DeptId || null;
-      if (raw === "pm")         return { role: "pm",        deptId };
-      if (raw === "executive")  return { role: "executive",  deptId };
+      if (raw === "pm")                                      return { role: "pm",        deptId };
+      if (raw === "executive")                               return { role: "executive",  deptId };
       if (raw === "dept_head" || raw === "department_head") return { role: "dept_head", deptId };
+      if (raw === "grc")                                     return { role: "grc",        deptId };
+      if (raw === "grc_admin")                               return { role: "grc_admin",  deptId };
       return fallback;
     } catch {
       return fallback;
