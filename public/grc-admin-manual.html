@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>دليل مستخدم — GRC Admin Dashboard</title>
+<title>User Manual — GRC Admin Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -12,7 +12,7 @@
     background: #f4f6f4;
     color: #0d1f1c;
     line-height: 1.7;
-    direction: rtl;
+    direction: ltr;
   }
 
   /* ── Cover ── */
@@ -26,7 +26,7 @@
   .cover::before {
     content: "🛡️";
     position: absolute;
-    left: -20px;
+    right: -20px;
     top: -20px;
     font-size: 220px;
     opacity: 0.06;
@@ -59,22 +59,20 @@
   /* ── TOC ── */
   .toc {
     background: #fff;
-    border-right: 4px solid #003932;
+    border-left: 4px solid #003932;
     margin: 40px 60px;
     border-radius: 12px;
     padding: 32px 36px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   }
   .toc h3 { font-size: 16px; font-weight: 800; color: #003932; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-  .toc ol { padding-right: 20px; }
+  .toc ol { padding-left: 20px; }
   .toc li { padding: 6px 0; font-size: 14px; }
   .toc a { color: #003932; text-decoration: none; font-weight: 600; }
   .toc a:hover { color: #00856a; text-decoration: underline; }
 
   /* ── Sections ── */
-  .section {
-    margin: 0 60px 50px;
-  }
+  .section { margin: 0 60px 50px; }
   .section-header {
     display: flex;
     align-items: center;
@@ -92,12 +90,7 @@
     flex-shrink: 0;
   }
   .section-header h2 { font-size: 22px; font-weight: 900; color: #003932; }
-  .section-num {
-    font-size: 12px;
-    color: #5a7a6e;
-    font-weight: 600;
-    margin-bottom: 2px;
-  }
+  .section-num { font-size: 12px; color: #5a7a6e; font-weight: 600; margin-bottom: 2px; }
 
   /* ── Cards ── */
   .card-grid {
@@ -168,8 +161,6 @@
     margin: 0 8px;
   }
   .mockup-content { padding: 20px; }
-
-  /* ── UI components in mockups ── */
   .ui-header {
     background: #061210;
     border-radius: 12px;
@@ -189,34 +180,20 @@
     padding: 5px 14px;
     font-size: 11px;
     cursor: pointer;
-    margin-right: 8px;
+    margin-left: 8px;
     font-family: inherit;
   }
-  .ui-btn-green {
-    background: #00ffb3;
-    color: #061210;
-    border: none;
-    font-weight: 800;
-  }
+  .ui-btn-green { background: #00ffb3; color: #061210; border: none; font-weight: 800; }
   .ui-kpi-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 8px;
     margin-bottom: 14px;
   }
-  .ui-kpi {
-    background: #0f1e1a;
-    border: 2px solid;
-    border-radius: 10px;
-    padding: 12px;
-  }
+  .ui-kpi { background: #0f1e1a; border: 2px solid; border-radius: 10px; padding: 12px; }
   .ui-kpi .num { font-size: 24px; font-weight: 900; line-height: 1; }
   .ui-kpi .lbl { font-size: 10px; color: #7aaa96; margin-top: 5px; font-weight: 600; }
-  .ui-table {
-    background: #0f1e1a;
-    border-radius: 10px;
-    overflow: hidden;
-  }
+  .ui-table { background: #0f1e1a; border-radius: 10px; overflow: hidden; }
   .ui-table-head {
     background: #0a1512;
     display: grid;
@@ -234,13 +211,7 @@
     align-items: center;
   }
   .ui-table-row span { font-size: 11px; color: #e8f5f0; }
-  .ui-tag {
-    display: inline-block;
-    border-radius: 20px;
-    padding: 2px 8px;
-    font-size: 10px;
-    font-weight: 700;
-  }
+  .ui-tag { display: inline-block; border-radius: 20px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
 
   /* ── Alert boxes ── */
   .alert {
@@ -253,39 +224,35 @@
     font-size: 13px;
   }
   .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .alert-info  { background: #e8f5f0; border: 1px solid #a8d5c2; color: #003932; }
-  .alert-warn  { background: #fef9c3; border: 1px solid #eab308; color: #854d0e; }
-  .alert-danger{ background: #fee2e2; border: 1px solid #dc2626; color: #991b1b; }
+  .alert-info   { background: #e8f5f0; border: 1px solid #a8d5c2; color: #003932; }
+  .alert-warn   { background: #fef9c3; border: 1px solid #eab308; color: #854d0e; }
+  .alert-danger { background: #fee2e2; border: 1px solid #dc2626; color: #991b1b; }
 
   /* ── Permissions table ── */
   .perm-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.04); }
-  .perm-table th { background: #003932; color: #fff; padding: 12px 16px; font-size: 12px; font-weight: 700; text-align: right; }
+  .perm-table th { background: #003932; color: #fff; padding: 12px 16px; font-size: 12px; font-weight: 700; text-align: left; }
   .perm-table td { padding: 11px 16px; font-size: 13px; border-bottom: 1px solid #dce8dc; }
   .perm-table tr:last-child td { border-bottom: none; }
   .perm-table tr:nth-child(even) td { background: #f9fbf9; }
   .yes { color: #16a34a; font-weight: 700; }
   .no  { color: #dc2626; font-weight: 700; }
-  .ro  { color: #d97706; font-weight: 700; }
 
-  /* ── Field reference table ── */
+  /* ── Field table ── */
   .field-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .field-table th { background: #f4f6f4; padding: 10px 14px; font-weight: 700; text-align: right; color: #003932; border-bottom: 2px solid #dce8dc; }
+  .field-table th { background: #f4f6f4; padding: 10px 14px; font-weight: 700; text-align: left; color: #003932; border-bottom: 2px solid #dce8dc; }
   .field-table td { padding: 10px 14px; border-bottom: 1px solid #dce8dc; }
   .field-table tr:last-child td { border-bottom: none; }
   .field-req { color: #dc2626; font-size: 11px; font-weight: 700; }
   .field-opt { color: #5a7a6e; font-size: 11px; }
 
-  /* ── Inline code ── */
   code { background: #e8f5f0; color: #003932; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: 'Consolas', monospace; }
 
-  /* ── Page break for print ── */
   @media print {
     .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .section { break-inside: avoid; }
     .mockup { break-inside: avoid; }
   }
 
-  /* ── Footer ── */
   .footer {
     background: #003932;
     color: rgba(255,255,255,0.5);
@@ -301,28 +268,28 @@
 
 <!-- ══════════════════ COVER ══════════════════ -->
 <div class="cover">
-  <div class="badge">🔐 GRC ADMIN · دليل المستخدم</div>
+  <div class="badge">🔐 GRC ADMIN · USER MANUAL</div>
   <h1>GRC Risk Intelligence<br>Dashboard</h1>
-  <h2>دليل المستخدم الشامل — صلاحية GRC Admin</h2>
+  <h2>Complete User Guide — GRC Admin Role</h2>
   <div class="meta">
-    <span>📅 إصدار مايو 2026</span>
+    <span>📅 May 2026 Edition</span>
     <span>🏢 Tree Digital Insurance</span>
-    <span>🛡️ إعداد: فريق PMO</span>
+    <span>🛡️ Prepared by: PMO Team</span>
   </div>
 </div>
 
 <!-- ══════════════════ TOC ══════════════════ -->
 <div class="toc">
-  <h3>📋 فهرس المحتويات</h3>
+  <h3>📋 Table of Contents</h3>
   <ol>
-    <li><a href="#s1">نظرة عامة على الداشبورد</a></li>
-    <li><a href="#s2">صلاحيات GRC Admin</a></li>
-    <li><a href="#s3">مكونات الداشبورد</a></li>
-    <li><a href="#s4">إضافة قراءة KRI جديدة</a></li>
-    <li><a href="#s5">وضع التعديل الشامل (Global Edit)</a></li>
-    <li><a href="#s6">إدارة سجل المخاطر</a></li>
-    <li><a href="#s7">إدارة شهية المخاطر</a></li>
-    <li><a href="#s8">جدول المرجع السريع</a></li>
+    <li><a href="#s1">Dashboard Overview</a></li>
+    <li><a href="#s2">GRC Admin Permissions</a></li>
+    <li><a href="#s3">Dashboard Components</a></li>
+    <li><a href="#s4">Adding a KRI Reading</a></li>
+    <li><a href="#s5">Global Edit Mode</a></li>
+    <li><a href="#s6">Managing the Risk Register</a></li>
+    <li><a href="#s7">Managing Risk Appetite</a></li>
+    <li><a href="#s8">Quick Reference</a></li>
   </ol>
 </div>
 
@@ -331,35 +298,35 @@
   <div class="section-header">
     <div class="section-icon">🛡️</div>
     <div>
-      <div class="section-num">القسم الأول</div>
-      <h2>نظرة عامة على الداشبورد</h2>
+      <div class="section-num">Section 1</div>
+      <h2>Dashboard Overview</h2>
     </div>
   </div>
 
   <p style="font-size:14px; color:#5a7a6e; margin-bottom:20px;">
-    داشبورد GRC هو نظام متكامل لمراقبة مؤشرات المخاطر الرئيسية (KRI) وسجل المخاطر وشهية المخاطر. يتيح للمسؤولين رؤية شاملة للمخاطر في الوقت الفعلي وإدارتها مباشرة من البوابة.
+    The GRC Risk Intelligence Dashboard is an integrated platform for monitoring Key Risk Indicators (KRIs), the Risk Register, and Risk Appetite. It provides GRC Admins with a real-time, comprehensive view of organisational risks — all manageable directly from the portal.
   </p>
 
   <div class="card-grid">
     <div class="card">
       <div class="card-icon">📊</div>
-      <h4>مؤشرات KRI</h4>
-      <p>8 مؤشرات مخاطر رئيسية مرصودة بنظام RAG (أحمر / أصفر / أخضر)</p>
+      <h4>KRI Monitoring</h4>
+      <p>8 Key Risk Indicators tracked with a RAG status system (Red / Amber / Green).</p>
     </div>
     <div class="card">
       <div class="card-icon">⚠️</div>
-      <h4>سجل المخاطر</h4>
-      <p>قائمة شاملة بجميع المخاطر المفتوحة مع درجات الاحتمالية والأثر</p>
+      <h4>Risk Register</h4>
+      <p>A comprehensive list of all open risks with likelihood, impact scores, and mitigation actions.</p>
     </div>
     <div class="card">
       <div class="card-icon">🎯</div>
-      <h4>شهية المخاطر</h4>
-      <p>مقارنة التعرض الفعلي مع الحد الأقصى المقبول لكل فئة</p>
+      <h4>Risk Appetite</h4>
+      <p>Compares actual exposure against the maximum tolerable limit per risk category.</p>
     </div>
     <div class="card">
       <div class="card-icon">📈</div>
-      <h4>مخطط الاتجاه</h4>
-      <p>رسم بياني لتاريخ كل KRI خلال آخر 12 قراءة</p>
+      <h4>Trend Chart</h4>
+      <p>A line chart showing the last 12 readings for any selected KRI.</p>
     </div>
   </div>
 
@@ -394,7 +361,7 @@
           <span>KRI Name / Owner</span><span>Category</span><span>Current Value</span><span>RAG</span><span>Trend</span><span>Period</span><span></span>
         </div>
         <div class="ui-table-row">
-          <span style="color:#e8f5f0; font-weight:700">نسبة التحصيل الشهرية</span>
+          <span style="color:#e8f5f0; font-weight:700">Monthly Collection Rate</span>
           <span style="color:#7aaa96">Financial</span>
           <span style="color:#dc2626; font-weight:900">76 <span style="font-size:9px; color:#7aaa96">%</span></span>
           <span><span class="ui-tag" style="background:#fee2e222;color:#dc2626">Red</span></span>
@@ -403,7 +370,7 @@
           <span><button class="ui-btn ui-btn-green" style="padding:4px 10px; font-size:10px">+ Reading</button></span>
         </div>
         <div class="ui-table-row">
-          <span style="color:#e8f5f0; font-weight:700">نسبة الامتثال لـ SAMA</span>
+          <span style="color:#e8f5f0; font-weight:700">SAMA Compliance Rate</span>
           <span style="color:#7aaa96">Compliance</span>
           <span style="color:#d97706; font-weight:900">79 <span style="font-size:9px; color:#7aaa96">%</span></span>
           <span><span class="ui-tag" style="background:#fef9c322;color:#d97706">Amber</span></span>
@@ -421,36 +388,36 @@
   <div class="section-header">
     <div class="section-icon">🔐</div>
     <div>
-      <div class="section-num">القسم الثاني</div>
-      <h2>صلاحيات GRC Admin</h2>
+      <div class="section-num">Section 2</div>
+      <h2>GRC Admin Permissions</h2>
     </div>
   </div>
 
   <div class="alert alert-info">
     <span class="alert-icon">ℹ️</span>
-    <div>صلاحية <code>grc_admin</code> منفصلة تماماً عن بقية البوابة — لا يرى صاحبها أي مشاريع أو أقسام أخرى، بل يصل مباشرة للداشبورد عند تسجيل الدخول.</div>
+    <div>The <code>grc_admin</code> role is completely isolated from the rest of the portal. Users with this role land directly on the GRC Dashboard upon login — they cannot access any project data, departments, or other portal areas.</div>
   </div>
 
   <table class="perm-table">
     <thead>
       <tr>
-        <th>الوظيفة / الميزة</th>
+        <th>Feature / Action</th>
         <th>grc_admin</th>
-        <th>grc (عرض فقط)</th>
+        <th>grc (view only)</th>
         <th>executive</th>
         <th>dept_head (GRC)</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td>عرض لوحة KRI</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td></tr>
-      <tr><td>عرض سجل المخاطر</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td></tr>
-      <tr><td>عرض شهية المخاطر</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td><td class="yes">✅ نعم</td></tr>
-      <tr><td>إضافة قراءة KRI</td><td class="yes">✅ نعم</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td></tr>
-      <tr><td>تعديل تعريف KRI</td><td class="yes">✅ نعم</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td></tr>
-      <tr><td>إضافة / تعديل / حذف مخاطر</td><td class="yes">✅ نعم</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td></tr>
-      <tr><td>تعديل / حذف شهية المخاطر</td><td class="yes">✅ نعم</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td></tr>
-      <tr><td>زر Global Edit</td><td class="yes">✅ نعم</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td></tr>
-      <tr><td>الوصول لمشاريع PMO</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td><td class="no">❌ لا</td></tr>
+      <tr><td>View KRI Board</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td></tr>
+      <tr><td>View Risk Register</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td></tr>
+      <tr><td>View Risk Appetite</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td><td class="yes">✅ Yes</td></tr>
+      <tr><td>Add KRI Reading</td><td class="yes">✅ Yes</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td></tr>
+      <tr><td>Edit KRI Definition</td><td class="yes">✅ Yes</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td></tr>
+      <tr><td>Add / Edit / Delete Risks</td><td class="yes">✅ Yes</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td></tr>
+      <tr><td>Edit / Delete Risk Appetite</td><td class="yes">✅ Yes</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td></tr>
+      <tr><td>Global Edit button</td><td class="yes">✅ Yes</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td></tr>
+      <tr><td>Access PMO Projects</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td><td class="no">❌ No</td></tr>
     </tbody>
   </table>
 </div>
@@ -460,41 +427,41 @@
   <div class="section-header">
     <div class="section-icon">🗂️</div>
     <div>
-      <div class="section-num">القسم الثالث</div>
-      <h2>مكونات الداشبورد</h2>
+      <div class="section-num">Section 3</div>
+      <h2>Dashboard Components</h2>
     </div>
   </div>
 
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
     <div class="card">
       <div class="card-icon">1️⃣</div>
-      <h4>شريط الـ KPI (5 بطاقات)</h4>
-      <p>يعرض إجمالي KRIs وعدد الأحمر والأصفر والأخضر وعدد التصعيدات المطلوبة. تتحدث تلقائياً عند الضغط على Refresh.</p>
+      <h4>KPI Strip (5 cards)</h4>
+      <p>Displays total KRIs, Red/Amber/Green counts, and escalations required. Auto-refreshes when you press Refresh.</p>
     </div>
     <div class="card">
       <div class="card-icon">2️⃣</div>
       <h4>KRI Status Board</h4>
-      <p>جدول يعرض كل KRI مع آخر قيمة مسجلة ولون RAG والاتجاه والفترة. اضغط على أي صف لعرض مخطط الاتجاه التاريخي.</p>
+      <p>A table showing every active KRI with its latest value, RAG status, trend, and period. Click any row to open its trend chart.</p>
     </div>
     <div class="card">
       <div class="card-icon">3️⃣</div>
-      <h4>مخطط الاتجاه</h4>
-      <p>رسم خطي لآخر 12 قراءة مع خطوط مرجعية للحدود (أخضر / أصفر / أحمر). يظهر عند اختيار KRI من الجدول.</p>
+      <h4>Trend Chart</h4>
+      <p>A line chart of the last 12 readings with threshold reference lines (Green / Amber / Red). Appears when a KRI row is selected.</p>
     </div>
     <div class="card">
       <div class="card-icon">4️⃣</div>
-      <h4>شهية المخاطر</h4>
-      <p>شريط تقدم لكل فئة يقارن التعرض الفعلي بالحد الأقصى المقبول مع بيان الشهية.</p>
+      <h4>Risk Appetite</h4>
+      <p>Progress bar per category comparing actual exposure against the maximum tolerable score, with the appetite statement.</p>
     </div>
     <div class="card">
       <div class="card-icon">5️⃣</div>
-      <h4>أعلى المخاطر</h4>
-      <p>قائمة بأعلى 6 مخاطر (بعيداً عن Closed) مرتبة حسب الدرجة = الاحتمالية × الأثر.</p>
+      <h4>Top Risks</h4>
+      <p>Top 6 open risks ranked by score (Likelihood × Impact). In Global Edit mode, all risks are shown.</p>
     </div>
     <div class="card">
       <div class="card-icon">🔄</div>
-      <h4>زر Refresh</h4>
-      <p>يعيد تحميل جميع البيانات من SharePoint في الوقت الفعلي.</p>
+      <h4>Refresh Button</h4>
+      <p>Reloads all data from SharePoint in real time. Use it after any data change to see the latest state.</p>
     </div>
   </div>
 </div>
@@ -504,65 +471,65 @@
   <div class="section-header">
     <div class="section-icon">➕</div>
     <div>
-      <div class="section-num">القسم الرابع</div>
-      <h2>إضافة قراءة KRI جديدة</h2>
+      <div class="section-num">Section 4</div>
+      <h2>Adding a KRI Reading</h2>
     </div>
   </div>
 
   <p style="font-size:14px; color:#5a7a6e; margin-bottom:20px;">
-    القراءة هي تسجيل القيمة الفعلية للمؤشر في فترة زمنية محددة. يجب إضافة قراءة شهرية لكل KRI للحفاظ على دقة الداشبورد.
+    A KRI reading records the actual value of an indicator for a specific time period. A new reading should be added monthly for every active KRI to keep the dashboard accurate.
   </p>
 
   <div class="steps">
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-body">
-        <h4>ابحث عن الـ KRI في الجدول</h4>
-        <p>افتح داشبورد GRC وابحث عن المؤشر المطلوب في جدول <strong>KRI Status Board</strong>.</p>
+        <h4>Locate the KRI in the table</h4>
+        <p>Open the GRC Dashboard and find the indicator you want to update in the <strong>KRI Status Board</strong>.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-body">
-        <h4>اضغط زر <code>+ Reading</code></h4>
-        <p>الزر يظهر في عمود الأفعال آخر يمين كل صف — متاح فقط لـ GRC Admin.</p>
+        <h4>Click the <code>+ Reading</code> button</h4>
+        <p>The button appears in the last column of each row and is visible to GRC Admin only.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-body">
-        <h4>أدخل بيانات القراءة</h4>
-        <p>أدخل القيمة الفعلية، الفترة الزمنية، حالة RAG، الاتجاه، وأي ملاحظات. انظر جدول الحقول أدناه.</p>
+        <h4>Fill in the reading form</h4>
+        <p>Enter the actual value, period, RAG status, trend direction, and any comments. See the field reference table below.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
       <div class="step-body">
-        <h4>اضغط <strong>Save Reading</strong></h4>
-        <p>يتم الحفظ في SharePoint مباشرة ويتحدث الجدول والمخطط تلقائياً.</p>
+        <h4>Click <strong>Save Reading</strong></h4>
+        <p>The entry is written directly to SharePoint and the table and chart update automatically.</p>
       </div>
     </div>
   </div>
 
   <div style="margin-top:24px; background:#fff; border:1px solid #dce8dc; border-radius:12px; overflow:hidden;">
-    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">📋 حقول نموذج إضافة قراءة</div>
+    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">📋 KRI Reading Form — Field Reference</div>
     <table class="field-table" style="margin:0">
-      <thead><tr><th>الحقل</th><th>الوصف</th><th>النوع</th><th>إلزامي؟</th></tr></thead>
+      <thead><tr><th>Field</th><th>Description</th><th>Type</th><th>Required?</th></tr></thead>
       <tbody>
-        <tr><td><strong>Actual Value</strong></td><td>القيمة الفعلية للمؤشر في هذه الفترة</td><td>رقم</td><td><span class="field-req">● إلزامي</span></td></tr>
-        <tr><td><strong>Previous Value</strong></td><td>القيمة السابقة للمقارنة (اختياري)</td><td>رقم</td><td><span class="field-opt">○ اختياري</span></td></tr>
-        <tr><td><strong>Period</strong></td><td>الشهر والسنة مثل <code>2026-05</code></td><td>شهر / سنة</td><td><span class="field-req">● إلزامي</span></td></tr>
-        <tr><td><strong>RAG Status</strong></td><td>Green / Amber / Red بناءً على القيمة والحدود</td><td>اختيار</td><td><span class="field-req">● إلزامي</span></td></tr>
-        <tr><td><strong>Trend</strong></td><td>Improving / Stable / Worsening</td><td>اختيار</td><td><span class="field-req">● إلزامي</span></td></tr>
-        <tr><td><strong>Comments</strong></td><td>ملاحظات أو تفسير للقيمة</td><td>نص</td><td><span class="field-opt">○ اختياري</span></td></tr>
-        <tr><td><strong>Escalation Required</strong></td><td>هل تحتاج هذه القراءة إلى تصعيد؟</td><td>خانة اختيار</td><td><span class="field-opt">○ اختياري</span></td></tr>
+        <tr><td><strong>Actual Value</strong></td><td>The real measured value of the indicator for this period</td><td>Number</td><td><span class="field-req">● Required</span></td></tr>
+        <tr><td><strong>Previous Value</strong></td><td>Last period's value for comparison (optional)</td><td>Number</td><td><span class="field-opt">○ Optional</span></td></tr>
+        <tr><td><strong>Period</strong></td><td>Month and year, e.g. <code>2026-05</code></td><td>Month / Year</td><td><span class="field-req">● Required</span></td></tr>
+        <tr><td><strong>RAG Status</strong></td><td>Green / Amber / Red based on value vs thresholds</td><td>Choice</td><td><span class="field-req">● Required</span></td></tr>
+        <tr><td><strong>Trend</strong></td><td>Improving / Stable / Worsening</td><td>Choice</td><td><span class="field-req">● Required</span></td></tr>
+        <tr><td><strong>Comments</strong></td><td>Notes or explanation for the reading</td><td>Text</td><td><span class="field-opt">○ Optional</span></td></tr>
+        <tr><td><strong>Escalation Required</strong></td><td>Does this reading require escalation to senior management?</td><td>Checkbox</td><td><span class="field-opt">○ Optional</span></td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="alert alert-warn" style="margin-top:16px;">
     <span class="alert-icon">⚠️</span>
-    <div><strong>تنبيه:</strong> حدد RAG Status يدوياً بناءً على مقارنة القيمة الفعلية مع الحدود المعرّفة للـ KRI (تجدها في جدول الـ KRI عند الضغط على الصف).</div>
+    <div><strong>Note:</strong> Set RAG Status manually by comparing the actual value against the KRI thresholds. You can view the thresholds by clicking on the KRI row to expand its trend chart.</div>
   </div>
 </div>
 
@@ -571,49 +538,49 @@
   <div class="section-header">
     <div class="section-icon">✎</div>
     <div>
-      <div class="section-num">القسم الخامس</div>
-      <h2>وضع التعديل الشامل — Global Edit</h2>
+      <div class="section-num">Section 5</div>
+      <h2>Global Edit Mode</h2>
     </div>
   </div>
 
   <p style="font-size:14px; color:#5a7a6e; margin-bottom:20px;">
-    زر <strong>Global Edit</strong> في أعلى يمين الهيدر يفتح وضع التعديل الكامل — يُتيح إضافة وتعديل وحذف أي بيانات في الداشبورد.
+    The <strong>Global Edit</strong> button in the top-right of the header activates full edit mode — enabling add, edit, and delete operations across all dashboard data.
   </p>
 
   <div class="alert alert-danger">
     <span class="alert-icon">🚨</span>
-    <div><strong>تحذير:</strong> عمليات الحذف لا يمكن التراجع عنها. تأكد من البيانات قبل الضغط على Delete.</div>
+    <div><strong>Warning:</strong> Delete operations cannot be undone. Always verify the data before confirming a deletion.</div>
   </div>
 
   <div style="margin:20px 0; background:#fff; border:1px solid #dce8dc; border-radius:12px; overflow:hidden;">
-    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">🔓 ما يُتاح عند تفعيل Global Edit</div>
+    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">🔓 What becomes available in Global Edit mode</div>
     <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
       <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#f4f6f4; border-radius:8px;">
         <span style="font-size:22px">📊</span>
         <div>
-          <div style="font-weight:700; font-size:13px; margin-bottom:4px">تعديل تعريف KRI</div>
-          <div style="font-size:12px; color:#5a7a6e">تعديل الاسم، الفئة، الوحدة، الحدود (Green/Amber/Red)، الاتجاه</div>
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px">Edit KRI Definition</div>
+          <div style="font-size:12px; color:#5a7a6e">Modify KRI name, category, measurement unit, thresholds (Green/Amber/Red), and threshold direction.</div>
         </div>
       </div>
       <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#f4f6f4; border-radius:8px;">
         <span style="font-size:22px">⚠️</span>
         <div>
-          <div style="font-weight:700; font-size:13px; margin-bottom:4px">إضافة مخاطرة جديدة</div>
-          <div style="font-size:12px; color:#5a7a6e">إدخال مخاطرة جديدة في سجل المخاطر بكامل بياناتها</div>
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px">Add New Risk</div>
+          <div style="font-size:12px; color:#5a7a6e">Create a new risk entry in the register with full details including scores, status, and mitigation summary.</div>
         </div>
       </div>
       <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#f4f6f4; border-radius:8px;">
         <span style="font-size:22px">✏️</span>
         <div>
-          <div style="font-weight:700; font-size:13px; margin-bottom:4px">تعديل / حذف مخاطرة</div>
-          <div style="font-size:12px; color:#5a7a6e">تحديث الاحتمالية والأثر والحالة والتخفيفات أو حذف المخاطرة كلياً</div>
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px">Edit / Delete a Risk</div>
+          <div style="font-size:12px; color:#5a7a6e">Update likelihood, impact, status, appetite breach flag, and mitigation — or permanently remove the risk.</div>
         </div>
       </div>
       <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#f4f6f4; border-radius:8px;">
         <span style="font-size:22px">🎯</span>
         <div>
-          <div style="font-weight:700; font-size:13px; margin-bottom:4px">إضافة / تعديل / حذف شهية</div>
-          <div style="font-size:12px; color:#5a7a6e">إدارة شهية المخاطر لكل فئة مع النص التوضيحي والحدود</div>
+          <div style="font-weight:700; font-size:13px; margin-bottom:4px">Add / Edit / Delete Appetite</div>
+          <div style="font-size:12px; color:#5a7a6e">Manage risk appetite entries per category including the appetite statement and exposure/limit scores.</div>
         </div>
       </div>
     </div>
@@ -623,29 +590,29 @@
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-body">
-        <h4>افتح وضع التعديل</h4>
-        <p>اضغط زر <code>✎ Global Edit</code> في أعلى يمين الداشبورد. سيتحول لون الزر للأخضر ويكتب <code>✓ Edit Mode ON</code>.</p>
+        <h4>Activate Edit Mode</h4>
+        <p>Click the <code>✎ Global Edit</code> button at the top right. It will turn green and show <code>✓ Edit Mode ON</code>.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-body">
-        <h4>ستظهر أزرار إضافية في كل قسم</h4>
-        <p>كل صف في KRI يحصل على زر <code>Edit KRI</code>. كل مخاطرة تحصل على <code>Edit</code> و<code>Delete</code>. تظهر أزرار <code>+ Add Risk</code> و<code>+ Add Appetite Category</code>.</p>
+        <h4>Additional buttons appear throughout the dashboard</h4>
+        <p>Each KRI row gains an <code>Edit KRI</code> button. Each risk card gains <code>Edit</code> and <code>Delete</code>. <code>+ Add Risk</code> and <code>+ Add Appetite Category</code> buttons appear at the bottom of their sections.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-body">
-        <h4>نفذ التعديلات المطلوبة</h4>
-        <p>اضغط على الزر المناسب، أدخل البيانات في النموذج، ثم اضغط Save. البيانات تُحفظ مباشرة في SharePoint.</p>
+        <h4>Make your changes</h4>
+        <p>Click the relevant button, fill in the form, and press Save. Changes are written directly to SharePoint.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
       <div class="step-body">
-        <h4>أغلق وضع التعديل</h4>
-        <p>اضغط الزر مرة ثانية لإلغاء تفعيل وضع التعديل والعودة لعرض القراءة فقط.</p>
+        <h4>Exit Edit Mode</h4>
+        <p>Click the button again to deactivate Global Edit and return to the standard read/add view.</p>
       </div>
     </div>
   </div>
@@ -656,46 +623,47 @@
   <div class="section-header">
     <div class="section-icon">⚠️</div>
     <div>
-      <div class="section-num">القسم السادس</div>
-      <h2>إدارة سجل المخاطر</h2>
+      <div class="section-num">Section 6</div>
+      <h2>Managing the Risk Register</h2>
     </div>
   </div>
 
   <p style="font-size:14px; color:#5a7a6e; margin-bottom:20px;">
-    درجة الخطر = <strong>الاحتمالية × الأثر</strong>. تتراوح الدرجة من 1 إلى 25.
+    Risk Score = <strong>Likelihood × Impact</strong>. The score ranges from 1 to 25.
   </p>
 
   <div style="background:#fff; border:1px solid #dce8dc; border-radius:12px; overflow:hidden; margin-bottom:20px;">
-    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">🎚️ مقياس درجة الخطر</div>
+    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">🎚️ Risk Score Scale</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0;">
-      <div style="padding:16px 20px; border-left:1px solid #dce8dc; border-bottom:none;">
+      <div style="padding:16px 20px; border-right:1px solid #dce8dc;">
         <div style="background:#dcfce7; color:#16a34a; border-radius:8px; padding:10px; text-align:center; font-weight:900; font-size:20px; margin-bottom:8px;">1 – 8</div>
-        <div style="font-size:13px; font-weight:700; color:#16a34a; margin-bottom:4px">منخفض</div>
-        <div style="font-size:12px; color:#5a7a6e">خطر مقبول، يراقب دورياً</div>
+        <div style="font-size:13px; font-weight:700; color:#16a34a; margin-bottom:4px">Low</div>
+        <div style="font-size:12px; color:#5a7a6e">Acceptable risk — monitor periodically</div>
       </div>
-      <div style="padding:16px 20px; border-left:1px solid #dce8dc;">
+      <div style="padding:16px 20px; border-right:1px solid #dce8dc;">
         <div style="background:#fef9c3; color:#d97706; border-radius:8px; padding:10px; text-align:center; font-weight:900; font-size:20px; margin-bottom:8px;">9 – 14</div>
-        <div style="font-size:13px; font-weight:700; color:#d97706; margin-bottom:4px">متوسط</div>
-        <div style="font-size:12px; color:#5a7a6e">يتطلب خطة تخفيف نشطة</div>
+        <div style="font-size:13px; font-weight:700; color:#d97706; margin-bottom:4px">Medium</div>
+        <div style="font-size:12px; color:#5a7a6e">Requires an active mitigation plan</div>
       </div>
       <div style="padding:16px 20px;">
         <div style="background:#fee2e2; color:#dc2626; border-radius:8px; padding:10px; text-align:center; font-weight:900; font-size:20px; margin-bottom:8px;">15 – 25</div>
-        <div style="font-size:13px; font-weight:700; color:#dc2626; margin-bottom:4px">عالي</div>
-        <div style="font-size:12px; color:#5a7a6e">يتطلب تصعيداً فورياً</div>
+        <div style="font-size:13px; font-weight:700; color:#dc2626; margin-bottom:4px">High</div>
+        <div style="font-size:12px; color:#5a7a6e">Requires immediate escalation</div>
       </div>
     </div>
   </div>
 
   <div style="background:#fff; border:1px solid #dce8dc; border-radius:12px; overflow:hidden;">
-    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">📋 حقول تعديل المخاطرة</div>
+    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">📋 Risk Edit Form — Field Reference</div>
     <table class="field-table" style="margin:0">
-      <thead><tr><th>الحقل</th><th>القيم المقبولة</th><th>ملاحظة</th></tr></thead>
+      <thead><tr><th>Field</th><th>Accepted Values</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td><strong>Likelihood</strong> — الاحتمالية</td><td>1 (نادر) → 5 (شبه مؤكد)</td><td>يؤثر على درجة الخطر</td></tr>
-        <tr><td><strong>Impact</strong> — الأثر</td><td>1 (ضئيل) → 5 (كارثي)</td><td>يؤثر على درجة الخطر</td></tr>
-        <tr><td><strong>Risk Status</strong></td><td>Open / In Progress / Mitigated / Closed</td><td>Closed لا يظهر في القائمة الافتراضية</td></tr>
-        <tr><td><strong>Appetite Breached</strong></td><td>نعم / لا</td><td>يُضيف علامة "Breached" حمراء</td></tr>
-        <tr><td><strong>Mitigation Summary</strong></td><td>نص حر</td><td>وصف إجراءات التخفيف</td></tr>
+        <tr><td><strong>Likelihood</strong></td><td>1 (Rare) → 5 (Almost Certain)</td><td>Directly affects the Risk Score</td></tr>
+        <tr><td><strong>Impact</strong></td><td>1 (Negligible) → 5 (Catastrophic)</td><td>Directly affects the Risk Score</td></tr>
+        <tr><td><strong>Risk Status</strong></td><td>Open / In Progress / Mitigated / Closed</td><td>"Closed" risks are hidden from the default view</td></tr>
+        <tr><td><strong>Appetite Breached</strong></td><td>Yes / No</td><td>Adds a red "Breached" badge to the risk card</td></tr>
+        <tr><td><strong>Mitigation Summary</strong></td><td>Free text</td><td>Describe the actions taken or planned</td></tr>
+        <tr><td><strong>Next Review Date</strong></td><td>Date</td><td>When adding a new risk (optional)</td></tr>
       </tbody>
     </table>
   </div>
@@ -706,22 +674,24 @@
   <div class="section-header">
     <div class="section-icon">🎯</div>
     <div>
-      <div class="section-num">القسم السابع</div>
-      <h2>إدارة شهية المخاطر</h2>
+      <div class="section-num">Section 7</div>
+      <h2>Managing Risk Appetite</h2>
     </div>
   </div>
 
   <p style="font-size:14px; color:#5a7a6e; margin-bottom:20px;">
-    شهية المخاطر تعكس الحد الأقصى للتعرض المقبول في كل فئة. يتم تحديثها دورياً أو عند تغيير السياسة.
+    Risk Appetite defines the maximum tolerable level of exposure the organisation is willing to accept per risk category. It should be reviewed and updated whenever policy changes or exposure materially shifts.
   </p>
 
   <div style="background:#fff; border:1px solid #dce8dc; border-radius:12px; overflow:hidden;">
-    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">📋 حقول تعديل شهية المخاطر</div>
+    <div style="background:#003932; padding:12px 20px; color:#fff; font-weight:700; font-size:13px;">📋 Risk Appetite Form — Field Reference</div>
     <table class="field-table" style="margin:0">
-      <thead><tr><th>الحقل</th><th>الوصف</th><th>إلزامي؟</th></tr></thead>
+      <thead><tr><th>Field</th><th>Description</th><th>Required?</th></tr></thead>
       <tbody>
-        <tr><td><strong>Current Exposure Score</strong></td><td>درجة التعرض الفعلية الحالية</td><td><span class="field-req">● إلزامي</span></td></tr>
-        <tr><td><strong>Appetite Status</strong></td><td>Within Appetite / Near Limit / Breached</td><td><span class="field-req">● إلزامي</span></td></tr>
+        <tr><td><strong>Current Exposure Score</strong></td><td>The actual current exposure level for this category</td><td><span class="field-req">● Required</span></td></tr>
+        <tr><td><strong>Appetite Status</strong></td><td>Within Appetite / Near Limit / Breached</td><td><span class="field-req">● Required</span></td></tr>
+        <tr><td><strong>Appetite Statement</strong></td><td>A sentence describing the organisation's stance (e.g. "We accept calculated strategic risks…")</td><td><span class="field-opt">○ When adding new</span></td></tr>
+        <tr><td><strong>Max Tolerable Score</strong></td><td>The upper limit before the category is considered breached</td><td><span class="field-opt">○ When adding new</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -729,7 +699,7 @@
   <div class="alert alert-info" style="margin-top:16px;">
     <span class="alert-icon">💡</span>
     <div>
-      <strong>نصيحة:</strong> الشريط البياني يحسب تلقائياً نسبة التعرض = (التعرض الحالي ÷ الحد الأقصى) × 100. احرص على تحديث <strong>Current Exposure Score</strong> شهرياً ليعكس الواقع الفعلي.
+      <strong>Tip:</strong> The progress bar auto-calculates: (Current Exposure ÷ Max Tolerable) × 100. Update <strong>Current Exposure Score</strong> monthly to keep the visual accurate for executive viewers.
     </div>
   </div>
 </div>
@@ -739,64 +709,64 @@
   <div class="section-header">
     <div class="section-icon">⚡</div>
     <div>
-      <div class="section-num">القسم الثامن</div>
-      <h2>جدول المرجع السريع</h2>
+      <div class="section-num">Section 8</div>
+      <h2>Quick Reference</h2>
     </div>
   </div>
 
   <table class="perm-table">
     <thead>
       <tr>
-        <th>المهمة</th>
-        <th>الخطوات</th>
-        <th>القائمة المتأثرة في SP</th>
+        <th>Task</th>
+        <th>Steps</th>
+        <th>SharePoint List Affected</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>إضافة قراءة KRI</strong></td>
-        <td>جدول KRI → زر <code>+ Reading</code> → أدخل البيانات → Save</td>
+        <td><strong>Add a KRI reading</strong></td>
+        <td>KRI table → <code>+ Reading</code> → fill form → Save</td>
         <td><code>GRC_KRI_Readings</code></td>
       </tr>
       <tr>
-        <td><strong>تعديل تعريف KRI</strong></td>
-        <td>فعّل Global Edit → زر <code>Edit KRI</code> → عدّل → Save</td>
+        <td><strong>Edit a KRI definition</strong></td>
+        <td>Enable Global Edit → <code>Edit KRI</code> → update → Save</td>
         <td><code>GRC_KRI_Master</code></td>
       </tr>
       <tr>
-        <td><strong>إضافة مخاطرة</strong></td>
-        <td>فعّل Global Edit → <code>+ Add Risk</code> → أدخل البيانات → Save</td>
+        <td><strong>Add a new risk</strong></td>
+        <td>Enable Global Edit → <code>+ Add Risk</code> → fill form → Save</td>
         <td><code>GRC_RiskRegister</code></td>
       </tr>
       <tr>
-        <td><strong>تعديل مخاطرة</strong></td>
-        <td>فعّل Global Edit → زر <code>Edit</code> على المخاطرة → عدّل → Save</td>
+        <td><strong>Edit an existing risk</strong></td>
+        <td>Enable Global Edit → <code>Edit</code> on the risk card → update → Save</td>
         <td><code>GRC_RiskRegister</code></td>
       </tr>
       <tr>
-        <td><strong>حذف مخاطرة</strong></td>
-        <td>فعّل Global Edit → زر <code>Delete</code> → تأكيد</td>
+        <td><strong>Delete a risk</strong></td>
+        <td>Enable Global Edit → <code>Delete</code> → confirm</td>
         <td><code>GRC_RiskRegister</code></td>
       </tr>
       <tr>
-        <td><strong>تحديث شهية المخاطر</strong></td>
-        <td>زر <code>Edit</code> بجانب الفئة → عدّل الدرجة والحالة → Save</td>
+        <td><strong>Update risk appetite</strong></td>
+        <td><code>Edit</code> next to category → update exposure & status → Save</td>
         <td><code>GRC_RiskAppetite</code></td>
       </tr>
       <tr>
-        <td><strong>إضافة فئة شهية</strong></td>
-        <td>فعّل Global Edit → <code>+ Add Appetite Category</code> → Save</td>
+        <td><strong>Add a new appetite category</strong></td>
+        <td>Enable Global Edit → <code>+ Add Appetite Category</code> → fill form → Save</td>
         <td><code>GRC_RiskAppetite</code></td>
       </tr>
       <tr>
-        <td><strong>عرض مخطط الاتجاه</strong></td>
-        <td>اضغط على أي صف في جدول KRI</td>
+        <td><strong>View KRI trend chart</strong></td>
+        <td>Click any row in the KRI Status Board table</td>
         <td>—</td>
       </tr>
       <tr>
-        <td><strong>تحديث البيانات</strong></td>
-        <td>زر <code>↻ Refresh</code> في أعلى يمين الداشبورد</td>
-        <td>جميع القوائم</td>
+        <td><strong>Refresh all data</strong></td>
+        <td>Click <code>↻ Refresh</code> in the top right of the dashboard</td>
+        <td>All lists</td>
       </tr>
     </tbody>
   </table>
@@ -804,15 +774,15 @@
   <div class="alert alert-info" style="margin-top:24px;">
     <span class="alert-icon">📞</span>
     <div>
-      <strong>للدعم الفني:</strong> تواصل مع فريق PMO. للمشكلات المتعلقة بالصلاحيات تأكد من وجود بريدك الإلكتروني في قائمة <code>PMO_Users</code> بدور <code>grc_admin</code>.
+      <strong>Support:</strong> Contact the PMO Team for technical issues. For access problems, ensure your email is listed in the <code>PMO_Users</code> SharePoint list with role <code>grc_admin</code>.
     </div>
   </div>
 </div>
 
 <!-- ══════════════════ FOOTER ══════════════════ -->
 <div class="footer">
-  <strong>GRC Risk Intelligence Dashboard</strong> — دليل المستخدم<br>
-  إصدار مايو 2026 · Tree Digital Insurance · فريق PMO
+  <strong>GRC Risk Intelligence Dashboard</strong> — User Manual<br>
+  May 2026 Edition · Tree Digital Insurance · PMO Team
 </div>
 
 </body>
