@@ -1206,7 +1206,192 @@ const RAG_COLOR = {
 const trendIcon  = t => t === "Improving" ? "↑" : t === "Worsening" ? "↓" : "→";
 const trendColor = t => t === "Improving" ? "#15803d" : t === "Worsening" ? "#dc2626" : "#d97706";
 
-const GRCDashboard = () => {
+// ── GRC shared modal wrapper ──────────────────────────────────────
+const GRCModal = ({ title, onClose, children }) => {
+  const T = useT();
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+         onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ fontWeight: 800, fontSize: 14, color: T.text }}>{title}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.muted, lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ padding: 22 }}>{children}</div>
+      </div>
+    </div>
+  );
+};
+
+// ── Add KRI Reading form ──────────────────────────────────────────
+const GRCReadingForm = ({ kri, onSave, saving, error, onCancel }) => {
+  const T = useT();
+  const [form, setForm] = useState({
+    KRIID:              kri.KRIID,
+    KRIName:            kri.Title,
+    ActualValue:        "",
+    PreviousValue:      "",
+    Period:             new Date().toISOString().substring(0, 7),
+    RAGStatus:          "Green",
+    Trend:              "Stable",
+    Comments:           "",
+    EscalationRequired: false,
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
+  const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <label style={lbl}>Actual Value *</label>
+          <input type="number" value={form.ActualValue} onChange={e => set("ActualValue", e.target.value)} placeholder="e.g. 42" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Previous Value</label>
+          <input type="number" value={form.PreviousValue} onChange={e => set("PreviousValue", e.target.value)} placeholder="optional" style={inp} />
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Period (YYYY-MM) *</label>
+        <input type="month" value={form.Period} onChange={e => set("Period", e.target.value)} style={inp} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <label style={lbl}>RAG Status</label>
+          <select value={form.RAGStatus} onChange={e => set("RAGStatus", e.target.value)} style={inp}>
+            {["Green","Amber","Red"].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Trend</label>
+          <select value={form.Trend} onChange={e => set("Trend", e.target.value)} style={inp}>
+            {["Improving","Stable","Worsening"].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Comments</label>
+        <textarea value={form.Comments} onChange={e => set("Comments", e.target.value)} rows={3} placeholder="Optional commentary…" style={{ ...inp, resize: "vertical" }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input type="checkbox" id="grc-escal" checked={form.EscalationRequired} onChange={e => set("EscalationRequired", e.target.checked)} style={{ cursor: "pointer" }} />
+        <label htmlFor="grc-escal" style={{ fontSize: 13, color: T.text, cursor: "pointer" }}>Escalation required</label>
+      </div>
+      {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+        <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
+        <button onClick={() => onSave(form)} disabled={saving || !form.ActualValue} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || !form.ActualValue ? "not-allowed" : "pointer", opacity: saving || !form.ActualValue ? 0.6 : 1 }}>
+          {saving ? "Saving…" : "Save Reading"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit Risk Register form ───────────────────────────────────────
+const GRCRiskForm = ({ risk, onSave, saving, error, onCancel }) => {
+  const T = useT();
+  const [form, setForm] = useState({
+    ID:                   risk.ID,
+    LikelihoodScore:      risk.LikelihoodScore ?? 3,
+    ImpactScore:          risk.ImpactScore ?? 3,
+    RiskStatus:           risk.RiskStatus || "Open",
+    RiskAppetiteBreached: risk.RiskAppetiteBreached ?? false,
+    MitigationSummary:    risk.MitigationSummary || "",
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
+  const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box" };
+  const score = (form.LikelihoodScore || 0) * (form.ImpactScore || 0);
+  const sc = score >= 15 ? "#dc2626" : score >= 9 ? "#d97706" : "#16a34a";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: T.bg, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: T.muted }}>{risk.Title}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <label style={lbl}>Likelihood (1–5)</label>
+          <select value={form.LikelihoodScore} onChange={e => set("LikelihoodScore", Number(e.target.value))} style={inp}>
+            {[1,2,3,4,5].map(n => <option key={n}>{n}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Impact (1–5)</label>
+          <select value={form.ImpactScore} onChange={e => set("ImpactScore", Number(e.target.value))} style={inp}>
+            {[1,2,3,4,5].map(n => <option key={n}>{n}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 12, color: T.muted }}>Risk Score:</span>
+        <span style={{ background: sc, color: "#fff", borderRadius: 7, padding: "3px 10px", fontSize: 13, fontWeight: 900 }}>{score}</span>
+      </div>
+      <div>
+        <label style={lbl}>Risk Status</label>
+        <select value={form.RiskStatus} onChange={e => set("RiskStatus", e.target.value)} style={inp}>
+          {["Open","In Progress","Mitigated","Closed"].map(s => <option key={s}>{s}</option>)}
+        </select>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input type="checkbox" id="grc-breach" checked={!!form.RiskAppetiteBreached} onChange={e => set("RiskAppetiteBreached", e.target.checked)} style={{ cursor: "pointer" }} />
+        <label htmlFor="grc-breach" style={{ fontSize: 13, color: T.text, cursor: "pointer" }}>Risk appetite breached</label>
+      </div>
+      <div>
+        <label style={lbl}>Mitigation Summary</label>
+        <textarea value={form.MitigationSummary} onChange={e => set("MitigationSummary", e.target.value)} rows={3} placeholder="Describe mitigation actions…" style={{ ...inp, resize: "vertical" }} />
+      </div>
+      {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+        <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
+        <button onClick={() => onSave(form)} disabled={saving} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving…" : "Save Risk"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit Risk Appetite form ───────────────────────────────────────
+const GRCAppetiteForm = ({ item, onSave, saving, error, onCancel }) => {
+  const T = useT();
+  const [form, setForm] = useState({
+    ID:                   item.ID,
+    CurrentExposureScore: item.CurrentExposureScore ?? 0,
+    AppetiteStatus:       item.AppetiteStatus || "Within Appetite",
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
+  const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: T.bg, borderRadius: 8, padding: "10px 14px" }}>
+        <div style={{ fontSize: 12, color: T.muted, marginBottom: 2 }}>Category</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{item.RiskCategory}</div>
+        {item.AppetiteStatement && <div style={{ fontSize: 12, color: T.muted, marginTop: 6, fontStyle: "italic" }}>"{item.AppetiteStatement}"</div>}
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Max tolerable score: {item.MaxTolerableScore}</div>
+      </div>
+      <div>
+        <label style={lbl}>Current Exposure Score</label>
+        <input type="number" min="0" value={form.CurrentExposureScore} onChange={e => set("CurrentExposureScore", Number(e.target.value))} style={inp} />
+      </div>
+      <div>
+        <label style={lbl}>Appetite Status</label>
+        <select value={form.AppetiteStatus} onChange={e => set("AppetiteStatus", e.target.value)} style={inp}>
+          {["Within Appetite","Near Limit","Breached"].map(s => <option key={s}>{s}</option>)}
+        </select>
+      </div>
+      {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+        <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
+        <button onClick={() => onSave(form)} disabled={saving} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving…" : "Save Appetite"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const GRCDashboard = ({ canEdit = false }) => {
   const T   = useT();
   const bp  = useBp();
   const [loading, setLoading]       = useState(true);
@@ -1216,6 +1401,12 @@ const GRCDashboard = () => {
   const [riskReg,     setRiskReg]     = useState([]);
   const [appetite,    setAppetite]    = useState([]);
   const [selectedKRI, setSelectedKRI] = useState(null);
+  // Edit modals
+  const [readingModal, setReadingModal] = useState(null); // kri object or null
+  const [riskModal,    setRiskModal]    = useState(null); // risk object or null
+  const [appetiteModal,setAppetiteModal]= useState(null); // appetite object or null
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -1239,6 +1430,79 @@ const GRCDashboard = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── SP Write helpers ──────────────────────────────────────────
+  const spPost = async (listName, data) => {
+    const token = await acquireSpToken();
+    const res = await fetch(`${GRC_SP_SITE}/_api/web/lists/getbytitle('${listName}')/items`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata", "Content-Type": "application/json;odata=nometadata" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  };
+  const spPatch = async (listName, id, data) => {
+    const token = await acquireSpToken();
+    const res = await fetch(`${GRC_SP_SITE}/_api/web/lists/getbytitle('${listName}')/items(${id})`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata", "Content-Type": "application/json;odata=nometadata", "IF-MATCH": "*", "X-HTTP-Method": "MERGE" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  };
+
+  // ── Save handlers ─────────────────────────────────────────────
+  const saveReading = async (form) => {
+    setSaving(true); setSaveErr("");
+    try {
+      await spPost("GRC_KRI_Readings", {
+        Title:               `${form.KRIID}-${form.Period}`,
+        KRIID:               form.KRIID,
+        KRIName:             form.KRIName,
+        ReadingDate:         new Date().toISOString(),
+        ActualValue:         Number(form.ActualValue),
+        PreviousValue:       form.PreviousValue ? Number(form.PreviousValue) : null,
+        Period:              form.Period,
+        RAGStatus:           form.RAGStatus,
+        Trend:               form.Trend,
+        Comments:            form.Comments || "",
+        EscalationRequired:  form.EscalationRequired,
+      });
+      setReadingModal(null);
+      await load();
+    } catch(e) { setSaveErr(e.message); }
+    finally    { setSaving(false); }
+  };
+
+  const saveRisk = async (form) => {
+    setSaving(true); setSaveErr("");
+    try {
+      await spPatch("GRC_RiskRegister", form.ID, {
+        LikelihoodScore:    Number(form.LikelihoodScore),
+        ImpactScore:        Number(form.ImpactScore),
+        RiskStatus:         form.RiskStatus,
+        RiskAppetiteBreached: form.RiskAppetiteBreached,
+        MitigationSummary:  form.MitigationSummary || "",
+      });
+      setRiskModal(null);
+      await load();
+    } catch(e) { setSaveErr(e.message); }
+    finally    { setSaving(false); }
+  };
+
+  const saveAppetite = async (form) => {
+    setSaving(true); setSaveErr("");
+    try {
+      await spPatch("GRC_RiskAppetite", form.ID, {
+        CurrentExposureScore: Number(form.CurrentExposureScore),
+        AppetiteStatus:       form.AppetiteStatus,
+      });
+      setAppetiteModal(null);
+      await load();
+    } catch(e) { setSaveErr(e.message); }
+    finally    { setSaving(false); }
+  };
 
   const activeKRIs = useMemo(() => kriMaster.filter(k => k.IsActive !== false), [kriMaster]);
 
@@ -1330,7 +1594,7 @@ const GRCDashboard = () => {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
               <thead>
                 <tr style={{ background: T.bg }}>
-                  {["KRI Name / Owner","Category","Current Value","RAG","Trend","Period","Escalate"].map(h => (
+                  {["KRI Name / Owner","Category","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[])].map(h => (
                     <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -1368,6 +1632,14 @@ const GRCDashboard = () => {
                           ? <span style={{ background: T.bg, color: T.primary, border: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 10 }}>⚠ Yes</span>
                           : <span style={{ color: T.muted, fontSize: 12 }}>—</span>}
                       </td>
+                      {canEdit && (
+                        <td style={{ padding: "11px 12px" }} onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setReadingModal(kri)}
+                            style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            + Reading
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -1419,9 +1691,17 @@ const GRCDashboard = () => {
                 const sc  = a.AppetiteStatus === "Breached" ? "#dc2626" : a.AppetiteStatus === "Near Limit" ? "#d97706" : "#16a34a";
                 return (
                   <div key={a.Title} style={{ marginBottom: 18 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.RiskCategory}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: sc, background: sc + "22", padding: "2px 8px", borderRadius: 10 }}>{a.AppetiteStatus}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: sc, background: sc + "22", padding: "2px 8px", borderRadius: 10 }}>{a.AppetiteStatus}</span>
+                        {canEdit && (
+                          <button onClick={() => setAppetiteModal(a)}
+                            style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: T.text }}>
+                            Edit
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div style={{ background: T.border, borderRadius: 6, height: 8, overflow: "hidden", marginBottom: 4 }}>
                       <div style={{ width: `${pct}%`, height: "100%", background: sc, borderRadius: 6, transition: "width 0.4s" }} />
@@ -1455,6 +1735,12 @@ const GRCDashboard = () => {
                       {r.RiskAppetiteBreached && (
                         <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 8, flexShrink: 0 }}>Breached</span>
                       )}
+                      {canEdit && (
+                        <button onClick={() => setRiskModal(r)}
+                          style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: T.text, flexShrink: 0 }}>
+                          Edit
+                        </button>
+                      )}
                     </div>
                   );
                 })
@@ -1466,12 +1752,29 @@ const GRCDashboard = () => {
           )}
         </div>
       </div>
+
+      {/* ── MODALS ── */}
+      {readingModal && (
+        <GRCModal title={`Add KRI Reading — ${readingModal.Title}`} onClose={() => { setReadingModal(null); setSaveErr(""); }}>
+          <GRCReadingForm kri={readingModal} onSave={saveReading} saving={saving} error={saveErr} onCancel={() => { setReadingModal(null); setSaveErr(""); }} />
+        </GRCModal>
+      )}
+      {riskModal && (
+        <GRCModal title={`Edit Risk — ${riskModal.Title}`} onClose={() => { setRiskModal(null); setSaveErr(""); }}>
+          <GRCRiskForm risk={riskModal} onSave={saveRisk} saving={saving} error={saveErr} onCancel={() => { setRiskModal(null); setSaveErr(""); }} />
+        </GRCModal>
+      )}
+      {appetiteModal && (
+        <GRCModal title={`Edit Appetite — ${appetiteModal.RiskCategory}`} onClose={() => { setAppetiteModal(null); setSaveErr(""); }}>
+          <GRCAppetiteForm item={appetiteModal} onSave={saveAppetite} saving={saving} error={saveErr} onCancel={() => { setAppetiteModal(null); setSaveErr(""); }} />
+        </GRCModal>
+      )}
     </div>
   );
 };
 
 // ─── DEPARTMENT VIEW ──────────────────────────────────────────────
-const DepartmentView = ({ projects, deptId, setRoute }) => {
+const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -1494,7 +1797,7 @@ const DepartmentView = ({ projects, deptId, setRoute }) => {
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
-  if (deptId === "grc") return <GRCDashboard />;
+  if (deptId === "grc") return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_DEPT_HEAD} />;
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -4674,7 +4977,7 @@ export default function App() {
           {route.view === "home"        && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
           {route.view === "departments" && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} />}
-          {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} />}
+          {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
