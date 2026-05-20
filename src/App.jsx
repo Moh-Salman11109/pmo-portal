@@ -1548,6 +1548,7 @@ const GRCDashboard = ({ canEdit = false }) => {
   const [newRiskModal,    setNewRiskModal]     = useState(false);
   const [newAppetiteModal,setNewAppetiteModal] = useState(false);
   const [globalEdit, setGlobalEdit] = useState(false);
+  const [heatmapCell, setHeatmapCell] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
@@ -1748,12 +1749,51 @@ const GRCDashboard = ({ canEdit = false }) => {
   const escalCount  = kriWithLatest.filter(k => k.latest?.EscalationRequired).length;
   const appBreaches = riskReg.filter(r => r.RiskAppetiteBreached && r.RiskStatus !== "Closed").length;
 
+  const parsePeriodToDate = (period) => {
+    if (!period) return null;
+    if (/^\d{4}-\d{2}$/.test(period)) {
+      const [y, m] = period.split("-");
+      return new Date(Number(y), Number(m) - 1, 1);
+    }
+    const d = new Date(period);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const fmtPeriod = (period) => {
+    if (!period) return "";
+    if (/^\d{4}-\d{2}$/.test(period)) {
+      const [y, m] = period.split("-");
+      return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-GB", { month: "short", year: "numeric" });
+    }
+    return period;
+  };
+
   const kriHistory = useMemo(() => {
     if (!selectedKRI) return [];
-    return [...kriReadings.filter(r => r.KRIID === selectedKRI)]
-      .sort((a, b) => (a.ReadingDate || "").localeCompare(b.ReadingDate || ""))
+    return [...kriReadings.filter(r => r.KRIID === selectedKRI && r.ActualValue != null)]
+      .sort((a, b) => {
+        const da = parsePeriodToDate(a.Period) || new Date(a.ReadingDate || 0);
+        const db = parsePeriodToDate(b.Period) || new Date(b.ReadingDate || 0);
+        return da - db;
+      })
       .slice(-12);
   }, [kriReadings, selectedKRI]);
+
+  const heatmapData = useMemo(() => {
+    const cells = {};
+    riskReg
+      .filter(r => r.RiskStatus !== "Closed")
+      .forEach(r => {
+        const l = Number(r.LikelihoodScore);
+        const i = Number(r.ImpactScore);
+        if (l >= 1 && l <= 5 && i >= 1 && i <= 5) {
+          const key = `${l}-${i}`;
+          if (!cells[key]) cells[key] = [];
+          cells[key].push(r.Title);
+        }
+      });
+    return cells;
+  }, [riskReg]);
 
   const pad = bp === "mobile" ? "16px" : "32px";
 
@@ -1892,7 +1932,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       {selectedKRI && kriHistory.length > 0 && (() => {
         const kri = kriMaster.find(k => k.KRIID === selectedKRI);
         const chartData = kriHistory.map(r => ({
-          period: r.Period || (r.ReadingDate || "").substring(0, 7),
+          period: fmtPeriod(r.Period || (r.ReadingDate || "").substring(0, 7)),
           value: r.ActualValue,
         }));
         return (
@@ -1915,6 +1955,104 @@ const GRCDashboard = ({ canEdit = false }) => {
           </div>
         );
       })()}
+
+      {/* ── Risk Heatmap ── */}
+      {riskReg.filter(r => r.RiskStatus !== "Closed").length > 0 && (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: T.text }}>🔥 Risk Heatmap</h3>
+          <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Active risks by Likelihood × Impact. Click a populated cell to see risk names.</p>
+          <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+            {/* Grid */}
+            <div style={{ flex: "1 1 300px" }}>
+              {[5,4,3,2,1].map(l => (
+                <div key={l} style={{ display: "flex", alignItems: "stretch", gap: 5, marginBottom: 5 }}>
+                  <span style={{ width: 18, fontSize: 11, fontWeight: 700, color: T.muted, display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>{l}</span>
+                  {[1,2,3,4,5].map(i => {
+                    const score = l * i;
+                    const key   = `${l}-${i}`;
+                    const risks = heatmapData[key] || [];
+                    const count = risks.length;
+                    const cellC = score >= 15 ? { bg: "#490300", text: "#ffb3b3", border: "#6b0400" }
+                                : score >= 10 ? { bg: "#dc2626", text: "#fff",    border: "#b91c1c" }
+                                : score >= 5  ? { bg: "#d97706", text: "#fff",    border: "#b45309" }
+                                :               { bg: "#16a34a", text: "#fff",    border: "#15803d" };
+                    const isSelected = heatmapCell?.l === l && heatmapCell?.i === i;
+                    return (
+                      <div key={i}
+                        onClick={() => setHeatmapCell(count > 0 ? (isSelected ? null : { l, i, risks }) : null)}
+                        style={{
+                          flex: 1, minWidth: 44, minHeight: 52,
+                          background: count > 0 ? cellC.bg : cellC.bg + "28",
+                          border: `1px solid ${isSelected ? cellC.border : cellC.border + "55"}`,
+                          borderRadius: 6,
+                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          cursor: count > 0 ? "pointer" : "default",
+                          position: "relative",
+                          transition: "transform 0.12s, box-shadow 0.12s",
+                          transform: isSelected ? "scale(1.06)" : "scale(1)",
+                          boxShadow: isSelected ? `0 0 0 2px ${cellC.border}` : "none",
+                        }}>
+                        {count > 0 && (
+                          <>
+                            <span style={{ fontSize: 20, fontWeight: 900, color: cellC.text, lineHeight: 1 }}>{count}</span>
+                            <span style={{ fontSize: 9, color: cellC.text, opacity: 0.75 }}>risk{count > 1 ? "s" : ""}</span>
+                          </>
+                        )}
+                        <span style={{ position: "absolute", bottom: 3, right: 5, fontSize: 9, fontWeight: 600, color: count > 0 ? cellC.text : T.muted, opacity: 0.45 }}>{score}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
+                <span style={{ width: 18, flexShrink: 0 }} />
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 700, color: T.muted }}>{i}</div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 5, marginTop: 2 }}>
+                <span style={{ width: 18, flexShrink: 0 }} />
+                <div style={{ flex: 1, textAlign: "center", fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>Impact →</div>
+              </div>
+              <div style={{ marginTop: 2, paddingLeft: 23, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>↑ Likelihood</div>
+            </div>
+            {/* Legend */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4, flexShrink: 0 }}>
+              {[
+                { label: "Critical  15 – 25", bg: "#490300", text: "#ffb3b3" },
+                { label: "High      10 – 14",  bg: "#dc2626", text: "#fff"    },
+                { label: "Medium    5 – 9",    bg: "#d97706", text: "#fff"    },
+                { label: "Low       1 – 4",    bg: "#16a34a", text: "#fff"    },
+              ].map(({ label, bg }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 16, height: 16, background: bg, borderRadius: 4, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Cell detail panel */}
+          {heatmapCell && (
+            <div style={{ marginTop: 16, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+                  Likelihood {heatmapCell.l} × Impact {heatmapCell.i} — Score {heatmapCell.l * heatmapCell.i}
+                  &nbsp;
+                  <span style={{ fontSize: 11, fontWeight: 400, color: T.muted }}>({heatmapCell.risks.length} risk{heatmapCell.risks.length > 1 ? "s" : ""})</span>
+                </span>
+                <button onClick={() => setHeatmapCell(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: T.muted, lineHeight: 1 }}>✕</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {heatmapCell.risks.map((name, idx) => (
+                  <div key={idx} style={{ fontSize: 13, color: T.text, padding: "7px 12px", background: T.surface, borderRadius: 7, border: `1px solid ${T.border}` }}>
+                    {name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Bottom: Appetite + Top Risks ── */}
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 20 }}>
