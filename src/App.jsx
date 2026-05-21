@@ -1530,6 +1530,92 @@ const GRCNewAppetiteForm = ({ onSave, saving, error, onCancel }) => {
   );
 };
 
+const GRCAuditFindingForm = ({ item = null, onSave, saving, error, onCancel }) => {
+  const T = useT();
+  const [form, setForm] = useState({
+    ID: item?.ID || null,
+    Title: item?.Title || "",
+    FindingSeverity: item?.FindingSeverity || "Medium",
+    BusinessUnit: item?.BusinessUnit || "",
+    Status: item?.Status || "Open",
+    DueDate: item?.DueDate ? item.DueDate.substring(0, 10) : "",
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
+  const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box", fontFamily: "inherit" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div><label style={lbl}>Finding Title *</label><input value={form.Title} onChange={e => set("Title", e.target.value)} style={inp} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div><label style={lbl}>Severity</label>
+          <select value={form.FindingSeverity} onChange={e => set("FindingSeverity", e.target.value)} style={inp}>
+            {["Critical","High","Medium","Low"].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><label style={lbl}>Status</label>
+          <select value={form.Status} onChange={e => set("Status", e.target.value)} style={inp}>
+            {["Open","In Progress","Closed"].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><label style={lbl}>Business Unit</label><input value={form.BusinessUnit} onChange={e => set("BusinessUnit", e.target.value)} style={inp} /></div>
+        <div><label style={lbl}>Due Date</label><input type="date" value={form.DueDate} onChange={e => set("DueDate", e.target.value)} style={inp} /></div>
+      </div>
+      {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+        <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
+        <button onClick={() => onSave(form)} disabled={saving || !form.Title} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || !form.Title ? "not-allowed" : "pointer", opacity: saving || !form.Title ? 0.6 : 1 }}>
+          {saving ? "Saving…" : item ? "Update Finding" : "Add Finding"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const GRCCorrectiveActionForm = ({ item = null, onSave, saving, error, onCancel }) => {
+  const T = useT();
+  const [form, setForm] = useState({
+    ID: item?.ID || null,
+    Title: item?.Title || "",
+    Status: item?.Status || "Not Started",
+    CompletionPercentage: item?.CompletionPercentage ?? 0,
+    TargetDate: item?.TargetDate ? item.TargetDate.substring(0, 10) : "",
+    LinkedFindingID: item?.LinkedFindingID || "",
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
+  const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box", fontFamily: "inherit" };
+  const pct = Math.min(100, Math.max(0, Number(form.CompletionPercentage) || 0));
+  const pc  = pct >= 70 ? "#00c48c" : pct >= 30 ? "#f5a623" : "#dc2626";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div><label style={lbl}>Action Title *</label><input value={form.Title} onChange={e => set("Title", e.target.value)} style={inp} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div><label style={lbl}>Status</label>
+          <select value={form.Status} onChange={e => set("Status", e.target.value)} style={inp}>
+            {["Not Started","In Progress","Completed"].map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><label style={lbl}>Target Date</label><input type="date" value={form.TargetDate} onChange={e => set("TargetDate", e.target.value)} style={inp} /></div>
+        <div><label style={lbl}>Linked Finding ID</label><input value={form.LinkedFindingID} onChange={e => set("LinkedFindingID", e.target.value)} style={inp} placeholder="Optional" /></div>
+      </div>
+      <div>
+        <label style={lbl}>Completion % — <span style={{ color: pc, fontWeight: 900 }}>{pct}%</span></label>
+        <input type="range" min="0" max="100" step="5" value={pct} onChange={e => set("CompletionPercentage", Number(e.target.value))} style={{ width: "100%", accentColor: pc, cursor: "pointer" }} />
+        <div style={{ background: T.border, borderRadius: 4, height: 6, marginTop: 6, overflow: "hidden" }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: pc, borderRadius: 4, transition: "width 0.15s" }} />
+        </div>
+      </div>
+      {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+        <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
+        <button onClick={() => onSave(form)} disabled={saving || !form.Title} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || !form.Title ? "not-allowed" : "pointer", opacity: saving || !form.Title ? 0.6 : 1 }}>
+          {saving ? "Saving…" : item ? "Update Action" : "Add Action"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const GRCDashboard = ({ canEdit = false }) => {
   const T   = useT();
   const bp  = useBp();
@@ -1549,6 +1635,10 @@ const GRCDashboard = ({ canEdit = false }) => {
   const [masterModal,     setMasterModal]     = useState(null);
   const [newRiskModal,    setNewRiskModal]     = useState(false);
   const [newAppetiteModal,setNewAppetiteModal] = useState(false);
+  const [afEditModal,     setAfEditModal]      = useState(null);
+  const [afNewModal,      setAfNewModal]       = useState(false);
+  const [caEditModal,     setCaEditModal]      = useState(null);
+  const [caNewModal,      setCaNewModal]       = useState(false);
   const [globalEdit, setGlobalEdit] = useState(false);
   const [heatmapCell, setHeatmapCell] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1732,6 +1822,44 @@ const GRCDashboard = ({ canEdit = false }) => {
       await load();
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
+  };
+
+  const saveAuditFinding = async (form) => {
+    setSaving(true); setSaveErr("");
+    try {
+      const data = { Title: form.Title, FindingSeverity: form.FindingSeverity, BusinessUnit: form.BusinessUnit || "", Status: form.Status, DueDate: form.DueDate || null };
+      if (form.ID) { await spPatch("GRC_AuditFindings", form.ID, data); setAfEditModal(null); }
+      else         { await spPost("GRC_AuditFindings", data);           setAfNewModal(false); }
+      await load();
+    } catch(e) { setSaveErr(e.message); }
+    finally    { setSaving(false); }
+  };
+
+  const deleteAuditFinding = async (id) => {
+    if (!window.confirm("Delete this audit finding?")) return;
+    setSaving(true);
+    try { await spDelete("GRC_AuditFindings", id); await load(); }
+    catch(e) { window.alert(e.message); }
+    finally  { setSaving(false); }
+  };
+
+  const saveCorrectiveAction = async (form) => {
+    setSaving(true); setSaveErr("");
+    try {
+      const data = { Title: form.Title, Status: form.Status, CompletionPercentage: Number(form.CompletionPercentage), TargetDate: form.TargetDate || null, LinkedFindingID: form.LinkedFindingID || "" };
+      if (form.ID) { await spPatch("GRC_CorrectiveActions", form.ID, data); setCaEditModal(null); }
+      else         { await spPost("GRC_CorrectiveActions", data);           setCaNewModal(false); }
+      await load();
+    } catch(e) { setSaveErr(e.message); }
+    finally    { setSaving(false); }
+  };
+
+  const deleteCorrectiveAction = async (id) => {
+    if (!window.confirm("Delete this corrective action?")) return;
+    setSaving(true);
+    try { await spDelete("GRC_CorrectiveActions", id); await load(); }
+    catch(e) { window.alert(e.message); }
+    finally  { setSaving(false); }
   };
 
   const activeKRIs = useMemo(() => kriMaster.filter(k => k.IsActive !== false), [kriMaster]);
@@ -2219,12 +2347,20 @@ const GRCDashboard = ({ canEdit = false }) => {
 
             {/* ── Audit Findings ── */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: T.text }}>🔍 Audit Findings Summary</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>🔍 Audit Findings Summary</h3>
+                {globalEdit && (
+                  <button onClick={() => { setSaveErr(""); setAfNewModal(true); }}
+                    style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    + Add Finding
+                  </button>
+                )}
+              </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-                {miniStat(afOpen,     "Open",          "#dc2626", "#dc2626")}
+                {miniStat(afOpen,     "Open",           "#dc2626", "#dc2626")}
                 {miniStat(afCritHigh, "Critical / High","#490300", "#490300")}
-                {miniStat(afOverdue,  "Overdue",       "#ff5000", "#ff5000")}
-                {miniStat(afClosed,   "Closed",        "#16a34a", "#16a34a")}
+                {miniStat(afOverdue,  "Overdue",        "#ff5000", "#ff5000")}
+                {miniStat(afClosed,   "Closed",         "#16a34a", "#16a34a")}
               </div>
               {auditFindings.length === 0
                 ? <p style={{ color: T.muted, fontSize: 13 }}>No audit findings.</p>
@@ -2238,12 +2374,20 @@ const GRCDashboard = ({ canEdit = false }) => {
                         const badge = statusBadge(f.Status, f.DueDate);
                         const sc    = sevColor(f.FindingSeverity);
                         return (
-                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: T.bg, borderRadius: 8, borderLeft: `4px solid ${sc}`, border: `1px solid ${T.border}`, borderLeftColor: sc }}>
+                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: T.bg, borderRadius: 8, borderLeft: `4px solid ${sc}`, border: `1px solid ${T.border}`, borderLeftColor: sc }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.Title}</div>
                               <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{f.BusinessUnit || "—"}{f.DueDate ? ` · Due ${new Date(f.DueDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}` : ""}</div>
                             </div>
                             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: badge.bg, color: badge.text, whiteSpace: "nowrap", flexShrink: 0 }}>{badge.label}</span>
+                            {globalEdit && (
+                              <>
+                                <button onClick={() => { setSaveErr(""); setAfEditModal(f); }}
+                                  style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: T.text, flexShrink: 0 }}>Edit</button>
+                                <button onClick={() => deleteAuditFinding(f.ID)}
+                                  style={{ background: "#fee2e2", border: "1px solid #dc2626", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#dc2626", flexShrink: 0 }}>Delete</button>
+                              </>
+                            )}
                           </div>
                         );
                       })
@@ -2254,11 +2398,19 @@ const GRCDashboard = ({ canEdit = false }) => {
 
             {/* ── Corrective Actions ── */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: T.text }}>✅ Corrective Actions Progress</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>✅ Corrective Actions Progress</h3>
+                {globalEdit && (
+                  <button onClick={() => { setSaveErr(""); setCaNewModal(true); }}
+                    style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    + Add Action
+                  </button>
+                )}
+              </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-                {miniStat(caTotal,     "Total",          T.text,     T.primary)}
-                {miniStat(caCompleted, "Completed",      "#16a34a",  "#16a34a")}
-                {miniStat(caOverdue,   "Overdue",        "#ff5000",  "#ff5000")}
+                {miniStat(caTotal,     "Total",     T.text,    T.primary)}
+                {miniStat(caCompleted, "Completed", "#16a34a", "#16a34a")}
+                {miniStat(caOverdue,   "Overdue",   "#ff5000", "#ff5000")}
                 <div style={{ background: T.bg, border: `1px solid ${pctColor(caAvgPct)}33`, borderLeft: `3px solid ${pctColor(caAvgPct)}`, borderRadius: 8, padding: "10px 14px", flex: 1, minWidth: 80 }}>
                   <div style={{ fontSize: 22, fontWeight: 900, color: pctColor(caAvgPct), lineHeight: 1 }}>{caAvgPct}%</div>
                   <div style={{ fontSize: 10, color: T.muted, marginTop: 4, fontWeight: 600 }}>Overall Completion</div>
@@ -2280,7 +2432,17 @@ const GRCDashboard = ({ canEdit = false }) => {
                                 <div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.Title}</div>
                                 {a.TargetDate && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Target: {new Date(a.TargetDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}</div>}
                               </div>
-                              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: badge.bg, color: badge.text, whiteSpace: "nowrap", flexShrink: 0 }}>{badge.label}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: badge.bg, color: badge.text, whiteSpace: "nowrap" }}>{badge.label}</span>
+                                {globalEdit && (
+                                  <>
+                                    <button onClick={() => { setSaveErr(""); setCaEditModal(a); }}
+                                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: T.text }}>Edit</button>
+                                    <button onClick={() => deleteCorrectiveAction(a.ID)}
+                                      style={{ background: "#fee2e2", border: "1px solid #dc2626", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#dc2626" }}>Delete</button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ flex: 1, background: T.border, borderRadius: 4, height: 7, overflow: "hidden" }}>
@@ -2329,6 +2491,26 @@ const GRCDashboard = ({ canEdit = false }) => {
       {newAppetiteModal && (
         <GRCModal title="Add Risk Appetite Category" onClose={() => { setNewAppetiteModal(false); setSaveErr(""); }}>
           <GRCNewAppetiteForm onSave={saveNewAppetite} saving={saving} error={saveErr} onCancel={() => { setNewAppetiteModal(false); setSaveErr(""); }} />
+        </GRCModal>
+      )}
+      {afEditModal && (
+        <GRCModal title={`Edit Finding — ${afEditModal.Title}`} onClose={() => { setAfEditModal(null); setSaveErr(""); }}>
+          <GRCAuditFindingForm item={afEditModal} onSave={saveAuditFinding} saving={saving} error={saveErr} onCancel={() => { setAfEditModal(null); setSaveErr(""); }} />
+        </GRCModal>
+      )}
+      {afNewModal && (
+        <GRCModal title="Add Audit Finding" onClose={() => { setAfNewModal(false); setSaveErr(""); }}>
+          <GRCAuditFindingForm onSave={saveAuditFinding} saving={saving} error={saveErr} onCancel={() => { setAfNewModal(false); setSaveErr(""); }} />
+        </GRCModal>
+      )}
+      {caEditModal && (
+        <GRCModal title={`Edit Action — ${caEditModal.Title}`} onClose={() => { setCaEditModal(null); setSaveErr(""); }}>
+          <GRCCorrectiveActionForm item={caEditModal} onSave={saveCorrectiveAction} saving={saving} error={saveErr} onCancel={() => { setCaEditModal(null); setSaveErr(""); }} />
+        </GRCModal>
+      )}
+      {caNewModal && (
+        <GRCModal title="Add Corrective Action" onClose={() => { setCaNewModal(false); setSaveErr(""); }}>
+          <GRCCorrectiveActionForm onSave={saveCorrectiveAction} saving={saving} error={saveErr} onCancel={() => { setCaNewModal(false); setSaveErr(""); }} />
         </GRCModal>
       )}
     </div>
