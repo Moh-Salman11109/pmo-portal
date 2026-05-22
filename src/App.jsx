@@ -14,6 +14,7 @@ import { TODAY, daysSince } from "./utils/dates.js";
 import { getDeptStats, calcProjectIPI, calcDeptIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, HealthBadge, RiskBadge } from "./components/Badge.jsx";
+import { Progress } from "./components/Progress.jsx";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
 // ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────
@@ -249,15 +250,6 @@ const DocComplianceBar = ({ project }) => {
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 36 }}>{pct}%</span>
       <span style={{ fontSize: 11, color: T.muted }}>{ready.length}/{reqDocs.length} required</span>
-    </div>
-  );
-};
-
-const Progress = ({ value, color, height = 6 }) => {
-  const T = useT();
-  return (
-    <div style={{ background: T.border, borderRadius: height, height, overflow: "hidden" }}>
-      <div style={{ width: `${Math.min(100, value)}%`, height: "100%", background: color || T.accent, borderRadius: height, transition: "width 0.3s" }} />
     </div>
   );
 };
