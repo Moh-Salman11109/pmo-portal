@@ -15,6 +15,7 @@ import { getDeptStats, calcProjectIPI, calcDeptIPI, ipiColor, getGateSLA } from 
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, HealthBadge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
+import { KPICard } from "./components/KPICard.jsx";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
 // ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────
@@ -250,37 +251,6 @@ const DocComplianceBar = ({ project }) => {
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 36 }}>{pct}%</span>
       <span style={{ fontSize: 11, color: T.muted }}>{ready.length}/{reqDocs.length} required</span>
-    </div>
-  );
-};
-
-const KPICard = ({ label, value, sub, color, icon, onClick }) => {
-  const T = useT();
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => onClick && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: T.surface,
-        border: `1px solid ${hovered ? (color || T.accent) : T.border}`,
-        borderRadius: 12,
-        padding: "16px 20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        cursor: onClick ? "pointer" : "default",
-        transition: "box-shadow 0.15s, border-color 0.15s",
-        boxShadow: hovered ? `0 4px 18px rgba(0,0,0,0.12)` : "none",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>{label}</span>
-        {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
-      </div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: color || T.text, lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: T.muted }}>{sub}</div>}
     </div>
   );
 };
