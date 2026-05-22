@@ -585,128 +585,276 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
   const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
-  const allProjects = projects.filter(p => !p.archived);
+  const dark = themeStore.dark;
+
+  const allProjects    = projects.filter(p => !p.archived);
+  const activeProjects = allProjects.filter(p => p.status !== "Completed");
+
+  // ── Status counts ──────────────────────────────────────────────
   const byStatus = { "On Track": 0, "At Risk": 0, "Delayed": 0, "Completed": 0, "Not Started": 0 };
   allProjects.forEach(p => { byStatus[p.status] = (byStatus[p.status] || 0) + 1; });
-  const statusPie = Object.entries(byStatus).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value }));
-  const PIE_COLORS = ["#16a34a", "#eab308", "#dc2626", "#3b82f6", "#9ca3af"];
 
-  const budgetTotal = allProjects.reduce((s, p) => s + p.budget, 0);
-  const costTotal = allProjects.reduce((s, p) => s + p.actualCost, 0);
+  // ── Portfolio budget ───────────────────────────────────────────
+  const budgetTotal   = allProjects.reduce((s, p) => s + p.budget, 0);
+  const costTotal     = allProjects.reduce((s, p) => s + p.actualCost, 0);
+  const budgetUtilPct = budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0;
 
+  // ── Department IPI chart data ──────────────────────────────────
   const deptPerf = departments.map(d => {
-    const s = getDeptStats(d.id, allProjects);
+    const s   = getDeptStats(d.id, allProjects);
     const ipi = calcDeptIPI(d.id, allProjects);
-    // shorten name to fit chart
     const short = d.name
       .replace("Strategy & PMO", "Strategy")
       .replace("Operations", "Ops")
-      .replace("Performance", "Perf")
-      .replace("Finance", "Finance");
-    return { name: short, health: s.health, ipi, projects: s.total, icon: d.icon };
+      .replace("Performance", "Perf");
+    return { name: short, health: s.health, ipi, projects: s.total };
   });
 
-  const riskDist = [
-    { name: "Low",      value: allProjects.filter(p => p.riskLevel === "Low").length,      fill: "#16a34a" },
-    { name: "Medium",   value: allProjects.filter(p => p.riskLevel === "Medium").length,    fill: "#eab308" },
-    { name: "High",     value: allProjects.filter(p => p.riskLevel === "High").length,      fill: "#dc2626" },
-    { name: "Critical", value: allProjects.filter(p => p.riskLevel === "Critical").length,  fill: "#490300" },
-  ].filter(x => x.value);
+  // ── Overdue milestones ─────────────────────────────────────────
+  const overdueMilestones = activeProjects.flatMap(p =>
+    (p.milestones || [])
+      .filter(m => m.status !== "Completed" && m.date && m.date < TODAY)
+      .map(m => ({
+        ...m,
+        projectId:   p.id,
+        projectName: p.name,
+        daysOverdue: daysSince(m.date) || 0,
+      }))
+  ).sort((a, b) => b.daysOverdue - a.daysOverdue);
 
-  // budget per dept for bar chart
-  const budgetPerDept = departments.map(d => {
-    const s = getDeptStats(d.id, allProjects);
-    const short = d.name.replace("Strategy & PMO","Strategy").replace("Operations","Ops").replace("Performance","Perf");
-    return { name: short, budget: +(s.totalBudget/1000000).toFixed(1), spent: +(s.actualCost/1000000).toFixed(1) };
+  const overdue7   = overdueMilestones.filter(m => m.daysOverdue <= 7);
+  const overdue30  = overdueMilestones.filter(m => m.daysOverdue > 7 && m.daysOverdue <= 30);
+  const overdueOld = overdueMilestones.filter(m => m.daysOverdue > 30);
+
+  // ── Pending approvals ──────────────────────────────────────────
+  const pendingApprovals = (gateSubmissions || [])
+    .filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"))
+    .sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0));
+
+  // ── Gate pipeline (count active projects per gate) ─────────────
+  const gatePipeline = GATE_DEFS.map(def => {
+    const count   = activeProjects.filter(p => p.gate === def.label).length;
+    const g1Subs  = def.id === "G1" ? pendingApprovals : [];
+    const avgDays = g1Subs.length
+      ? Math.round(g1Subs.reduce((s, g) => s + (g.daysAtGate || 0), 0) / g1Subs.length)
+      : null;
+    return { ...def, count, avgDays };
   });
+  const maxGateCount = Math.max(...gatePipeline.map(g => g.count), 1);
 
-  const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
-  const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
+  // ── Executive Intervention flags ───────────────────────────────
+  const interventionFlags = (() => {
+    const flags = [];
+    activeProjects.forEach(p => {
+      const reasons = [];
+      let severity  = "medium";
+
+      if (p.status === "Delayed") {
+        reasons.push(`Delayed${p.daysDelayed > 0 ? ` — ${p.daysDelayed}d behind` : ""}`);
+        severity = "high";
+      }
+      if (p.riskLevel === "Critical") {
+        reasons.push("Critical risk");
+        severity = "high";
+      } else if (p.riskLevel === "High" && severity !== "high") {
+        reasons.push("High risk");
+      }
+      const staleDays = daysSince(p.lastUpdate);
+      if (staleDays !== null && staleDays > 14) {
+        reasons.push(`No update ${staleDays}d`);
+      }
+      if (p.budget > 0) {
+        const util = p.actualCost / p.budget;
+        if (util > 0.95) { reasons.push(`Budget ${Math.round(util * 100)}%`); severity = "high"; }
+        else if (util > 0.85) reasons.push(`Budget ${Math.round(util * 100)}%`);
+      }
+      const om = (p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY);
+      if (om.length > 0) {
+        const ageDays = daysSince(om.sort((a, b) => a.date.localeCompare(b.date))[0].date) || 0;
+        reasons.push(`${om.length} overdue milestone${om.length > 1 ? "s" : ""}${ageDays > 0 ? ` (${ageDays}d)` : ""}`);
+        if (ageDays > 14) severity = "high";
+      }
+
+      if (reasons.length > 0) {
+        const score = (severity === "high" ? 100 : 50) + reasons.length * 10;
+        flags.push({ project: p, reasons, severity, score });
+      }
+    });
+    return flags.sort((a, b) => b.score - a.score).slice(0, 8);
+  })();
+
+  // ── Layout helpers ─────────────────────────────────────────────
+  const pad       = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
+  const kpiCols   = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
   const chartCols = bp === "mobile" || bp === "tablet" ? "1fr" : "2fr 1fr";
+  const deptCols  = bp === "mobile" ? "1fr" : bp === "tablet" ? "repeat(2, 1fr)" : "repeat(3, 1fr)";
 
   return (
     <div style={{ padding: pad, maxWidth: 1500 }}>
-      {/* Page header */}
+
+      {/* ── HEADER ─────────────────────────────────────────────── */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 26, fontWeight: 900, color: T.text }}>Enterprise Portfolio Dashboard</h1>
         <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>
-          Real-time portfolio overview across all departments · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+          Real-time portfolio overview · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           {loadedAt && <span style={{ color: T.accent, fontWeight: 600 }}> · Synced {loadedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>}
         </p>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
-        <KPICard label="Total Projects"    value={allProjects.length}          icon="📋" onClick={() => setRoute({ view: "projects", filterStatus: "All" })} />
-        <KPICard label="On Track"          value={byStatus["On Track"] || 0}   color="#16a34a" icon="✅" onClick={() => setRoute({ view: "projects", filterStatus: "On Track" })} />
-        <KPICard label="At Risk"           value={byStatus["At Risk"] || 0}    color="#eab308" icon="⚠️" onClick={() => setRoute({ view: "projects", filterStatus: "At Risk" })} />
-        <KPICard label="Delayed"           value={byStatus["Delayed"] || 0}    color="#dc2626" icon="🔴" onClick={() => setRoute({ view: "projects", filterStatus: "Delayed" })} />
-        <KPICard label="Completed"         value={byStatus["Completed"] || 0}  color="#3b82f6" icon="🏁" onClick={() => setRoute({ view: "projects", filterStatus: "Completed" })} />
-        <KPICard label="Portfolio Budget"  value={fmtSAR(budgetTotal)} sub={`${fmtSAR(costTotal)} spent`} icon="💰" />
-      </div>
-
-      {/* ── ROW 1: Department Health (wide) + Budget Summary ── */}
-      <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 20 }}>
-
-        {/* Department Health Score — bigger */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Department Health Score</h3>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>Portfolio progress % across all {departments.length} departments</p>
-            </div>
+      {/* ── EXECUTIVE INTERVENTION PANEL ───────────────────────── */}
+      {interventionFlags.length > 0 && (
+        <div style={{ background: T.surface, border: `1px solid ${dark ? "rgba(220,38,38,0.4)" : "#fca5a5"}`, borderRadius: 14, padding: "18px 24px", marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 16 }}>🚨</span>
+            <span style={{ fontWeight: 800, fontSize: 14, color: "#dc2626" }}>Requires Attention</span>
+            <span style={{ fontSize: 12, color: T.muted }}>— {interventionFlags.length} project{interventionFlags.length > 1 ? "s" : ""} flagged</span>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={38} />
-              <Tooltip formatter={v => [`${v}%`, "Health"]} {...ttStyle()} />
-              <Bar dataKey="health" radius={[6, 6, 0, 0]} minPointSize={4}>
-                {deptPerf.map((entry, i) => (
-                  <Cell key={i} fill={entry.health === 0 ? T.border : entry.health >= 70 ? T.accent : entry.health >= 50 ? "#eab308" : "#dc2626"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Budget Summary */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", display: "flex", flexDirection: "column" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Budget Summary</h3>
-          <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Portfolio level</p>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            {[
-              { label: "Total Approved", value: fmtSAR(budgetTotal),              color: T.text },
-              { label: "Total Spent",    value: fmtSAR(costTotal),                color: T.text },
-              { label: "Remaining",      value: fmtSAR(budgetTotal - costTotal),  color: (budgetTotal - costTotal) >= 0 ? "#16a34a" : "#dc2626" },
-              { label: "Utilisation",    value: `${budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0}%`, color: T.primary },
-            ].map(({ label, value, color }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ fontSize: 13, color: T.muted }}>{label}</span>
-                <span style={{ fontSize: 15, fontWeight: 800, color }}>{value}</span>
+          <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "repeat(2, 1fr)", gap: 8 }}>
+            {interventionFlags.map(({ project: p, reasons, severity }) => (
+              <div key={p.id}
+                onClick={() => setRoute({ view: "project", projectId: p.id })}
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 10, cursor: "pointer",
+                  background: severity === "high"
+                    ? (dark ? "rgba(220,38,38,0.1)" : "rgba(220,38,38,0.05)")
+                    : (dark ? "rgba(217,119,6,0.1)"  : "rgba(217,119,6,0.05)"),
+                  border: `1px solid ${severity === "high" ? "rgba(220,38,38,0.2)" : "rgba(217,119,6,0.2)"}`,
+                  transition: "opacity 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+                onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+              >
+                <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{severity === "high" ? "🔴" : "🟡"}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 2 }}>{p.code} — {p.name}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>
+                    {reasons.map((r, i) => (
+                      <span key={i}>{i > 0 && <span style={{ margin: "0 4px", opacity: 0.4 }}>·</span>}{r}</span>
+                    ))}
+                  </div>
+                </div>
+                <span style={{ color: T.muted, fontSize: 12, flexShrink: 0 }}>→</span>
               </div>
             ))}
-            <div style={{ marginTop: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: T.muted }}>Overall Utilisation</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0}%</span>
-              </div>
-              <Progress value={budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0} height={10}
-                color={budgetTotal && costTotal / budgetTotal > 0.9 ? "#dc2626" : T.accent} />
-            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── KPI ROW ─────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
+        <KPICard label="Total Projects"     value={allProjects.length}              icon="📋" onClick={() => setRoute({ view: "projects", filterStatus: "All" })} />
+        <KPICard label="Delayed"            value={byStatus["Delayed"] || 0}        icon="🔴" color={byStatus["Delayed"] > 0 ? "#dc2626" : "#16a34a"} onClick={() => setRoute({ view: "projects", filterStatus: "Delayed" })} />
+        <KPICard label="At Risk"            value={byStatus["At Risk"] || 0}        icon="⚠️" color={byStatus["At Risk"] > 0 ? "#eab308" : "#16a34a"} onClick={() => setRoute({ view: "projects", filterStatus: "At Risk" })} />
+        <KPICard label="Overdue Milestones" value={overdueMilestones.length}        icon="📅" color={overdueMilestones.length > 0 ? "#dc2626" : "#16a34a"} sub={overdueMilestones.length > 0 ? `${overdueOld.length} critical (30d+)` : "All on track"} />
+        <KPICard label="Pending Approvals"  value={pendingApprovals.length}         icon="⏳" color={pendingApprovals.length > 0 ? "#d97706" : "#16a34a"} sub={pendingApprovals.length > 0 ? `Oldest: ${pendingApprovals[0]?.daysAtGate || 0}d` : "Queue clear"} onClick={pendingApprovals.length > 0 ? () => setRoute({ view: "actions" }) : null} />
+        <KPICard label="Budget Utilisation" value={`${budgetUtilPct}%`}             icon="💰" color={budgetUtilPct > 90 ? "#dc2626" : budgetUtilPct > 75 ? "#eab308" : T.primary} sub={`${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)}`} />
+      </div>
+
+      {/* ── ROW 1: Gate Pipeline (wide) | Overdue + Pending (narrow) ── */}
+      <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 20 }}>
+
+        {/* Gate Pipeline */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Gate Pipeline</h3>
+          <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Active projects by current gate — bottlenecks show where work is stacking</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {gatePipeline.map(g => {
+              const barPct      = (g.count / maxGateCount) * 100;
+              const isBottleneck = g.count > 1 && g.count === maxGateCount;
+              return (
+                <div key={g.id}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text, minWidth: 52 }}>{g.label}</span>
+                      <span style={{ fontSize: 11, color: T.muted }}>{g.name}</span>
+                      {isBottleneck && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: "#fef9c3", color: "#854d0e", padding: "1px 7px", borderRadius: 8 }}>BOTTLENECK</span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {g.avgDays !== null && <span style={{ fontSize: 11, color: T.muted }}>avg {g.avgDays}d wait</span>}
+                      <span style={{ fontSize: 14, fontWeight: 800, color: g.count > 0 ? T.primary : T.muted, minWidth: 18, textAlign: "right" }}>{g.count}</span>
+                    </div>
+                  </div>
+                  <div style={{ background: T.border, borderRadius: 5, height: 10, overflow: "hidden" }}>
+                    <div style={{ width: `${barPct}%`, height: "100%", borderRadius: 5, transition: "width 0.4s",
+                      background: isBottleneck ? "#eab308" : g.count > 0 ? T.accent : "transparent" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Overdue Milestones + Pending Approvals stacked */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Overdue Milestones */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", flex: 1 }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: T.text }}>Overdue Milestones</h3>
+            {overdueMilestones.length === 0 ? (
+              <div style={{ fontSize: 13, color: T.muted, padding: "8px 0" }}>✅ All milestones on track</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { label: "1–7 days",  items: overdue7,   color: "#eab308", bg: dark ? "rgba(234,179,8,0.1)"   : "#fef9c3" },
+                    { label: "8–30 days", items: overdue30,  color: "#d97706", bg: dark ? "rgba(217,119,6,0.1)"  : "#fef3c7" },
+                    { label: "30+ days",  items: overdueOld, color: "#dc2626", bg: dark ? "rgba(220,38,38,0.1)"  : "#fee2e2" },
+                  ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 8, background: bg }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color }}>{label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color }}>{items.length}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10, fontSize: 11, color: T.muted }}>
+                  {overdueMilestones.length} total across {new Set(overdueMilestones.map(m => m.projectId)).size} project{new Set(overdueMilestones.map(m => m.projectId)).size !== 1 ? "s" : ""}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Pending Approvals */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", flex: 1 }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: T.text }}>Pending Approvals</h3>
+            {pendingApprovals.length === 0 ? (
+              <div style={{ fontSize: 13, color: T.muted, padding: "8px 0" }}>✅ No pending approvals</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {pendingApprovals.slice(0, 4).map(g => (
+                    <div key={g.id}
+                      onClick={() => setRoute({ view: "actions" })}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 8, background: T.bg, cursor: "pointer" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.projectTitle || g.projectCode}</div>
+                        <div style={{ fontSize: 11, color: T.muted }}>{g.gateLabel}</div>
+                      </div>
+                      <div style={{ flexShrink: 0, marginLeft: 10, textAlign: "right" }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: (g.daysAtGate || 0) > 10 ? "#dc2626" : "#d97706" }}>{g.daysAtGate || 0}d</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {pendingApprovals.length > 4 && (
+                  <div onClick={() => setRoute({ view: "actions" })} style={{ marginTop: 8, fontSize: 12, color: T.primary, fontWeight: 600, textAlign: "center", cursor: "pointer" }}>
+                    +{pendingApprovals.length - 4} more →
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── ROW 2: IPI (wide) + Risk Profile ── */}
+      {/* ── ROW 2: IPI Chart (wide) + Budget Summary (narrow) ─── */}
       <div style={{ display: "grid", gridTemplateColumns: chartCols, gap: 20, marginBottom: 24 }}>
 
-        {/* Department IPI Scores — bigger, all departments visible */}
+        {/* Department IPI Scores */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <div style={{ marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Department IPI Scores</h3>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + Docs×25% — all {departments.length} departments</p>
-          </div>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Department IPI Scores</h3>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + Docs×25% — delivery performance index</p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
@@ -735,39 +883,42 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
           </div>
         </div>
 
-        {/* Risk Profile */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Risk Profile</h3>
-          <p style={{ margin: "0 0 10px", fontSize: 12, color: T.muted }}>By risk level</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={riskDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={42}>
-                {riskDist.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-              </Pie>
-              <Tooltip {...ttStyle()} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-            {riskDist.map(r => (
-              <div key={r.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: r.fill }} />
-                  <span style={{ fontSize: 12, color: T.text }}>{r.name}</span>
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{r.value}</span>
+        {/* Budget Summary — compact */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Portfolio Budget</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Across all active projects</p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[
+              { label: "Approved",  value: fmtSAR(budgetTotal),              color: T.text },
+              { label: "Spent",     value: fmtSAR(costTotal),                color: T.text },
+              { label: "Remaining", value: fmtSAR(budgetTotal - costTotal),  color: (budgetTotal - costTotal) >= 0 ? "#16a34a" : "#dc2626" },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ fontSize: 13, color: T.muted }}>{label}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color }}>{value}</span>
               </div>
             ))}
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: T.muted }}>Utilisation</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: budgetUtilPct > 90 ? "#dc2626" : T.text }}>{budgetUtilPct}%</span>
+            </div>
+            <Progress value={budgetUtilPct} height={10} color={budgetUtilPct > 90 ? "#dc2626" : budgetUtilPct > 75 ? "#eab308" : T.accent} />
           </div>
         </div>
       </div>
 
-      {/* Department Cards */}
+      {/* ── DEPARTMENT CARDS ─────────────────────────────────────── */}
       <SectionHeader title="Department Portfolio Overview" subtitle="Click a department to view its projects" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: deptCols, gap: 16 }}>
         {departments.map(d => {
           const stats = getDeptStats(d.id, allProjects);
           return (
-            <div key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+            <div key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })}
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,57,50,0.1)"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -786,10 +937,10 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
               <Progress value={stats.health} color={stats.health > 70 ? T.accent : stats.health > 50 ? "#eab308" : "#dc2626"} height={6} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 16 }}>
                 {[
-                  { label: "Active", value: stats.active, color: "#16a34a" },
-                  { label: "At Risk", value: stats.total - stats.active - stats.delayed - stats.completed, color: "#eab308" },
-                  { label: "Delayed", value: stats.delayed, color: "#dc2626" },
-                  { label: "Done", value: stats.completed, color: "#3b82f6" },
+                  { label: "Active",  value: stats.active,                                                  color: "#16a34a" },
+                  { label: "At Risk", value: stats.total - stats.active - stats.delayed - stats.completed,  color: "#eab308" },
+                  { label: "Delayed", value: stats.delayed,                                                 color: "#dc2626" },
+                  { label: "Done",    value: stats.completed,                                               color: "#3b82f6" },
                 ].map(s => (
                   <div key={s.label} style={{ textAlign: "center", padding: "8px 4px", background: T.bg, borderRadius: 8 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -797,7 +948,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
                   </div>
                 ))}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: `1px solid rgba(255,255,255,0.15)` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
                 <div style={{ fontSize: 12, color: T.muted }}>Budget: <span style={{ fontWeight: 600, color: T.text }}>{fmtSAR(stats.totalBudget)}</span></div>
                 <div style={{ fontSize: 12, color: T.muted }}>High Risk: <span style={{ fontWeight: 600, color: stats.highRisk > 0 ? "#dc2626" : T.text }}>{stats.highRisk}</span></div>
               </div>
