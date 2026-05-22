@@ -1651,12 +1651,12 @@ const GRCDashboard = ({ canEdit = false }) => {
       const headers = { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" };
       const base    = `${GRC_SP_SITE}/_api/web/lists/getbytitle`;
       const [mR, rR, rrR, aR, afR, caR] = await Promise.all([
-        fetch(`${base}('GRC_KRI_Master')/items?$select=Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive&$expand=KRIOwner&$top=500`, { headers }),
-        fetch(`${base}('GRC_KRI_Readings')/items?$select=Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
-        fetch(`${base}('GRC_RiskRegister')/items?$select=Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
-        fetch(`${base}('GRC_RiskAppetite')/items?$select=Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
-        fetch(`${base}('GRC_AuditFindings')/items?$select=Title,FindingSeverity,BusinessUnit,Status,DueDate&$top=500`, { headers }),
-        fetch(`${base}('GRC_CorrectiveActions')/items?$select=Title,Status,CompletionPercentage,TargetDate,LinkedFindingID&$top=500`, { headers }),
+        fetch(`${base}('GRC_KRI_Master')/items?$select=ID,Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive&$expand=KRIOwner&$top=500`, { headers }),
+        fetch(`${base}('GRC_KRI_Readings')/items?$select=ID,Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
+        fetch(`${base}('GRC_RiskRegister')/items?$select=ID,Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
+        fetch(`${base}('GRC_RiskAppetite')/items?$select=ID,Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
+        fetch(`${base}('GRC_AuditFindings')/items?$select=ID,Title,FindingSeverity,BusinessUnit,Status,DueDate&$top=500`, { headers }),
+        fetch(`${base}('GRC_CorrectiveActions')/items?$select=ID,Title,Status,CompletionPercentage,TargetDate,LinkedFindingID&$top=500`, { headers }),
       ]);
       const [m, r, rr, a, af, ca] = await Promise.all([mR.json(), rR.json(), rrR.json(), aR.json(), afR.json(), caR.json()]);
       setKriMaster(m.value          || []);
@@ -1904,7 +1904,17 @@ const GRCDashboard = ({ canEdit = false }) => {
 
   const kriHistory = useMemo(() => {
     if (!selectedKRI) return [];
-    return [...kriReadings.filter(r => r.KRIID === selectedKRI && r.ActualValue != null)]
+    // Deduplicate by Period — for the same period keep only the latest reading (by ReadingDate)
+    const byPeriod = {};
+    kriReadings
+      .filter(r => r.KRIID === selectedKRI && r.ActualValue != null)
+      .forEach(r => {
+        const key = r.Period || (r.ReadingDate || "").substring(0, 7);
+        if (!byPeriod[key] || (r.ReadingDate || "") > (byPeriod[key].ReadingDate || "")) {
+          byPeriod[key] = r;
+        }
+      });
+    return Object.values(byPeriod)
       .sort((a, b) => {
         const da = parsePeriodToDate(a.Period) || new Date(a.ReadingDate || 0);
         const db = parsePeriodToDate(b.Period) || new Date(b.ReadingDate || 0);
