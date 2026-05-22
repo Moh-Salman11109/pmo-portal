@@ -2319,7 +2319,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>{p.code}</td>
                   <td style={{ padding: "12px 14px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</div>
                     <div style={{ fontSize: 11, color: T.muted }}>{p.sponsor}</div>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{p.pm}</td>
@@ -4605,7 +4605,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
                   onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: themeStore.T.text }}>{p.name}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -5209,11 +5209,10 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
-  const [, rerenderDark] = useState(0);
+  const activeT = useT();
   const dark = themeStore.dark;
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const toggleDark = () => { themeStore.toggle(); rerenderDark(n => n + 1); };
-  const activeT = themeStore.T;
+  const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [userRole, setUserRole] = useState(ROLE_ADMIN);   // fail-open default during setup
   const [userDeptId, setUserDeptId] = useState(null);
