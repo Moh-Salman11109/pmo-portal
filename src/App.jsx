@@ -4,236 +4,22 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
 import { acquireSpToken } from "./services/auth.js";
-// Role constants
-const ROLE_ADMIN     = "pmo_admin";
-const ROLE_PM        = "pm";
-const ROLE_EXEC      = "executive";
-const ROLE_DEPT_HEAD = "dept_head";
-const ROLE_GRC       = "grc";        // view GRC dashboard only
-const ROLE_GRC_ADMIN = "grc_admin";  // view + full edit GRC dashboard
-const ROLE_PMO_HEAD  = "pmo_head";   // all pmo_admin permissions except GRC dashboard
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
+import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD } from "./roles.js";
+import { THEMES, themeStore, useT, useDark, ttStyle } from "./theme.js";
+import { useBp } from "./hooks/useBp.js";
+import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
+import { fmt, fmtSAR } from "./utils/format.js";
+import { TODAY, daysSince } from "./utils/dates.js";
+import { getDeptStats, calcProjectIPI, calcDeptIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
+import { exportExcel } from "./utils/export.js";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
-const THEMES = {
-  light: {
-    primary:    "#003932",
-    accent:     "#00ffb3",
-    secondary:  "#a1b9ab",
-    light:      "#c9d5c9",
-    danger:     "#ff5000",
-    critical:   "#490300",
-    bg:         "#f4f6f4",
-    surface:    "#ffffff",
-    border:     "#dce8dc",
-    text:       "#0d1f1c",
-    muted:      "#5a7a6e",
-    sidebarBg:  "#003932",
-    cardHover:  "#f0f7f4",
-    inputBg:    "#ffffff",
-    tableBg:    "#f4f6f4",
-    // semantic
-    headerBg:   "#003932",   // project header, banners
-    headerText: "#ffffff",   // text ON dark header backgrounds
-    btnPrimBg:  "#003932",   // primary button bg
-    btnPrimText:"#00ffb3",   // primary button text
-    accentText: "#0d1f1c",   // text ON accent-coloured backgrounds
-    badgeBg:    "#e8f5f0",   // light tint badge
-    inputText:  "#0d1f1c",
-    selectBg:   "#ffffff",
-  },
-  dark: {
-    primary:    "#00ffb3",   // accent is the "brand" highlight in dark
-    accent:     "#00ffb3",
-    secondary:  "#a1b9ab",
-    light:      "#c9d5c9",
-    danger:     "#ff5000",
-    critical:   "#ff6b6b",
-    bg:         "#0a1512",
-    surface:    "#0f1e1a",
-    border:     "#1a3330",
-    text:       "#e8f5f0",
-    muted:      "#7aaa96",
-    sidebarBg:  "#060e0c",
-    cardHover:  "#132820",
-    inputBg:    "#132820",
-    tableBg:    "#0a1512",
-    // semantic
-    headerBg:   "#061210",   // very dark for project header / banners
-    headerText: "#e8f5f0",   // text ON dark header backgrounds
-    btnPrimBg:  "#00ffb3",   // primary button bg in dark = accent
-    btnPrimText:"#061210",   // dark text ON green button
-    accentText: "#061210",   // text ON accent backgrounds
-    badgeBg:    "#0f2a22",
-    inputText:  "#e8f5f0",
-    selectBg:   "#132820",
-  },
-};
-
-// ─── THEME STORE (module-level, no context needed) ────────────────
-// Simple pub/sub store - guaranteed to work
-const themeStore = {
-  dark: false,
-  listeners: new Set(),
-  get T() { return this.dark ? THEMES.dark : THEMES.light; },
-  toggle() {
-    this.dark = !this.dark;
-    this.listeners.forEach(fn => fn());
-  },
-  subscribe(fn) {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
-  }
-};
-
-// Hook that re-renders on theme change
-const useT = () => {
-  const [, rerender] = useState(0);
-  useEffect(() => {
-    const unsub = themeStore.subscribe(() => rerender(n => n + 1));
-    return unsub;
-  }, []);
-  return themeStore.T;
-};
-
-const useDark = () => themeStore.dark;
-
-// ─── BREAKPOINT STORE ─────────────────────────────────────────────
-// Mirrors the themeStore pattern — any component can call useBp()
-// and will re-render on window resize. No prop drilling needed.
-const getBp = () => {
-  if (typeof window === "undefined") return "desktop";
-  if (window.innerWidth < 640)  return "mobile";
-  if (window.innerWidth < 1024) return "tablet";
-  return "desktop";
-};
-const bpStore = { listeners: new Set() };
-if (typeof window !== "undefined") {
-  window.addEventListener("resize", () => bpStore.listeners.forEach(fn => fn()), { passive: true });
-}
-const useBp = () => {
-  const [, rerender] = useState(0);
-  useEffect(() => {
-    const fn = () => rerender(n => n + 1);
-    bpStore.listeners.add(fn);
-    return () => bpStore.listeners.delete(fn);
-  }, []);
-  return getBp();
-};
-
 // ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────
 const DeptContext = createContext(null);
 const useDepts = () => useContext(DeptContext);
 
-// ─── CHART TOOLTIP STYLE ──────────────────────────────────────────
-// Called inline in JSX — reads current theme at render time.
-// Spreads onto <Tooltip> so all charts share one high-contrast style.
-const ttStyle = () => {
-  const dark = themeStore.dark;
-  return {
-    contentStyle: {
-      fontSize: 12,
-      borderRadius: 10,
-      border: `1px solid ${dark ? "rgba(0,255,179,0.3)" : "#dce8dc"}`,
-      background: dark ? "#0c1f1b" : "#ffffff",
-      color: dark ? "#e8f5f0" : "#0d1f1c",
-      boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.45)" : "0 4px 16px rgba(0,57,50,0.10)",
-      padding: "8px 14px",
-    },
-    labelStyle: {
-      color: dark ? "#a1b9ab" : "#5a7a6e",
-      fontWeight: 600,
-      marginBottom: 2,
-    },
-    itemStyle: {
-      color: dark ? "#e8f5f0" : "#0d1f1c",
-    },
-    cursor: {
-      fill: dark ? "rgba(255,255,255,0.04)" : "rgba(0,57,50,0.04)",
-    },
-  };
-};
-
-
-// ─── COMPUTED METRICS ─────────────────────────────────────────────
-function getDeptStats(deptId, projects) {
-  const dp = projects.filter(p => p.deptId === deptId);
-  const total = dp.length;
-  const onTrack = dp.filter(p => p.status === "On Track").length;
-  const active = dp.filter(p => p.status === "On Track" || p.status === "At Risk").length;
-  const delayed = dp.filter(p => p.status === "Delayed").length;
-  const completed = dp.filter(p => p.status === "Completed").length;
-  const highRisk = dp.filter(p => p.riskLevel === "High" || p.riskLevel === "Critical").length;
-  const health = total ? Math.round(dp.reduce((s, p) => s + p.progress, 0) / total) : 0;
-  const totalBudget = dp.reduce((s, p) => s + p.budget, 0);
-  const actualCost = dp.reduce((s, p) => s + p.actualCost, 0);
-  const budgetUtil = totalBudget ? Math.round((actualCost / totalBudget) * 100) : 0;
-  return { total, onTrack, active, delayed, completed, highRisk, health, totalBudget, actualCost, budgetUtil };
-}
-
-// ─── IPI CALCULATIONS ─────────────────────────────────────────────
-// IPI per project = SPI×50% + CPI×25% + DocsCompliance×25%
-// Capped at 1.2 to avoid inflated scores; normalised to 0–100
-function calcProjectIPI(project) {
-  // Only count REQUIRED documents in compliance score
-  const allDocs = project.documents ?? [];
-  const reqDocs = allDocs.filter(d => d.required === true);
-  const docsTotal = reqDocs.length;
-  const docsReady = reqDocs.filter(d =>
-    ["Approved","Final","Received","Current","Submitted"].includes(d.status)
-  ).length;
-  const docsScore = docsTotal > 0 ? docsReady / docsTotal : 0;
-
-  const spi = Math.min(project.spi ?? 1, 1.2);
-  const cpi = Math.min(project.cpi ?? 1, 1.2);
-
-  const raw = (spi * 0.5) + (cpi * 0.25) + (docsScore * 0.25);
-  return Math.min(Math.round((raw / 1.15) * 100), 100);
-}
-
-// IPI per department = average of its projects' IPIs
-function calcDeptIPI(deptId, projects) {
-  const dp = projects.filter(p => p.deptId === deptId);
-  if (!dp.length) return 0;
-  return Math.round(dp.reduce((s, p) => s + calcProjectIPI(p), 0) / dp.length);
-}
-
-// IPI colour band
-function ipiColor(score) {
-  if (score >= 90) return { color: "#15803d", bg: "#dcfce7", label: "Excellent" };
-  if (score >= 70) return { color: "#005c4b", bg: "#e8f5f0", label: "Good" };
-  if (score >= 55) return { color: "#854d0e", bg: "#fef9c3", label: "Fair" };
-  return { color: "#991b1b", bg: "#fee2e2", label: "Poor" };
-}
-
-// SPService and isUsingMock imported from ./services/sharepoint.js
-
 // ─── HELPERS ──────────────────────────────────────────────────────
-const fmt = (n) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}K` : n;
-const fmtSAR = (n) => `SAR ${fmt(n)}`;
-
-const statusColor = {
-  "On Track": { bg: "#dcfce7", text: "#15803d", dot: "#16a34a" },
-  "At Risk": { bg: "#fef9c3", text: "#854d0e", dot: "#eab308" },
-  "Delayed": { bg: "#fee2e2", text: "#991b1b", dot: "#dc2626" },
-  "Completed": { bg: "#dbeafe", text: "#1e40af", dot: "#3b82f6" },
-  "Not Started": { bg: "#f3f4f6", text: "#4b5563", dot: "#9ca3af" },
-};
-
-const healthColor = {
-  "Green": { bg: "#dcfce7", text: "#15803d", label: "Green" },
-  "Amber": { bg: "#fef9c3", text: "#854d0e", label: "Amber" },
-  "Red": { bg: "#fee2e2", text: "#991b1b", label: "Red" },
-};
-
-const riskColor = {
-  "Critical": { bg: "#fee2e2", text: "#991b1b" },
-  "High": { bg: "#fef3c7", text: "#92400e" },
-  "Medium": { bg: "#fef9c3", text: "#854d0e" },
-  "Low": { bg: "#dcfce7", text: "#15803d" },
-};
-
-const TODAY = new Date().toISOString().split("T")[0];
 
 // Mandatory docs every project gets at creation — single source of truth
 const MANDATORY_DOCS = [
@@ -242,107 +28,6 @@ const MANDATORY_DOCS = [
   { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
 ];
 
-// Days since a date string — staleness + Gate SLA calculations
-const daysSince = (dateStr) => {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
-  return Math.floor((new Date() - d) / 86400000);
-};
-
-// How many days has this project been sitting at its current active gate
-const getGateSLA = (project) => {
-  if (!project?.gates) return null;
-  const ordered = GATE_DEFS.map(def => ({
-    def,
-    g: project.gates.find(g => g.id === def.id) || { status: "Pending" }
-  }));
-  const lastApprovedIdx = ordered.reduce((idx, x, i) => x.g.status === "Approved" ? i : idx, -1);
-  const currentIdx = (() => {
-    const ipIdx = ordered.findIndex(x => x.g.status === "In Progress");
-    if (ipIdx !== -1) return ipIdx;
-    return lastApprovedIdx >= 0 && lastApprovedIdx + 1 < ordered.length ? lastApprovedIdx + 1 : 0;
-  })();
-  const current = ordered[currentIdx];
-  if (!current || current.g.status === "Approved") return null;
-  const fromDate = lastApprovedIdx >= 0 ? ordered[lastApprovedIdx]?.g?.date : project.startDate;
-  const days = daysSince(fromDate);
-  if (days == null) return null;
-  return { label: current.def.label, days };
-};
-
-const exportExcel = (rows, filename, deptMap = {}) => {
-  const SC = {
-    "On Track":    { bg: "#dcfce7", fg: "#15803d" },
-    "At Risk":     { bg: "#fef9c3", fg: "#854d0e" },
-    "Delayed":     { bg: "#fee2e2", fg: "#991b1b" },
-    "Completed":   { bg: "#dbeafe", fg: "#1e40af" },
-    "Not Started": { bg: "#f3f4f6", fg: "#4b5563" },
-  };
-  const RC = {
-    "Critical": { bg: "#fee2e2", fg: "#991b1b" },
-    "High":     { bg: "#fef3c7", fg: "#92400e" },
-    "Medium":   { bg: "#fef9c3", fg: "#854d0e" },
-    "Low":      { bg: "#dcfce7", fg: "#15803d" },
-  };
-
-  const td = (val, style = "") =>
-    `<td style="border:1px solid #dce8dc;padding:7px 12px;font-size:12px;font-family:'Segoe UI',sans-serif;vertical-align:middle;${style}">${val ?? "—"}</td>`;
-  const th = (val) =>
-    `<td style="background:#003932;color:#ffffff;font-weight:700;padding:10px 14px;font-size:12px;font-family:'Segoe UI',sans-serif;border:1px solid #00524a;white-space:nowrap;">${val}</td>`;
-
-  const HEADERS = ["Code","Project Name","Department","PM","Sponsor","Phase","Status","Progress","Risk","Budget (SAR)","Actual Cost (SAR)","Budget Status","Gate","Start Date","Planned End"];
-  const COL_COUNT = HEADERS.length;
-
-  const titleRow = `<tr><td colspan="${COL_COUNT}" style="background:#003932;color:#00ffb3;font-size:16px;font-weight:900;padding:14px 18px;font-family:'Segoe UI',sans-serif;border:none;letter-spacing:0.02em;">PMO Portal — Project Export</td></tr>`;
-  const dateRow  = `<tr><td colspan="${COL_COUNT}" style="background:#003932;color:#a1c9b8;font-size:11px;padding:4px 18px 12px;font-family:'Segoe UI',sans-serif;border:none;">Generated ${new Date().toLocaleDateString("en-US",{dateStyle:"full"})} · ${rows.length} project${rows.length!==1?"s":""}</td></tr>`;
-  const spaceRow = `<tr><td colspan="${COL_COUNT}" style="height:8px;border:none;background:#f4f6f4;"></td></tr>`;
-  const headerRow = `<tr>${HEADERS.map(h => th(h)).join("")}</tr>`;
-
-  const dataRows = rows.map((p, i) => {
-    const sc = SC[p.status] || {};
-    const rc = RC[p.riskLevel] || {};
-    const rowBg = i % 2 === 0 ? "#ffffff" : "#f9fbf9";
-    const b = `background:${rowBg};`;
-    const budgetOk = p.budgetStatus !== "Over Budget";
-    return `<tr>
-      ${td(p.code,        b + "font-weight:700;color:#003932;")}
-      ${td(p.name,        b + "font-weight:600;")}
-      ${td(deptMap[p.deptId] || p.deptId, b)}
-      ${td(p.pm,          b)}
-      ${td(p.sponsor,     b)}
-      ${td(p.phase,       b)}
-      ${td(p.status,      `background:${sc.bg||rowBg};color:${sc.fg||"#000"};font-weight:700;text-align:center;`)}
-      ${td((p.progress||0)+"%", b + "text-align:center;font-weight:700;")}
-      ${td(p.riskLevel,   `background:${rc.bg||rowBg};color:${rc.fg||"#000"};font-weight:700;text-align:center;`)}
-      ${td((p.budget||0).toLocaleString(),     b + "text-align:right;")}
-      ${td((p.actualCost||0).toLocaleString(), b + "text-align:right;")}
-      ${td(p.budgetStatus, b + `color:${budgetOk?"#15803d":"#991b1b"};font-weight:700;`)}
-      ${td(p.gate,        b)}
-      ${td(p.startDate||"—", b)}
-      ${td(p.plannedEnd||"—", b)}
-    </tr>`;
-  }).join("");
-
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-    xmlns:x="urn:schemas-microsoft-com:office:excel"
-    xmlns="http://www.w3.org/TR/REC-html40">
-  <head><meta charset="UTF-8">
-  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
-  <x:ExcelWorksheet><x:Name>Projects</x:Name></x:ExcelWorksheet>
-  </x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-  </head>
-  <body>
-  <table style="border-collapse:collapse;">
-    ${titleRow}${dateRow}${spaceRow}${headerRow}${dataRows}
-  </table>
-  </body></html>`;
-
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  Object.assign(document.createElement("a"), { href: url, download: filename }).click();
-  URL.revokeObjectURL(url);
-};
 
 // ─── UI COMPONENTS ───────────────────────────────────────────────
 // ─── RISK MATRIX COMPONENT ───────────────────────────────────────
@@ -1200,14 +885,6 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
 
 // ─── GRC KRI DASHBOARD ───────────────────────────────────────────
 const GRC_SP_SITE = import.meta.env.VITE_GRC_SP_SITE_URL || "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
-
-const RAG_COLOR = {
-  Green: { bg: "#dcfce7", text: "#15803d", border: "#16a34a" },
-  Amber: { bg: "#fef9c3", text: "#854d0e", border: "#eab308" },
-  Red:   { bg: "#fee2e2", text: "#991b1b", border: "#dc2626" },
-};
-const trendIcon  = t => t === "Improving" ? "↑" : t === "Worsening" ? "↓" : "→";
-const trendColor = t => t === "Improving" ? "#15803d" : t === "Worsening" ? "#dc2626" : "#d97706";
 
 // ── GRC shared modal wrapper ──────────────────────────────────────
 const GRCModal = ({ title, onClose, children }) => {
