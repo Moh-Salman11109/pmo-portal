@@ -587,8 +587,9 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
   const T = useT();
   const dark = themeStore.dark;
 
-  const allProjects    = projects.filter(p => !p.archived);
-  const activeProjects = allProjects.filter(p => p.status !== "Completed");
+  // ── Stable derived arrays (memoized to prevent re-computation on theme/resize) ──
+  const allProjects    = useMemo(() => projects.filter(p => !p.archived),                [projects]);
+  const activeProjects = useMemo(() => allProjects.filter(p => p.status !== "Completed"),[allProjects]);
 
   // ── Status counts ──────────────────────────────────────────────
   const byStatus = { "On Track": 0, "At Risk": 0, "Delayed": 0, "Completed": 0, "Not Started": 0 };
@@ -599,8 +600,8 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
   const costTotal     = allProjects.reduce((s, p) => s + p.actualCost, 0);
   const budgetUtilPct = budgetTotal ? Math.round((costTotal / budgetTotal) * 100) : 0;
 
-  // ── Department IPI chart data ──────────────────────────────────
-  const deptPerf = departments.map(d => {
+  // ── Department IPI chart data (memoized — each dept calls getDeptStats + calcDeptIPI) ──
+  const deptPerf = useMemo(() => departments.map(d => {
     const s   = getDeptStats(d.id, allProjects);
     const ipi = calcDeptIPI(d.id, allProjects);
     const short = d.name
@@ -608,42 +609,47 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
       .replace("Operations", "Ops")
       .replace("Performance", "Perf");
     return { name: short, health: s.health, ipi, projects: s.total };
-  });
+  }), [allProjects, departments]);
 
-  // ── Overdue milestones ─────────────────────────────────────────
-  const overdueMilestones = activeProjects.flatMap(p =>
-    (p.milestones || [])
-      .filter(m => m.status !== "Completed" && m.date && m.date < TODAY)
-      .map(m => ({
-        ...m,
-        projectId:   p.id,
-        projectName: p.name,
-        daysOverdue: daysSince(m.date) || 0,
-      }))
-  ).sort((a, b) => b.daysOverdue - a.daysOverdue);
+  // ── Overdue milestones (memoized — O(n×milestones) flatMap + sort) ─────────────
+  const overdueMilestones = useMemo(() =>
+    activeProjects.flatMap(p =>
+      (p.milestones || [])
+        .filter(m => m.status !== "Completed" && m.date && m.date < TODAY)
+        .map(m => ({
+          ...m,
+          projectId:   p.id,
+          projectName: p.name,
+          daysOverdue: daysSince(m.date) || 0,
+        }))
+    ).sort((a, b) => b.daysOverdue - a.daysOverdue),
+  [activeProjects]);
 
-  const overdue7   = overdueMilestones.filter(m => m.daysOverdue <= 7);
-  const overdue30  = overdueMilestones.filter(m => m.daysOverdue > 7 && m.daysOverdue <= 30);
-  const overdueOld = overdueMilestones.filter(m => m.daysOverdue > 30);
+  const overdue7            = overdueMilestones.filter(m => m.daysOverdue <= 7);
+  const overdue30           = overdueMilestones.filter(m => m.daysOverdue > 7 && m.daysOverdue <= 30);
+  const overdueOld          = overdueMilestones.filter(m => m.daysOverdue > 30);
+  const overdueProjectCount = useMemo(() => new Set(overdueMilestones.map(m => m.projectId)).size, [overdueMilestones]);
 
   // ── Pending approvals ──────────────────────────────────────────
-  const pendingApprovals = (gateSubmissions || [])
-    .filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"))
-    .sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0));
+  const pendingApprovals = useMemo(() =>
+    (gateSubmissions || [])
+      .filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"))
+      .sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0)),
+  [gateSubmissions]);
 
   // ── Gate pipeline (count active projects per gate) ─────────────
-  const gatePipeline = GATE_DEFS.map(def => {
+  const gatePipeline = useMemo(() => GATE_DEFS.map(def => {
     const count   = activeProjects.filter(p => p.gate === def.label).length;
     const g1Subs  = def.id === "G1" ? pendingApprovals : [];
     const avgDays = g1Subs.length
       ? Math.round(g1Subs.reduce((s, g) => s + (g.daysAtGate || 0), 0) / g1Subs.length)
       : null;
     return { ...def, count, avgDays };
-  });
+  }), [activeProjects, pendingApprovals]);
   const maxGateCount = Math.max(...gatePipeline.map(g => g.count), 1);
 
-  // ── Executive Intervention flags ───────────────────────────────
-  const interventionFlags = (() => {
+  // ── Executive Intervention flags (memoized) ────────────────────
+  const interventionFlags = useMemo(() => {
     const flags = [];
     activeProjects.forEach(p => {
       const reasons = [];
@@ -656,8 +662,10 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
       if (p.riskLevel === "Critical") {
         reasons.push("Critical risk");
         severity = "high";
-      } else if (p.riskLevel === "High" && severity !== "high") {
+      } else if (p.riskLevel === "High") {
+        // High risk always surfaces as a reason, even when project is already Delayed
         reasons.push("High risk");
+        if (severity !== "high") severity = "medium";
       }
       const staleDays = daysSince(p.lastUpdate);
       if (staleDays !== null && staleDays > 14) {
@@ -681,7 +689,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
       }
     });
     return flags.sort((a, b) => b.score - a.score).slice(0, 8);
-  })();
+  }, [activeProjects]);
 
   // ── Layout helpers ─────────────────────────────────────────────
   const pad       = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
@@ -702,6 +710,13 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
       </div>
 
       {/* ── EXECUTIVE INTERVENTION PANEL ───────────────────────── */}
+      {interventionFlags.length === 0 && (
+        <div style={{ background: dark ? "rgba(22,163,74,0.08)" : "#f0fdf4", border: `1px solid ${dark ? "rgba(22,163,74,0.3)" : "#86efac"}`, borderRadius: 14, padding: "14px 24px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 15 }}>✅</span>
+          <span style={{ fontWeight: 700, fontSize: 13, color: "#16a34a" }}>All clear</span>
+          <span style={{ fontSize: 12, color: T.muted }}>— No projects flagged for intervention</span>
+        </div>
+      )}
       {interventionFlags.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${dark ? "rgba(220,38,38,0.4)" : "#fca5a5"}`, borderRadius: 14, padding: "18px 24px", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -726,7 +741,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
               >
                 <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{severity === "high" ? "🔴" : "🟡"}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 2 }}>{p.code} — {p.name}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.code} — {p.name}</div>
                   <div style={{ fontSize: 11, color: T.muted }}>
                     {reasons.map((r, i) => (
                       <span key={i}>{i > 0 && <span style={{ margin: "0 4px", opacity: 0.4 }}>·</span>}{r}</span>
@@ -745,7 +760,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
         <KPICard label="Total Projects"     value={allProjects.length}              icon="📋" onClick={() => setRoute({ view: "projects", filterStatus: "All" })} />
         <KPICard label="Delayed"            value={byStatus["Delayed"] || 0}        icon="🔴" color={byStatus["Delayed"] > 0 ? "#dc2626" : "#16a34a"} onClick={() => setRoute({ view: "projects", filterStatus: "Delayed" })} />
         <KPICard label="At Risk"            value={byStatus["At Risk"] || 0}        icon="⚠️" color={byStatus["At Risk"] > 0 ? "#eab308" : "#16a34a"} onClick={() => setRoute({ view: "projects", filterStatus: "At Risk" })} />
-        <KPICard label="Overdue Milestones" value={overdueMilestones.length}        icon="📅" color={overdueMilestones.length > 0 ? "#dc2626" : "#16a34a"} sub={overdueMilestones.length > 0 ? `${overdueOld.length} critical (30d+)` : "All on track"} />
+        <KPICard label="Overdue Milestones" value={overdueMilestones.length}        icon="📅" color={overdueMilestones.length > 0 ? "#dc2626" : "#16a34a"} sub={overdueMilestones.length > 0 ? `${overdueOld.length} critical (30d+)` : "All on track"} onClick={() => setRoute({ view: "actions" })} />
         <KPICard label="Pending Approvals"  value={pendingApprovals.length}         icon="⏳" color={pendingApprovals.length > 0 ? "#d97706" : "#16a34a"} sub={pendingApprovals.length > 0 ? `Oldest: ${pendingApprovals[0]?.daysAtGate || 0}d` : "Queue clear"} onClick={pendingApprovals.length > 0 ? () => setRoute({ view: "actions" }) : null} />
         <KPICard label="Budget Utilisation" value={`${budgetUtilPct}%`}             icon="💰" color={budgetUtilPct > 90 ? "#dc2626" : budgetUtilPct > 75 ? "#eab308" : T.primary} sub={`${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)}`} />
       </div>
@@ -757,6 +772,9 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Gate Pipeline</h3>
           <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Active projects by current gate — bottlenecks show where work is stacking</p>
+          {gatePipeline.every(g => g.count === 0) && (
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted }}>No active projects currently in any gate.</p>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {gatePipeline.map(g => {
               const barPct      = (g.count / maxGateCount) * 100;
@@ -809,7 +827,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
                   ))}
                 </div>
                 <div style={{ marginTop: 10, fontSize: 11, color: T.muted }}>
-                  {overdueMilestones.length} total across {new Set(overdueMilestones.map(m => m.projectId)).size} project{new Set(overdueMilestones.map(m => m.projectId)).size !== 1 ? "s" : ""}
+                  {overdueMilestones.length} total across {overdueProjectCount} project{overdueProjectCount !== 1 ? "s" : ""}
                 </div>
               </>
             )}
@@ -853,7 +871,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
 
         {/* Department IPI Scores */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Department IPI Scores</h3>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }} title="Integrated Performance Index: Schedule Performance (SPI) × 50% + Cost Performance (CPI) × 25% + Document Compliance × 25%">Department IPI Scores</h3>
           <p style={{ margin: "0 0 16px", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + Docs×25% — delivery performance index</p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
