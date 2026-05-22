@@ -323,13 +323,16 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
     return reqs + gates + closures;
   }, [requests, gateSubmissions, closureSubmissions]);
 
+  const isPM   = userRole === ROLE_PM;
+  const isAdmin = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD;
+
   const navItems = [
-    { icon: "🏠", label: "Portfolio Overview", route: "home" },
-    { icon: "📁", label: "Departments",         route: "departments" },
-    { icon: "📋", label: "All Projects",         route: "projects", badge: attnCount },
+    ...(!isPM ? [{ icon: "🏠", label: "Portfolio Overview", route: "home" }] : []),
+    ...(!isPM ? [{ icon: "📁", label: "Departments",         route: "departments" }] : []),
+    ...(!isPM ? [{ icon: "📋", label: "All Projects",        route: "projects", badge: attnCount }] : []),
     { icon: "📨", label: "New Request",          route: "requests"},
     { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
-    ...((userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
+    ...(isAdmin ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
   ];
 
   const sidebarStyle = isDesktop
@@ -370,8 +373,8 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               )}
             </button>
           ))}
-          <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>
-          {departments.map(d => {
+          {!isPM && <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>}
+          {!isPM && departments.map(d => {
             const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
             const del = projects.filter(p => !p.archived && p.deptId === d.id && p.status === "Delayed").length;
             return (
@@ -581,7 +584,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
 };
 
 // ─── HOME / PORTFOLIO OVERVIEW ────────────────────────────────────
-const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) => {
+const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, userRole }) => {
   const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
@@ -5309,7 +5312,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
-  const [userRole, setUserRole] = useState(ROLE_ADMIN);   // fail-open default during setup
+  const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
   const [userDeptId, setUserDeptId] = useState(null);
   const [projects, setProjects] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -5358,8 +5361,13 @@ export default function App() {
           setRoute({ view: "department", deptId: "grc" });
         }
       })
-      .catch(() => {}); // fail-open: keep pmo_admin default
+      .catch(() => {}); // fail-open: keep exec default
   }, [currentUserEmail]);
+
+  // ── PM default landing: redirect to actions on first load ────
+  useEffect(() => {
+    if (userRole === ROLE_PM) setRoute({ view: "actions" });
+  }, [userRole]);
 
   const addDept    = useCallback((d) => setDepartments(prev => [...prev, d]), []);
   const updateDept = useCallback((id, data) => setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...data } : d)), []);
@@ -5543,10 +5551,12 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} currentUserName={currentUserName} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
-          {route.view === "home"        && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
-          {route.view === "departments" && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
-          {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
-          {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
+          {/* Portfolio-level views — blocked for PM role */}
+          {route.view === "home"        && userRole !== ROLE_PM && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
+          {route.view === "departments" && userRole !== ROLE_PM && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
+          {route.view === "projects"    && userRole !== ROLE_PM && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
+          {route.view === "department"  && userRole !== ROLE_PM && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
+          {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
