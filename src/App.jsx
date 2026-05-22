@@ -1199,7 +1199,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt }) =
 };
 
 // ─── GRC KRI DASHBOARD ───────────────────────────────────────────
-const GRC_SP_SITE = "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
+const GRC_SP_SITE = import.meta.env.VITE_GRC_SP_SITE_URL || "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
 
 const RAG_COLOR = {
   Green: { bg: "#dcfce7", text: "#15803d", border: "#16a34a" },
@@ -1646,6 +1646,12 @@ const GRCDashboard = ({ canEdit = false }) => {
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
+    if (isUsingMock()) {
+      setKriMaster([]); setKriReadings([]); setRiskReg([]);
+      setAppetite([]); setAuditFindings([]); setCorrectiveActions([]);
+      setLoading(false);
+      return;
+    }
     try {
       const token   = await acquireSpToken();
       const headers = { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" };
@@ -4843,7 +4849,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 };
 
 // ─── ALL PROJECTS VIEW ────────────────────────────────────────────
-const AllProjectsView = ({ projects, setRoute, route }) => {
+const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -5768,7 +5774,7 @@ export default function App() {
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
           {route.view === "home"        && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} />}
           {route.view === "departments" && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
-          {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} />}
+          {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
           {route.view === "department"  && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
