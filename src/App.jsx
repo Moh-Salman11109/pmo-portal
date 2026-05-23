@@ -1830,7 +1830,7 @@ const GRCDashboard = ({ canEdit = false }) => {
                       {canEdit && (
                         <td style={{ padding: "11px 12px" }} onClick={e => e.stopPropagation()}>
                           <button onClick={() => setReadingModal(kri)}
-                            style={{ background: T.primary, color: T.accent, border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                             + Reading
                           </button>
                         </td>
@@ -3375,7 +3375,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
                 {/* Update header */}
                 <div style={{ padding: "12px 20px", background: T.bg, borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 32, height: 32, background: T.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                    <div style={{ width: 32, height: 32, background: T.btnPrimBg, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: T.btnPrimText, fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
                       {(u.owner || "?").charAt(0)}
                     </div>
                     <div>
