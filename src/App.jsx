@@ -5157,7 +5157,9 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
           </FField>
           <FField label="Project Type"><select value={form.projectType} onChange={e => set("projectType", e.target.value)} style={ss}>{PROJECT_TYPES.map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Project Manager" required error={errors.pm}><input value={form.pm} onChange={e => set("pm", e.target.value)} placeholder="Full name" style={sErr("pm")} /></FField>
+          <FField label="PM Email"><input value={form.pmEmail || ""} onChange={e => set("pmEmail", e.target.value)} placeholder="pm@tree.com.sa" type="email" style={s} /></FField>
           <FField label="Sponsor"><input value={form.sponsor} onChange={e => set("sponsor", e.target.value)} placeholder="Full name" style={s} /></FField>
+          <FField label="Sponsor Email"><input value={form.sponsorEmail || ""} onChange={e => set("sponsorEmail", e.target.value)} placeholder="sponsor@tree.com.sa" type="email" style={s} /></FField>
           <FField label="Phase"><select value={form.phase} onChange={e => set("phase", e.target.value)} style={ss}>{["Initiation","Planning","Execution","Monitoring","Closure"].map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Current Gate"><select value={form.gate} onChange={e => set("gate", e.target.value)} style={ss}>{["Gate 1","Gate 2","Gate 3","Gate 4","Gate 5"].map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Status"><select value={form.status} onChange={e => set("status", e.target.value)} style={ss}>{["Not Started","On Track","At Risk","Delayed","Completed"].map(o => <option key={o}>{o}</option>)}</select></FField>
