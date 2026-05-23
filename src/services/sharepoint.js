@@ -621,8 +621,8 @@ Object.assign(SPService, {
       const data = await res.json();
       const items = data?.d?.results || [];
       if (!items.length) return fallback;
-      // Deactivated users get read-only executive view
-      if (items[0].IsActive === false) return { role: "executive", deptId: null };
+      // Deactivated users are fully locked out
+      if (items[0].IsActive === false) return { role: "locked", deptId: null };
       const raw = (items[0].Role || "").trim().toLowerCase().replace(/\s+/g, "_");
       const deptId = items[0].DeptId || null;
       if (raw === "pmo_admin")                               return { role: "pmo_admin",  deptId };

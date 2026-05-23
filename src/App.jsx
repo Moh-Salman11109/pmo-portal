@@ -5,7 +5,7 @@ import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/co
 import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
 import { acquireSpToken } from "./services/auth.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
-import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD } from "./roles.js";
+import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_LOCKED } from "./roles.js";
 import { THEMES, themeStore, useT, useDark, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
 import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
@@ -5543,6 +5543,20 @@ export default function App() {
         <h2 style={{ color: activeT.text, margin: 0 }}>Failed to load data</h2>
         <p style={{ color: activeT.muted, fontSize: 13, margin: 0 }}>{loadError}</p>
         <button onClick={() => window.location.reload()} style={{ marginTop: 8, padding: "8px 20px", background: activeT.primary, color: activeT.btnPrimText || "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Retry</button>
+      </div>
+    );
+  }
+
+  // Deactivated accounts — full lockout screen
+  if (userRole === ROLE_LOCKED) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: activeT.bg, flexDirection: "column", gap: 16, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+        <div style={{ fontSize: 52 }}>🔒</div>
+        <div style={{ fontWeight: 900, fontSize: 20, color: activeT.text }}>Account Deactivated</div>
+        <div style={{ fontSize: 13, color: activeT.muted, textAlign: "center", maxWidth: 340, lineHeight: 1.6 }}>
+          Your account has been deactivated. Please contact the PMO team to restore access.
+        </div>
+        <a href="mailto:pmo@tree.com" style={{ marginTop: 4, fontSize: 13, color: activeT.primary, fontWeight: 600, textDecoration: "none" }}>pmo@tree.com</a>
       </div>
     );
   }

@@ -5,3 +5,4 @@ export const ROLE_DEPT_HEAD = "dept_head";
 export const ROLE_GRC       = "grc";        // view GRC dashboard only
 export const ROLE_GRC_ADMIN = "grc_admin";  // view + full edit GRC dashboard
 export const ROLE_PMO_HEAD  = "pmo_head";   // all pmo_admin permissions except GRC dashboard
+export const ROLE_LOCKED    = "locked";     // IsActive=No in PMO_Users — no portal access
