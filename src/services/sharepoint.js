@@ -32,7 +32,9 @@ export const SP_FIELD_MAP = {
   code:                "ProjectCode",
   name:                "Title",
   pm:                  "ProjectManager",
+  pmEmail:             "ProjectManagerEmail",
   sponsor:             "Sponsor",
+  sponsorEmail:        "SponsorEmail",
   deptId:              "DepartmentID",
   projectType:         "ProjectType",
   phase:               "Phase",
@@ -115,7 +117,9 @@ export function mapSPItemToProject(item) {
     projectType:         item[f.projectType]        || "Internal Project",
     // People
     pm:                  item[f.pm]                 || "",
+    pmEmail:             item[f.pmEmail]            || "",
     sponsor:             item[f.sponsor]            || "",
+    sponsorEmail:        item[f.sponsorEmail]       || "",
     // Classification
     phase:               item[f.phase]              || "",
     gate:                item[f.gate]               || "",
@@ -193,7 +197,9 @@ export function mapProjectToSPItem(project) {
     [f.code]:              project.code             || "",
     [f.name]:              project.name             || "",
     [f.pm]:                project.pm               || "",
+    [f.pmEmail]:           project.pmEmail          || "",
     [f.sponsor]:           project.sponsor          || "",
+    [f.sponsorEmail]:      project.sponsorEmail     || "",
     [f.deptId]:            project.deptId           || "",
     [f.projectType]:       project.projectType      || "Internal Project",
     [f.phase]:             project.phase            || "Planning",
@@ -566,16 +572,16 @@ Object.assign(SPService, {
    *  Returns: { role: "pmo_admin"|"pm"|"executive"|"dept_head", deptId: string|null }
    *  Defaults to { role: "pmo_admin", deptId: null } on any error or missing record (fail-open). */
   async getUserRole(email) {
-    const fallback = { role: "pmo_admin", deptId: null };
+    const fallback = { role: "executive", deptId: null };
     if (!email) return fallback;
     if (USE_MOCK) {
       const found = MOCK_USERS.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      return found ? { role: found.role || "pmo_admin", deptId: found.deptId || null } : fallback;
+      return found ? { role: found.role || "executive", deptId: found.deptId || null } : fallback;
     }
     try {
       const token = await acquireSpToken();
       const escaped = email.replace(/'/g, "''");
-      const url = `${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${SP_CONFIG.usersListName}')/items?$select=ID,Title,Role,DeptId&$filter=Title eq '${escaped}'&$top=1`;
+      const url = `${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${SP_CONFIG.usersListName}')/items?$select=ID,Title,Role,DeptId,IsActive&$filter=Title eq '${escaped}'&$top=1`;
       const res = await fetch(url, {
         headers: { Accept: "application/json;odata=verbose", Authorization: `Bearer ${token}` },
       });
@@ -583,14 +589,17 @@ Object.assign(SPService, {
       const data = await res.json();
       const items = data?.d?.results || [];
       if (!items.length) return fallback;
+      // Deactivated users get read-only executive view
+      if (items[0].IsActive === false) return { role: "executive", deptId: null };
       const raw = (items[0].Role || "").trim().toLowerCase().replace(/\s+/g, "_");
       const deptId = items[0].DeptId || null;
-      if (raw === "pm")                                      return { role: "pm",        deptId };
-      if (raw === "executive")                               return { role: "executive",  deptId };
-      if (raw === "dept_head" || raw === "department_head") return { role: "dept_head", deptId };
-      if (raw === "grc")                                     return { role: "grc",        deptId };
-      if (raw === "grc_admin")                               return { role: "grc_admin",  deptId };
-      if (raw === "pmo_head")                                return { role: "pmo_head",   deptId };
+      if (raw === "pmo_admin")                               return { role: "pmo_admin",  deptId };
+      if (raw === "pm")                                      return { role: "pm",          deptId };
+      if (raw === "executive")                               return { role: "executive",   deptId };
+      if (raw === "dept_head" || raw === "department_head") return { role: "dept_head",   deptId };
+      if (raw === "grc")                                     return { role: "grc",         deptId };
+      if (raw === "grc_admin")                               return { role: "grc_admin",   deptId };
+      if (raw === "pmo_head")                                return { role: "pmo_head",    deptId };
       return fallback;
     } catch {
       return fallback;

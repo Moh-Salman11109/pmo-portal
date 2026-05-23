@@ -5381,9 +5381,15 @@ export default function App() {
   // Dept Head → only projects in their department
   // Others    → full list
   const visibleProjects = useMemo(() => {
-    if (userRole === ROLE_PM && currentUserName) {
-      const name = currentUserName.trim().toLowerCase();
-      return projects.filter(p => (p.pm || "").trim().toLowerCase() === name);
+    if (userRole === ROLE_PM) {
+      // Filter by email (unique) with fallback to name match for projects without pmEmail yet
+      if (currentUserEmail) {
+        const email = currentUserEmail.trim().toLowerCase();
+        return projects.filter(p =>
+          p.pmEmail ? p.pmEmail.trim().toLowerCase() === email
+                    : (p.pm || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
+        );
+      }
     }
     if (userRole === ROLE_DEPT_HEAD) {
       if (!userDeptId) return projects;
