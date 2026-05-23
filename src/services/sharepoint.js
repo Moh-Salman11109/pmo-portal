@@ -388,6 +388,7 @@ export const isUsingMock = () => USE_MOCK;
 // Emails for approval-routing — set via .env so My Actions shows the right person
 const PMO_COORDINATOR_EMAIL  = import.meta.env.VITE_PMO_COORDINATOR_EMAIL || "";
 const FINANCE_REVIEWER_EMAIL = import.meta.env.VITE_FINANCE_EMAIL         || "";
+const STRATEGY_EMAIL         = import.meta.env.VITE_STRATEGY_EMAIL        || "";
 
 // ─── REQUESTS FIELD MAP ──────────────────────────────────────────
 // Maps app field names → actual SharePoint internal column names.
@@ -443,7 +444,7 @@ export function mapSPItemToRequest(item) {
     const strategySt = (item.StrategyApprovalStatus || "").toLowerCase();
     if (ownerSt.includes("pending"))    return ownerEmail;
     if (pmoSt.includes("pending"))      return PMO_COORDINATOR_EMAIL;
-    if (strategySt.includes("pending")) return PMO_COORDINATOR_EMAIL; // strategy routes through PMO until VITE_STRATEGY_EMAIL added
+    if (strategySt.includes("pending")) return STRATEGY_EMAIL;
     return "";
   })();
   return {
