@@ -4134,7 +4134,13 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
           gates: defaultGates,
           milestones: [], risks: [], issues: [], benefits: [],
           approvals: [], updates: [],
-          documents: [...MANDATORY_DOCS],
+          documents: [
+            ...MANDATORY_DOCS,
+            ...(formData.requiredDocs || []).map((name, i) => ({
+              id: `OD${i + 1}`, name, type: name,
+              required: false, status: "Pending", version: "", lastUpdated: "",
+            })),
+          ],
           health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
           spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0,
           scheduleVariance: "0", actualCost: 0,
