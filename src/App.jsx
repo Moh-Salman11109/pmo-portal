@@ -310,10 +310,11 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 
   // Pending actions = submissions where pendingWithEmail matches current user
   const actionsCount = useMemo(() => {
-    const reqPending  = (requests       || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
-    const gatePending = (gateSubmissions|| []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
-    return reqPending + gatePending;
-  }, [requests, gateSubmissions, currentUserEmail]);
+    const reqPending     = (requests           || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
+    const gatePending    = (gateSubmissions    || []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
+    const closurePending = (closureSubmissions || []).filter(c => c.pendingWithEmail && c.pendingWithEmail === currentUserEmail).length;
+    return reqPending + gatePending + closurePending;
+  }, [requests, gateSubmissions, closureSubmissions, currentUserEmail]);
 
   // All active submissions across all three lists
   const myRequestsCount = useMemo(() => {
@@ -3897,7 +3898,9 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
                     {cl.daysInClosure > 0 && (
                       <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#d97706" }} />
-                        <span style={{ fontSize: 12, color: T.muted }}>In review · <strong>{cl.daysInClosure} day{cl.daysInClosure !== 1 ? "s" : ""}</strong></span>
+                        <span style={{ fontSize: 12, color: T.muted }}>
+                          {cl.pendingWith ? `Pending with ${cl.pendingWith}` : "In review"} · <strong>{cl.daysInClosure} day{cl.daysInClosure !== 1 ? "s" : ""}</strong>
+                        </span>
                       </div>
                     )}
                   </div>
@@ -3945,7 +3948,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 };
 
 // ─── MY ACTIONS VIEW ─────────────────────────────────────────────
-const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentUserEmail, currentUserName }) => {
+const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects, setRoute, currentUserEmail, currentUserName }) => {
   const T = useT();
   const bp = useBp();
   const pad = bp === "mobile" ? "16px" : "32px";
@@ -3963,6 +3966,11 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
     (isMock || g.pendingWithEmail === currentUserEmail)
   );
 
+  const pendingClosures = (closureSubmissions || []).filter(c =>
+    c.status !== "Closed" && c.status !== "Rejected" &&
+    (isMock || c.pendingWithEmail === currentUserEmail)
+  );
+
   // Overdue milestones in projects where PM matches current user
   const TODAY = new Date().toISOString().split("T")[0];
   const overdueMilestones = (projects || []).flatMap(p =>
@@ -3971,7 +3979,7 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
       .map(m => ({ ...m, projectId: p.id, projectName: p.name, pm: p.pm }))
   ).filter(m => isMock || m.pm === currentUserName);
 
-  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || overdueMilestones.length > 0;
+  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || pendingClosures.length > 0 || overdueMilestones.length > 0;
 
   const ActionCard = ({ icon, title, subtitle, rightContent, onClick, urgency }) => {
     const borderColor = urgency === "high" ? "#dc2626" : urgency === "medium" ? "#d97706" : T.border;
@@ -4044,6 +4052,27 @@ const MyActionsView = ({ requests, gateSubmissions, projects, setRoute, currentU
                 rightContent={<RequestStatusBadge status={gs.status} />}
                 urgency={gs.daysAtGate > 5 ? "medium" : null}
                 onClick={() => setRoute({ view: "project", projectId: gs.projectId, from: "actions" })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending closure approvals */}
+      {pendingClosures.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Project Closure Approvals
+            <span style={{ background: "#f0fdf4", color: "#15803d", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{pendingClosures.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingClosures.map(cl => (
+              <ActionCard key={cl.id}
+                icon="🔐"
+                title={`${cl.projectTitle}${cl.projectCode ? ` (${cl.projectCode})` : ""}`}
+                subtitle={`PM: ${cl.projectManager} · ${cl.daysInClosure} day${cl.daysInClosure !== 1 ? "s" : ""} in closure · Pending with ${cl.pendingWith}`}
+                rightContent={<span style={{ fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 10px", fontWeight: 700 }}>{cl.status || "Stakeholder Review"}</span>}
+                urgency={cl.daysInClosure > 7 ? "medium" : null}
               />
             ))}
           </div>
@@ -5602,7 +5631,7 @@ export default function App() {
           {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
-          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
+          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
           {route.view === "admin"       && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
           {route.view === "form"        && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <ProjectForm projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
         </main>

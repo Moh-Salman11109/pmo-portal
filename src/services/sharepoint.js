@@ -678,6 +678,12 @@ export function mapSPItemToClosureSubmission(item) {
   const daysInClosure = submissionDate
     ? Math.floor((Date.now() - new Date(item.Created)) / 86400000)
     : 0;
+  const st = item.Status || "";
+  // Derive who currently holds the closure for review
+  const pendingWith = st === "In Review" ? "PMO"
+                    : st === "Closed" || st === "Rejected" ? ""
+                    : "Stakeholders";
+  const pendingWithEmail = st === "In Review" ? PMO_COORDINATOR_EMAIL : "";
   return {
     id:             `CL${item.ID}`,
     spId:           item.ID                        || null,
@@ -685,7 +691,7 @@ export function mapSPItemToClosureSubmission(item) {
     projectCode:    item.ProjectCode               || "",
     projectId:      item.ProjectCode               || "",
     department:     item.Department                || "",
-    status:         item.Status                    || "",
+    status:         st,
     projectManager: item.ProjectManager?.Title     || "",
     stakeholders:   (item.Stakeholders || []).map(u => u.Title).filter(Boolean),
     comments:       item.Comments                  || "",
@@ -693,5 +699,7 @@ export function mapSPItemToClosureSubmission(item) {
     submittedByEmail: item.Author?.EMail           || "",
     submissionDate,
     daysInClosure,
+    pendingWith,
+    pendingWithEmail,
   };
 }
