@@ -375,6 +375,10 @@ export const SPService = {
 /** True when running against mock data, false when live SP. */
 export const isUsingMock = () => USE_MOCK;
 
+// Emails for approval-routing — set via .env so My Actions shows the right person
+const PMO_COORDINATOR_EMAIL  = import.meta.env.VITE_PMO_COORDINATOR_EMAIL || "";
+const FINANCE_REVIEWER_EMAIL = import.meta.env.VITE_FINANCE_EMAIL         || "";
+
 // ─── REQUESTS FIELD MAP ──────────────────────────────────────────
 // Maps app field names → actual SharePoint internal column names.
 export const SP_REQUESTS_FIELD_MAP = {
@@ -422,6 +426,16 @@ const REQUESTS_EXPAND = "ProjectManager,ProjectOwner_x002f_Manager,Author";
 
 export function mapSPItemToRequest(item) {
   const f = SP_REQUESTS_FIELD_MAP;
+  const ownerEmail = item["ProjectOwner_x002f_Manager"]?.EMail || "";
+  const pendingWithEmail = (() => {
+    const ownerSt    = (item.OwnerApprovalStatus    || "").toLowerCase();
+    const pmoSt      = (item.PMOApprovalStatus      || "").toLowerCase();
+    const strategySt = (item.StrategyApprovalStatus || "").toLowerCase();
+    if (ownerSt.includes("pending"))    return ownerEmail;
+    if (pmoSt.includes("pending"))      return PMO_COORDINATOR_EMAIL;
+    if (strategySt.includes("pending")) return PMO_COORDINATOR_EMAIL; // strategy routes through PMO until VITE_STRATEGY_EMAIL added
+    return "";
+  })();
   return {
     id:              `RQ${item.ID}`,
     spId:            item.ID                       || null,
@@ -434,6 +448,7 @@ export function mapSPItemToRequest(item) {
     deptId:          item[f.department]            || "",  // alias for existing card UI
     projectManager:  item.ProjectManager?.Title    || "",
     projectOwner:    item["ProjectOwner_x002f_Manager"]?.Title || "",
+    pendingWithEmail,
     description:     stripHtml(item[f.description]),
     newProduct:      !!item[f.newProduct],
     newSalesChannel: !!item[f.newSalesChannel],
@@ -504,7 +519,14 @@ export function mapSPItemToGateSubmission(item) {
     gateLabel:            "Gate 1 — Project Initiation",
     status:               item.Status                      || "",
     pendingWith:          pendingWithFromG1Status(item.Status),
-    pendingWithEmail:     "",
+    pendingWithEmail:     (() => {
+      const st = item.Status || "";
+      if (st === "Project Sponsor Review") return item.ProjectSponsor?.EMail || "";
+      if (st === "Stakeholder Review")     return (item.Stakeholders || [])[0]?.EMail || "";
+      if (st === "PMO Review")             return PMO_COORDINATOR_EMAIL;
+      if (st.startsWith("Finance Review")) return FINANCE_REVIEWER_EMAIL;
+      return "";
+    })(),
     projectManager:       item.ProjectManager?.Title       || "",
     projectSponsor:       item.ProjectSponsor?.Title       || "",
     stakeholders:         (item.Stakeholders || []).map(u => u.Title).filter(Boolean),
