@@ -386,9 +386,10 @@ export const SPService = {
 export const isUsingMock = () => USE_MOCK;
 
 // Emails for approval-routing — set via .env so My Actions shows the right person
-const PMO_COORDINATOR_EMAIL  = import.meta.env.VITE_PMO_COORDINATOR_EMAIL || "";
-const FINANCE_REVIEWER_EMAIL = import.meta.env.VITE_FINANCE_EMAIL         || "";
-const STRATEGY_EMAIL         = import.meta.env.VITE_STRATEGY_EMAIL        || "";
+const PMO_COORDINATOR_EMAIL    = import.meta.env.VITE_PMO_COORDINATOR_EMAIL    || "";
+const FINANCE_STAGE1_EMAIL     = import.meta.env.VITE_FINANCE_STAGE1_EMAIL     || "";
+const FINANCE_FINAL_EMAIL      = import.meta.env.VITE_FINANCE_FINAL_EMAIL      || "";
+const STRATEGY_EMAIL           = import.meta.env.VITE_STRATEGY_EMAIL           || "";
 
 // ─── REQUESTS FIELD MAP ──────────────────────────────────────────
 // Maps app field names → actual SharePoint internal column names.
@@ -508,11 +509,18 @@ const G1_EXPAND = "ProjectManager,ProjectSponsor,Stakeholders,Author";
 // Derive who the item is currently pending with from its status string.
 const pendingWithFromG1Status = (status) => {
   if (!status) return "";
-  if (status === "Project Sponsor Review")          return "Project Sponsor";
-  if (status === "Stakeholder Review")              return "Stakeholders";
-  if (status === "PMO Review")                      return "PMO";
-  if (status.startsWith("Finance Review"))          return "Finance";
-  return "";
+  if (status === "Project Sponsor Review")             return "Project Sponsor";
+  if (status === "Stakeholder Review")                 return "Stakeholders";
+  if (status === "PMO Review")                         return "PMO";
+  if (status === "Finance Review (Stage 1)")           return "Finance — Stage 1";
+  if (status === "Finance Review (Final Stage)")       return "Finance — Final";
+  if (status === "Approved")                           return "Approved";
+  if (status === "Approved - Capitalized Project")     return "Approved — Capitalized";
+  if (status === "Approved - Non-Capitalized Project") return "Approved — Non-Capitalized";
+  if (status === "Rejected By Project Sponsor")        return "Rejected by Sponsor";
+  if (status === "Rejected By Stakeholder")            return "Rejected by Stakeholders";
+  if (status === "Rejected By PMO")                    return "Rejected by PMO";
+  return status;
 };
 
 export function mapSPItemToGateSubmission(item) {
@@ -532,10 +540,11 @@ export function mapSPItemToGateSubmission(item) {
     pendingWith:          pendingWithFromG1Status(item.Status),
     pendingWithEmail:     (() => {
       const st = item.Status || "";
-      if (st === "Project Sponsor Review") return item.ProjectSponsor?.EMail || "";
-      if (st === "Stakeholder Review")     return (item.Stakeholders || [])[0]?.EMail || "";
-      if (st === "PMO Review")             return PMO_COORDINATOR_EMAIL;
-      if (st.startsWith("Finance Review")) return FINANCE_REVIEWER_EMAIL;
+      if (st === "Project Sponsor Review")             return item.ProjectSponsor?.EMail || "";
+      if (st === "Stakeholder Review")                 return (item.Stakeholders || [])[0]?.EMail || "";
+      if (st === "PMO Review")                         return PMO_COORDINATOR_EMAIL;
+      if (st === "Finance Review (Stage 1)")           return FINANCE_STAGE1_EMAIL;
+      if (st === "Finance Review (Final Stage)")       return FINANCE_FINAL_EMAIL;
       return "";
     })(),
     projectManager:       item.ProjectManager?.Title       || "",
