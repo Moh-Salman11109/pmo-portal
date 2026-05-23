@@ -252,13 +252,14 @@ export function mapProjectToSPItem(project) {
 
 // ─── PAGINATION HELPER ───────────────────────────────────────────
 // Uses Bearer token (MSAL) — no cookies, works from any origin.
-async function fetchAllItems(listName, selectFields = "", expandFields = "") {
+async function fetchAllItems(listName, selectFields = "", expandFields = "", filterQuery = "") {
   const { siteUrl, pageSize } = SP_CONFIG;
   const token = await acquireSpToken();
   const selectParam = selectFields ? `&$select=${selectFields}` : "";
   const expandParam = expandFields ? `&$expand=${expandFields}` : "";
+  const filterParam = filterQuery  ? `&$filter=${filterQuery}`  : "";
   const encodedName = encodeURIComponent(listName);
-  let url = `${siteUrl}/_api/web/lists/getbytitle('${encodedName}')/items?$top=${pageSize}${selectParam}${expandParam}`;
+  let url = `${siteUrl}/_api/web/lists/getbytitle('${encodedName}')/items?$top=${pageSize}${selectParam}${expandParam}${filterParam}`;
   const allItems = [];
 
   while (url) {
@@ -284,10 +285,19 @@ async function fetchAllItems(listName, selectFields = "", expandFields = "") {
 
 // ─── SERVICE OBJECT ──────────────────────────────────────────────
 export const SPService = {
-  /** Fetch all active projects. Returns app-shaped objects. */
-  async getProjects() {
+  /** Fetch projects, optionally server-side filtered by role.
+   *  PM  → only projects where ProjectManagerEmail matches.
+   *  Dept Head → only projects in their department.
+   *  All other roles → no filter (full list). */
+  async getProjects({ role, email, deptId } = {}) {
     if (USE_MOCK) return MOCK_PROJECTS;
-    const items = await fetchAllItems(SP_CONFIG.projectsListName);
+    let filterQuery = "";
+    if (role === "pm" && email) {
+      filterQuery = `ProjectManagerEmail eq '${email.replace(/'/g, "''")}'`;
+    } else if (role === "dept_head" && deptId) {
+      filterQuery = `DepartmentID eq '${deptId.replace(/'/g, "''")}'`;
+    }
+    const items = await fetchAllItems(SP_CONFIG.projectsListName, "", "", filterQuery);
     return items.map(mapSPItemToProject);
   },
 

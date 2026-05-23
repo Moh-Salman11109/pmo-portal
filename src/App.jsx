@@ -5314,6 +5314,7 @@ export default function App() {
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
   const [userDeptId, setUserDeptId] = useState(null);
+  const [roleResolved, setRoleResolved] = useState(isUsingMock()); // mock: skip role lookup, load immediately
   const [projects, setProjects] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -5323,29 +5324,24 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
   const [loadedAt, setLoadedAt] = useState(null);
 
-  // ── Bootstrap: load all data from SP (or mock) ────────────────
+  // ── Bootstrap: non-project data (no role dependency) ─────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [projs, depts, reqs, gates, closures] = await Promise.all([
-          SPService.getProjects(),
+        const [depts, reqs, gates, closures] = await Promise.all([
           SPService.getDepartments(),
           SPService.getRequests(),
           SPService.getGateSubmissions(),
           SPService.getClosureSubmissions(),
         ]);
         if (cancelled) return;
-        setProjects(projs);
         setDepartments(depts);
         setRequests(reqs);
         setGateSubmissions(gates);
         setClosureSubmissions(closures);
-        setLoadedAt(new Date());
       } catch (err) {
         if (!cancelled) setLoadError(err.message || "Failed to load data");
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -5357,12 +5353,31 @@ export default function App() {
       .then(({ role, deptId }) => {
         setUserRole(role);
         setUserDeptId(deptId);
+        setRoleResolved(true);
         if (role === ROLE_GRC || role === ROLE_GRC_ADMIN) {
           setRoute({ view: "department", deptId: "grc" });
         }
       })
-      .catch(() => {}); // fail-open: keep exec default
+      .catch(() => { setRoleResolved(true); }); // fail-open: keep exec default
   }, [currentUserEmail]);
+  // ── Projects: server-side filtered once role is known ─────────
+  useEffect(() => {
+    if (!roleResolved) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const projs = await SPService.getProjects({ role: userRole, email: currentUserEmail, deptId: userDeptId });
+        if (cancelled) return;
+        setProjects(projs);
+        setLoadedAt(new Date());
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message || "Failed to load projects");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [roleResolved, userRole, userDeptId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── PM default landing: redirect to actions on first load ────
   useEffect(() => {
