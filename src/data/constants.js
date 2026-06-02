@@ -10,10 +10,6 @@ export const GATE_DEFS = [
 // ─── OPTIONAL DOCUMENTS ──────────────────────────────────────────
 export const OPTIONAL_DOCS = [
   "Resource Plan", "PO", "Invoice", "Security Approval",
-  "Technical Specification", "Risk Assessment", "Vendor Contract",
-  "Legal Review", "Compliance Certificate", "UAT Sign-off",
-  "Change Request", "Stakeholder Register", "Communication Plan",
-  "Training Plan", "Handover Document",
 ];
 
 // ─── PROJECT TYPES ───────────────────────────────────────────────
