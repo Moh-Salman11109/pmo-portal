@@ -9,7 +9,7 @@ export const GATE_DEFS = [
 
 // ─── OPTIONAL DOCUMENTS ──────────────────────────────────────────
 export const OPTIONAL_DOCS = [
-  "Resource Plan", "PO", "Invoice", "Security Approval",
+  "Project & Resource Plan", "PO", "Invoice", "Security Approval",
 ];
 
 // ─── PROJECT TYPES ───────────────────────────────────────────────
