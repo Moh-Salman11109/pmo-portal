@@ -651,6 +651,34 @@ Object.assign(SPService, {
     }
   },
 
+  /** Write PMO validation decision to a project item — only touches PMO-owned fields. */
+  async validateUpdate(spId, { approved, note, validatedBy, validatedDate }) {
+    if (USE_MOCK) return;
+    const { siteUrl, projectsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const payload = approved
+      ? { PMOStatus: "Validated", PMOValidatedBy: validatedBy, PMOValidatedDate: validatedDate, PMOValidationNote: null }
+      : { PMOStatus: "Returned",  PMOValidationNote: note };
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          "Content-Type": "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-HTTP-Method": "MERGE",
+          "IF-MATCH": "*",
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`validateUpdate failed: ${res.status} — ${body.slice(0, 300)}`);
+    }
+  },
+
 });
 
 // ─── PROJECT CLOSURE FIELD MAP ───────────────────────────────────

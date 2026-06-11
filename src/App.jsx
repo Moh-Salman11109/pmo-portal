@@ -310,11 +310,14 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 
   // Pending actions = submissions where pendingWithEmail matches current user
   const actionsCount = useMemo(() => {
-    const reqPending     = (requests           || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
-    const gatePending    = (gateSubmissions    || []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
-    const closurePending = (closureSubmissions || []).filter(c => c.pendingWithEmail && c.pendingWithEmail === currentUserEmail).length;
-    return reqPending + gatePending + closurePending;
-  }, [requests, gateSubmissions, closureSubmissions, currentUserEmail]);
+    const reqPending        = (requests           || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
+    const gatePending       = (gateSubmissions    || []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
+    const closurePending    = (closureSubmissions || []).filter(c => c.pendingWithEmail && c.pendingWithEmail === currentUserEmail).length;
+    const validationPending = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD)
+      ? (projects || []).filter(p => p.pmoStatus === "Submitted").length
+      : 0;
+    return reqPending + gatePending + closurePending + validationPending;
+  }, [requests, gateSubmissions, closureSubmissions, projects, currentUserEmail, userRole]);
 
   // All active submissions across all three lists
   const myRequestsCount = useMemo(() => {
@@ -2841,6 +2844,18 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
       {/* ── GATE TRACKER — always visible ── */}
       <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
 
+      {/* ── PMO returned banner — visible to PM only ── */}
+      {userRole === ROLE_PM && project.pmoStatus === "Returned" && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>↩</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#92400e" }}>Update Returned by PMO — revision required</div>
+            {project.pmoValidationNote && <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>{project.pmoValidationNote}</div>}
+            <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the ✏️ Update button above.</div>
+          </div>
+        </div>
+      )}
+
       {/* ── Submit Update Panel ─────────────────────────────────── */}
       {showUpdate && <UpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} />}
 
@@ -3948,10 +3963,13 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 };
 
 // ─── MY ACTIONS VIEW ─────────────────────────────────────────────
-const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects, setRoute, currentUserEmail, currentUserName }) => {
+const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects, setRoute, currentUserEmail, currentUserName, userRole, validateUpdate }) => {
   const T = useT();
   const bp = useBp();
   const pad = bp === "mobile" ? "16px" : "32px";
+  const [returnModal, setReturnModal] = useState(null);  // project object awaiting return note
+  const [returnNote,  setReturnNote]  = useState("");
+  const [saving,      setSaving]      = useState(false);
 
   // In mock mode, show all pending items as demo. In live mode, filter by current user email.
   const isMock = isUsingMock();
@@ -3971,6 +3989,11 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
     (isMock || c.pendingWithEmail === currentUserEmail)
   );
 
+  // PMO-only: projects where PM submitted an update awaiting validation
+  const pendingValidations = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD)
+    ? (projects || []).filter(p => p.pmoStatus === "Submitted")
+    : [];
+
   // Overdue milestones in projects where PM matches current user
   const TODAY = new Date().toISOString().split("T")[0];
   const overdueMilestones = (projects || []).flatMap(p =>
@@ -3979,7 +4002,23 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
       .map(m => ({ ...m, projectId: p.id, projectName: p.name, pm: p.pm }))
   ).filter(m => isMock || m.pm === currentUserName);
 
-  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || pendingClosures.length > 0 || overdueMilestones.length > 0;
+  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || pendingClosures.length > 0 || overdueMilestones.length > 0 || pendingValidations.length > 0;
+
+  const handleValidate = async (project) => {
+    setSaving(true);
+    try { await validateUpdate(project.id, { approved: true, note: "" }); }
+    finally { setSaving(false); }
+  };
+
+  const handleReturn = async () => {
+    if (!returnNote.trim() || !returnModal) return;
+    setSaving(true);
+    try {
+      await validateUpdate(returnModal.id, { approved: false, note: returnNote.trim() });
+      setReturnModal(null);
+      setReturnNote("");
+    } finally { setSaving(false); }
+  };
 
   const ActionCard = ({ icon, title, subtitle, rightContent, onClick, urgency }) => {
     const borderColor = urgency === "high" ? "#dc2626" : urgency === "medium" ? "#d97706" : T.border;
@@ -4096,6 +4135,71 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
                 onClick={() => setRoute({ view: "project", projectId: m.projectId, from: "actions" })}
               />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* PMO: updates awaiting validation */}
+      {pendingValidations.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Updates Pending Validation
+            <span style={{ background: "#dbeafe", color: "#1e40af", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{pendingValidations.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingValidations.map(p => (
+              <div key={p.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ fontSize: 22, flexShrink: 0 }}>📋</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{p.name}</div>
+                  <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                    PM: {p.pm}
+                    {p.lastSubmittedBy && ` · Submitted by ${p.lastSubmittedBy}`}
+                    {p.lastSubmittedDate && ` · ${p.lastSubmittedDate}`}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    disabled={saving}
+                    onClick={() => handleValidate(p)}
+                    style={{ background: "#dcfce7", border: "1px solid #16a34a", color: "#15803d", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    ✓ Validate
+                  </button>
+                  <button
+                    disabled={saving}
+                    onClick={() => { setReturnModal(p); setReturnNote(""); }}
+                    style={{ background: "#fef3c7", border: "1px solid #d97706", color: "#92400e", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    ↩ Return
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Return note modal */}
+      {returnModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: T.surface, borderRadius: 16, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 6 }}>Return Update for Revision</div>
+            <div style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>{returnModal.name} · PM: {returnModal.pm}</div>
+            <textarea
+              value={returnNote}
+              onChange={e => setReturnNote(e.target.value)}
+              placeholder="Explain what needs to be corrected before resubmission…"
+              rows={4}
+              style={{ width: "100%", padding: "10px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, resize: "vertical", boxSizing: "border-box", background: T.bg, color: T.text }}
+            />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
+              <button onClick={() => setReturnModal(null)} style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
+              <button
+                disabled={saving || !returnNote.trim()}
+                onClick={handleReturn}
+                style={{ background: "#fef3c7", border: "1px solid #d97706", color: "#92400e", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: returnNote.trim() ? "pointer" : "not-allowed", opacity: returnNote.trim() ? 1 : 0.5 }}>
+                {saving ? "Sending…" : "↩ Return to PM"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -5498,14 +5602,32 @@ export default function App() {
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
       milestones, risks, benefits,
       updates: newUpdates, lastUpdate: today,
+      // PM submission: flag for PMO validation; other roles leave pmoStatus unchanged
+      ...(userRole === ROLE_PM ? { pmoStatus: "Submitted", lastSubmittedBy: currentUserName, lastSubmittedDate: today } : {}),
     };
     if (!isUsingMock() && project.spId) {
-      const PMO_OWNED_SP_FIELDS = ["PMOStatus", "PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate"];
-      const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_OWNED_SP_FIELDS : [];
+      // PMOValidationNote/By/Date are PMO-only writes — never overwrite from PM/dept_head save
+      // PMOStatus is intentionally NOT protected: PM sets it to "Submitted" above
+      const PMO_PROTECTED = ["PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate"];
+      const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
       await SPService.updateProject(project.spId, updated, omit);
     }
     setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
   }, [projects, userRole]);
+
+  // ── PMO validate / return a PM update ───────────────────────────
+  const validateUpdate = useCallback(async (projectId, { approved, note }) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    const today = new Date().toISOString().split("T")[0];
+    const stateUpdate = approved
+      ? { pmoStatus: "Validated", pmoValidatedBy: currentUserName, pmoValidatedDate: today, pmoValidationNote: "" }
+      : { pmoStatus: "Returned",  pmoValidationNote: note };
+    if (!isUsingMock() && project.spId) {
+      await SPService.validateUpdate(project.spId, { approved, note, validatedBy: currentUserName, validatedDate: today });
+    }
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, ...stateUpdate } : p));
+  }, [projects, currentUserName]);
 
   // ── Form save: persists to SP then updates local state ──────────
   const onSaveForm = useCallback(async (form, mode, spId, localId) => {
@@ -5633,7 +5755,7 @@ export default function App() {
           {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
-          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} />}
+          {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} validateUpdate={validateUpdate} />}
           {route.view === "admin"       && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
           {route.view === "form"        && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <ProjectForm projectId={route.projectId} mode={route.mode || "create"} projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} />}
         </main>
