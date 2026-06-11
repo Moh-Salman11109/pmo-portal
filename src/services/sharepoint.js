@@ -73,6 +73,7 @@ export const SP_FIELD_MAP = {
   pmoValidatedDate:    "PMOValidatedDate",
   lastSubmittedBy:     "LastSubmittedBy",
   lastSubmittedDate:   "LastSubmittedDate",
+  pmoNotes:            "PMONotes",
   // JSON columns — stored as multi-line text in SP, parsed with safeJSON()
   gates:               "GatesJSON",
   milestones:          "MilestonesJSON",
@@ -161,6 +162,7 @@ export function mapSPItemToProject(item) {
     pmoValidatedDate:    safeDate(item[f.pmoValidatedDate]),
     lastSubmittedBy:     item[f.lastSubmittedBy]      || "",
     lastSubmittedDate:   safeDate(item[f.lastSubmittedDate]),
+    pmoNotes:            item[f.pmoNotes]             || "",
     // JSON sub-objects
     gates:               safeJSON(item[f.gates],       []),
     milestones:          safeJSON(item[f.milestones],  []),
@@ -177,11 +179,38 @@ export function mapSPItemToProject(item) {
 
 export function mapSPItemToDepartment(item) {
   return {
+    spId:  item.ID       || null,
     id:    item.DeptID   || String(item.ID),
     name:  item.Title    || "",
     icon:  item.DeptIcon || "⚡",
     color: item.DeptColor|| "#003932",
   };
+}
+
+function buildApprovalHistory(item) {
+  const toAction = st => {
+    const s = (st || "").toLowerCase();
+    if (s.includes("approved")) return "Approved";
+    if (s.includes("returned") || s.includes("rejected")) return "Returned";
+    return null;
+  };
+  const history = [];
+  const ownerAction = toAction(item.OwnerApprovalStatus);
+  if (ownerAction) history.push({
+    stage: "Owner / PM Review", action: ownerAction,
+    by: item["ProjectOwner_x002f_Manager"]?.Title || "", date: "", notes: ""
+  });
+  const pmoAction = toAction(item.PMOApprovalStatus);
+  if (pmoAction) history.push({
+    stage: "PMO Review", action: pmoAction,
+    by: "", date: "", notes: item.ReturnNotes || ""
+  });
+  const strategyAction = toAction(item.StrategyApprovalStatus);
+  if (strategyAction) history.push({
+    stage: "Strategy Review", action: strategyAction,
+    by: "", date: "", notes: ""
+  });
+  return history;
 }
 
 // ─── APP → SP SERIALISER ─────────────────────────────────────────
@@ -237,6 +266,7 @@ export function mapProjectToSPItem(project) {
     [f.pmoValidatedDate]:  nd(project.pmoValidatedDate),
     [f.lastSubmittedBy]:   ns(project.lastSubmittedBy),
     [f.lastSubmittedDate]: nd(project.lastSubmittedDate),
+    [f.pmoNotes]:          ns(project.pmoNotes),
     [f.gates]:             js(project.gates),
     [f.milestones]:        js(project.milestones),
     [f.risks]:             js(project.risks),
@@ -306,6 +336,78 @@ export const SPService = {
     if (USE_MOCK) return MOCK_DEPARTMENTS;
     const items = await fetchAllItems(SP_CONFIG.deptsListName);
     return items.map(mapSPItemToDepartment);
+  },
+
+  /** Create a new department. Returns dept object with spId populated. */
+  async createDept(dept) {
+    if (USE_MOCK) return { ...dept, spId: Date.now() };
+    const { siteUrl, deptsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${deptsListName}')/items`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          "Content-Type": "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ Title: dept.name, DeptID: dept.id, DeptIcon: dept.icon, DeptColor: dept.color }),
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`createDept failed: ${res.status} — ${body.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return { ...dept, spId: data.ID };
+  },
+
+  /** Update an existing department's metadata fields. */
+  async updateDeptSP(spId, data) {
+    if (USE_MOCK) return;
+    const { siteUrl, deptsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const body = {};
+    if (data.name  !== undefined) body.Title    = data.name;
+    if (data.icon  !== undefined) body.DeptIcon = data.icon;
+    if (data.color !== undefined) body.DeptColor = data.color;
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${deptsListName}')/items(${spId})`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          "Content-Type": "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-HTTP-Method": "MERGE",
+          "IF-MATCH": "*",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+    if (!res.ok) {
+      const b = await res.text().catch(() => "");
+      throw new Error(`updateDeptSP failed: ${res.status} — ${b.slice(0, 200)}`);
+    }
+  },
+
+  /** Delete a department item from SP. */
+  async deleteDeptSP(spId) {
+    if (USE_MOCK) return;
+    const { siteUrl, deptsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${deptsListName}')/items(${spId})`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "IF-MATCH": "*" },
+      }
+    );
+    if (!res.ok && res.status !== 404) {
+      const b = await res.text().catch(() => "");
+      throw new Error(`deleteDeptSP failed: ${res.status} — ${b.slice(0, 200)}`);
+    }
   },
 
   /** Create a new project in SharePoint. Returns the created project with spId populated. */
@@ -480,7 +582,7 @@ export function mapSPItemToRequest(item) {
     requestedBy:     item.Author?.Title            || "",
     requestedByEmail:item.Author?.EMail            || "",
     requestDate:     safeDate(item[f.requestDate]),
-    approvalHistory: [],
+    approvalHistory: buildApprovalHistory(item),
     linkedProjectId: "",
   };
 }
@@ -645,6 +747,7 @@ Object.assign(SPService, {
       if (raw === "grc")                                     return { role: "grc",         deptId };
       if (raw === "grc_admin")                               return { role: "grc_admin",   deptId };
       if (raw === "pmo_head")                                return { role: "pmo_head",    deptId };
+      if (raw === "pmo_staff")                               return { role: "pmo_staff",   deptId };
       return fallback;
     } catch {
       return fallback;
@@ -676,6 +779,31 @@ Object.assign(SPService, {
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(`validateUpdate failed: ${res.status} — ${body.slice(0, 300)}`);
+    }
+  },
+
+  /** Write PMO internal notes — only touches PMONotes field, invisible to PM. */
+  async savePMONote(spId, note) {
+    if (USE_MOCK) return;
+    const { siteUrl, projectsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          "Content-Type": "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-HTTP-Method": "MERGE",
+          "IF-MATCH": "*",
+        },
+        body: JSON.stringify({ PMONotes: note || null }),
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`savePMONote failed: ${res.status} — ${body.slice(0, 300)}`);
     }
   },
 

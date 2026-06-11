@@ -5,7 +5,7 @@ import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/co
 import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
 import { acquireSpToken } from "./services/auth.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
-import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_LOCKED } from "./roles.js";
+import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_LOCKED } from "./roles.js";
 import { THEMES, themeStore, useT, useDark, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
 import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
@@ -313,7 +313,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
     const reqPending        = (requests           || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
     const gatePending       = (gateSubmissions    || []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
     const closurePending    = (closureSubmissions || []).filter(c => c.pendingWithEmail && c.pendingWithEmail === currentUserEmail).length;
-    const validationPending = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD)
+    const validationPending = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF)
       ? (projects || []).filter(p => p.pmoStatus === "Submitted").length
       : 0;
     return reqPending + gatePending + closurePending + validationPending;
@@ -2516,6 +2516,7 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
   const ragClr     = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
   const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
   const statusOpts = ["On Track","At Risk","Delayed","Completed","Not Started"];
+  const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
   const TABS = [
     { key: "Status",     icon: "📊" },
     { key: "Health",     icon: "🩺" },
@@ -2523,6 +2524,7 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
     { key: "Milestones", icon: "🎯" },
     { key: "Risks",      icon: "⚠️" },
     { key: "Benefits",   icon: "📈" },
+    { key: "Documents",  icon: "📁" },
     { key: "Note",       icon: "📝" },
   ];
 
@@ -2533,7 +2535,7 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
       await onSubmit(project.id, {
         status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
         health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
-        milestones, risks, benefits, note,
+        milestones, risks, benefits, documents, note,
       });
       setSaved(true);
       setTimeout(onClose, 900);
@@ -2660,6 +2662,31 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
     if (tab === "Risks")      return <RiskListEditor      items={risks}      onChange={setRisks} />;
     if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
 
+    if (tab === "Documents") return (
+      <div>
+        <SL>DOCUMENT STATUS</SL>
+        {documents.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>No documents on this project yet.</div>}
+        {documents.map((doc, i) => (
+          <div key={doc.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.name}</div>
+              <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · Required" : ""}</div>
+            </div>
+            <select value={doc.status || "Pending"}
+              onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d))}
+              style={{ ...ss, width: 150, fontSize: 12 }}>
+              {["Pending","Draft","Under Review","Submitted","Approved","Final","Received","Current"].map(o => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+        ))}
+        <div style={{ marginTop: 14, fontSize: 12, color: T.muted, fontStyle: "italic" }}>
+          Changes will be logged automatically in the Updates tab.
+        </div>
+      </div>
+    );
+
     if (tab === "Note") return (
       <div>
         <SL>UPDATE NOTE</SL>
@@ -2739,7 +2766,7 @@ const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Health", "Milestones", 
 const PROJECT_TABS_PM    = ["Overview", "Health", "Milestones", "Risks & Issues", "Benefits", "Documents"];
 const PROJECT_TABS_EXEC  = ["Exec Summary"];
 
-const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = ROLE_ADMIN }) => {
+const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -2752,6 +2779,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
 
   const activeTab = TABS.includes(tab) ? tab : TABS[0];
   const [showUpdate, setShowUpdate] = useState(false);
+  const canSeeNotes = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF;
+  const [noteEdit,   setNoteEdit]   = useState(false);
+  const [noteDraft,  setNoteDraft]  = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
 
@@ -2789,10 +2820,16 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
           <div style={{ textAlign: "right" }}>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
               <Badge status={project.status} />
-              {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && (
+              {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
                 <button onClick={() => setShowUpdate(true)}
                   style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                   ✏️ Update
+                </button>
+              )}
+              {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) && project.pmoStatus === "Submitted" && (
+                <button onClick={() => setRoute({ view: "actions" })}
+                  style={{ background: "#f59e0b", color: "#fff", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                  ✅ Validate Update
                 </button>
               )}
               {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
@@ -2853,6 +2890,54 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
             {project.pmoValidationNote && <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>{project.pmoValidationNote}</div>}
             <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the ✏️ Update button above.</div>
           </div>
+        </div>
+      )}
+
+      {/* ── PMO Internal Notes (hidden from PM) ─────────────────── */}
+      {canSeeNotes && (
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 18px", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: noteEdit ? 10 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 15 }}>📝</span>
+              <span style={{ fontWeight: 700, fontSize: 12, color: "#92400e" }}>PMO Internal Notes</span>
+              <span style={{ fontSize: 10, color: "#b45309", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "1px 7px" }}>not visible to PM</span>
+            </div>
+            {!noteEdit && (
+              <button onClick={() => { setNoteDraft(project.pmoNotes || ""); setNoteEdit(true); }}
+                style={{ background: "none", border: "1px solid #fcd34d", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#92400e", cursor: "pointer", fontWeight: 600 }}>
+                {project.pmoNotes ? "Edit" : "+ Add note"}
+              </button>
+            )}
+          </div>
+          {noteEdit ? (
+            <div>
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                placeholder="Internal PMO observations, follow-up actions, concerns..."
+                rows={3}
+                style={{ width: "100%", borderRadius: 8, border: "1px solid #fcd34d", padding: "8px 10px", fontSize: 12, resize: "vertical", background: "#fffde7", color: "#1e293b", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
+                <button onClick={() => setNoteEdit(false)}
+                  style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 14px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>
+                  Cancel
+                </button>
+                <button disabled={noteSaving} onClick={async () => {
+                  setNoteSaving(true);
+                  try { await savePMONote(project.id, noteDraft); setNoteEdit(false); }
+                  finally { setNoteSaving(false); }
+                }}
+                  style={{ background: "#f59e0b", border: "none", borderRadius: 6, padding: "4px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#fff", opacity: noteSaving ? 0.6 : 1 }}>
+                  {noteSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            project.pmoNotes
+              ? <div style={{ fontSize: 12, color: "#78350f", marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{project.pmoNotes}</div>
+              : <div style={{ fontSize: 12, color: "#b45309", marginTop: 4, opacity: 0.6, fontStyle: "italic" }}>No internal notes yet.</div>
+          )}
         </div>
       )}
 
@@ -3321,7 +3406,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{isReady ? "✅" : "⚠️"}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</span>
+                        {d.url
+                          ? <a href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "none" }}>{d.name} ↗</a>
+                          : <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</span>}
                       </div>
                     </td>
                     <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
@@ -3357,7 +3444,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, userRole = R
                       <td style={{ padding: "12px 14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontSize: 16 }}>📄</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{d.name}</span>
+                          {d.url
+                            ? <a href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: T.accent, textDecoration: "none" }}>{d.name} ↗</a>
+                            : <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{d.name}</span>}
                         </div>
                       </td>
                       <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
@@ -3711,7 +3800,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
   // For non-admin roles: only show submissions where the user is involved
   const filterByUser = (list, nameFields, emailFields = []) => {
-    if (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) return list || [];
+    if (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) return list || [];
     const name  = (currentUserName  || "").trim().toLowerCase();
     const email = (currentUserEmail || "").trim().toLowerCase();
     return (list || []).filter(item =>
@@ -3990,7 +4079,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
   );
 
   // PMO-only: projects where PM submitted an update awaiting validation
-  const pendingValidations = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD)
+  const pendingValidations = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF)
     ? (projects || []).filter(p => p.pmoStatus === "Submitted")
     : [];
 
@@ -5525,9 +5614,30 @@ export default function App() {
     if (userRole === ROLE_PM) setRoute({ view: "actions" });
   }, [userRole]);
 
-  const addDept    = useCallback((d) => setDepartments(prev => [...prev, d]), []);
-  const updateDept = useCallback((id, data) => setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...data } : d)), []);
-  const deleteDept = useCallback((id) => setDepartments(prev => prev.filter(d => d.id !== id)), []);
+  const addDept = useCallback(async (d) => {
+    if (!isUsingMock()) {
+      const created = await SPService.createDept(d);
+      setDepartments(prev => [...prev, created]);
+    } else {
+      setDepartments(prev => [...prev, { ...d, spId: Date.now() }]);
+    }
+  }, []);
+
+  const updateDept = useCallback((id, data) => {
+    setDepartments(prev => {
+      const dept = prev.find(d => d.id === id);
+      if (!isUsingMock() && dept?.spId) SPService.updateDeptSP(dept.spId, data).catch(console.error);
+      return prev.map(d => d.id === id ? { ...d, ...data } : d);
+    });
+  }, []);
+
+  const deleteDept = useCallback((id) => {
+    setDepartments(prev => {
+      const dept = prev.find(d => d.id === id);
+      if (!isUsingMock() && dept?.spId) SPService.deleteDeptSP(dept.spId).catch(console.error);
+      return prev.filter(d => d.id !== id);
+    });
+  }, []);
   const deptCtx = { departments, addDept, updateDept, deleteDept };
 
   // theme handled by themeStore pub/sub
@@ -5588,19 +5698,38 @@ export default function App() {
   const submitUpdate = useCallback(async (projectId, {
     status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
     health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
-    milestones, risks, benefits, note,
+    milestones, risks, benefits, documents, note,
   }) => {
     const today = new Date().toISOString().split("T")[0];
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
-    const newUpdates = note?.trim()
-      ? [...(project.updates || []), { id: `U${Date.now()}`, date: today, owner: project.pm, note: note.trim() }]
+
+    // Build update log entries
+    const logEntries = [];
+    if (note?.trim()) {
+      logEntries.push({ id: `U${Date.now()}`, date: today, owner: project.pm, note: note.trim() });
+    }
+    // Auto-log document status changes
+    if (documents) {
+      const changed = documents.filter(d => {
+        const orig = (project.documents || []).find(o => o.id === d.id);
+        return orig && orig.status !== d.status;
+      });
+      if (changed.length) {
+        const docNote = "Document update: " + changed.map(d => `${d.name} → ${d.status}`).join(", ");
+        logEntries.push({ id: `U${Date.now() + 1}`, date: today, owner: project.pm, note: docNote });
+      }
+    }
+    const newUpdates = logEntries.length
+      ? [...(project.updates || []), ...logEntries]
       : project.updates || [];
+
     const updated = {
       ...project,
       status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
       milestones, risks, benefits,
+      ...(documents ? { documents } : {}),
       updates: newUpdates, lastUpdate: today,
       // PM submission: flag for PMO validation; other roles leave pmoStatus unchanged
       ...(userRole === ROLE_PM ? { pmoStatus: "Submitted", lastSubmittedBy: currentUserName, lastSubmittedDate: today } : {}),
@@ -5608,7 +5737,7 @@ export default function App() {
     if (!isUsingMock() && project.spId) {
       // PMOValidationNote/By/Date are PMO-only writes — never overwrite from PM/dept_head save
       // PMOStatus is intentionally NOT protected: PM sets it to "Submitted" above
-      const PMO_PROTECTED = ["PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate"];
+      const PMO_PROTECTED = ["PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate", "PMONotes"];
       const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
       await SPService.updateProject(project.spId, updated, omit);
     }
@@ -5628,6 +5757,15 @@ export default function App() {
     }
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, ...stateUpdate } : p));
   }, [projects, currentUserName]);
+
+  const savePMONote = useCallback(async (projectId, note) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    if (!isUsingMock() && project.spId) {
+      await SPService.savePMONote(project.spId, note);
+    }
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, pmoNotes: note } : p));
+  }, [projects]);
 
   // ── Form save: persists to SP then updates local state ──────────
   const onSaveForm = useCallback(async (form, mode, spId, localId) => {
@@ -5753,7 +5891,7 @@ export default function App() {
           {route.view === "projects"    && userRole !== ROLE_PM && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
           {route.view === "department"  && userRole !== ROLE_PM && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
           {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
-          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} userRole={userRole} />}
+          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} savePMONote={savePMONote} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} validateUpdate={validateUpdate} />}
           {route.view === "admin"       && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}
