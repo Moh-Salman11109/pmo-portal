@@ -332,11 +332,14 @@ export const SPService = {
     return mapSPItemToProject(await res.json());
   },
 
-  /** Update an existing SP item by its numeric SP ID. */
-  async updateProject(spId, project) {
+  /** Update an existing SP item by its numeric SP ID.
+   *  omitSPFields: SP column names to exclude from the MERGE payload (e.g. PMO-owned fields). */
+  async updateProject(spId, project, omitSPFields = []) {
     if (USE_MOCK) return project;
     const { siteUrl, projectsListName } = SP_CONFIG;
     const token = await acquireSpToken();
+    const payload = mapProjectToSPItem(project);
+    omitSPFields.forEach(f => delete payload[f]);
     const res = await fetch(
       `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`,
       {
@@ -348,7 +351,7 @@ export const SPService = {
           "X-HTTP-Method": "MERGE",
           "IF-MATCH": "*",
         },
-        body: JSON.stringify(mapProjectToSPItem(project)),
+        body: JSON.stringify(payload),
       }
     );
     if (!res.ok) {

@@ -5500,10 +5500,12 @@ export default function App() {
       updates: newUpdates, lastUpdate: today,
     };
     if (!isUsingMock() && project.spId) {
-      await SPService.updateProject(project.spId, updated);
+      const PMO_OWNED_SP_FIELDS = ["PMOStatus", "PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate"];
+      const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_OWNED_SP_FIELDS : [];
+      await SPService.updateProject(project.spId, updated, omit);
     }
     setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
-  }, [projects]);
+  }, [projects, userRole]);
 
   // ── Form save: persists to SP then updates local state ──────────
   const onSaveForm = useCallback(async (form, mode, spId, localId) => {
