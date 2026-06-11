@@ -59,7 +59,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
 
     ev = earnedWeight / totalWeight;
     pv = plannedWeight / totalWeight;
-    spi = pv === 0 ? (ev > 0 ? cap : null) : Math.min(cap, ev / pv);
+    // pv=0 means no milestone was due yet — neutral (null→1.0), not a reward
+    spi = pv === 0 ? null : Math.min(cap, ev / pv);
   } else {
     // Fallback: simple progress vs planned
     ev = (project.progress      ?? 0) / 100;

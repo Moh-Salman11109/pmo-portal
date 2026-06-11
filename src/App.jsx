@@ -2485,7 +2485,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 };
 
 // ─── UPDATE PANEL ────────────────────────────────────────────────
-const UpdatePanel = ({ project, onClose, onSubmit }) => {
+const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const T = useT();
   const [tab, setTab]                 = useState("Status");
   const [status, setStatus]           = useState(project.status);
@@ -2494,8 +2494,9 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
   const [priority, setPriority]       = useState(project.priority || "Medium");
   const [progress, setProgress]       = useState(project.progress ?? 0);
   const [plannedProgress, setPlanned] = useState(project.plannedProgress ?? 0);
-  const [startDate, setStartDate]     = useState(project.startDate || "");
-  const [plannedEnd, setPlannedEnd]   = useState(project.plannedEnd || "");
+  const [startDate, setStartDate]       = useState(project.startDate || "");
+  const [plannedEnd, setPlannedEnd]     = useState(project.plannedEnd || "");
+  const [roadmapDeadline, setRoadmap]   = useState(project.roadmapDeadline || "");
   const [health, setHealthState]      = useState({ ...(project.health || {}) });
   const [budget, setBudget]           = useState(project.budget ?? 0);
   const [forecast, setForecast]       = useState(project.forecast ?? 0);
@@ -2534,6 +2535,7 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
     try {
       await onSubmit(project.id, {
         status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+        roadmapDeadline,
         health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
         milestones, risks, benefits, documents, note,
       });
@@ -2672,6 +2674,14 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
             <div><FL>Days Delayed</FL>{numInput(daysDelayed, setDaysDelayed)}</div>
           </div>
         </div>
+        {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) && (
+          <div>
+            <SL>ROADMAP (PMO ONLY)</SL>
+            <div><FL>Roadmap Deadline</FL>
+              <input type="date" value={roadmapDeadline} onChange={e => setRoadmap(e.target.value)} style={s} />
+            </div>
+          </div>
+        )}
       </div>
     );
 
@@ -2986,7 +2996,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       )}
 
       {/* ── Submit Update Panel ─────────────────────────────────── */}
-      {showUpdate && <UpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} />}
+      {showUpdate && <UpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} userRole={userRole} />}
 
       {/* EXEC SUMMARY TAB */}
       {activeTab === "Exec Summary" && (() => {
@@ -5798,6 +5808,7 @@ export default function App() {
   // ── Update panel: all project fields → SP ───────────────────────
   const submitUpdate = useCallback(async (projectId, {
     status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+    roadmapDeadline,
     health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
     milestones, risks, benefits, documents, note,
   }) => {
@@ -5828,6 +5839,7 @@ export default function App() {
     const updated = {
       ...project,
       status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+      roadmapDeadline,
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
       milestones, risks, benefits,
       ...(documents ? { documents } : {}),
@@ -5838,7 +5850,7 @@ export default function App() {
     if (!isUsingMock() && project.spId) {
       // PMOValidationNote/By/Date are PMO-only writes — never overwrite from PM/dept_head save
       // PMOStatus is intentionally NOT protected: PM sets it to "Submitted" above
-      const PMO_PROTECTED = ["PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate", "PMONotes"];
+      const PMO_PROTECTED = ["PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline"];
       const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
       await SPService.updateProject(project.spId, updated, omit);
     }
