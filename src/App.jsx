@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, HealthBadge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -2834,9 +2834,12 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const remaining = project.budget - project.actualCost;
 
   // ── IPI ──────────────────────────────────────────────────────────
-  const ipiResult = calcProjectIPIFull(project);
-  const ipi  = ipiResult.ipi;
-  const ipiC = ipiColor(ipi);
+  const ipiResult  = calcProjectIPIFull(project);
+  const ipi        = ipiResult.ipi;                       // current snapshot
+  const twIPI      = calcTimeWeightedIPI(project);        // time-weighted official score
+  const ipiC       = ipiColor(ipi);
+  const twIpiC     = ipiColor(twIPI);
+  const hasHistory = (project.ipiHistory || []).length > 0;
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const infoCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -2887,9 +2890,16 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         {/* IPI banner row */}
         <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-            <div style={{ background: ipiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 90 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi}</div>
-              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 700 }}>IPI Score</div>
+            <div style={{ background: twIpiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{twIPI}</div>
+              <div style={{ fontSize: 10, color: twIpiC.color, fontWeight: 700 }}>
+                {hasHistory ? "IPI (Weighted)" : "IPI Score"}
+              </div>
+              {hasHistory && twIPI !== ipi && (
+                <div style={{ fontSize: 10, color: ipiC.color, marginTop: 3, fontWeight: 600 }}>
+                  Current: {ipi}
+                </div>
+              )}
             </div>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
               <div>
@@ -2911,7 +2921,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               )}
             </div>
           </div>
-          <div style={{ background: ipiC.bg, color: ipiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{ipiC.label}</div>
+          <div style={{ background: twIpiC.bg, color: twIpiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{twIpiC.label}</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: infoCols, gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
           {[
@@ -5836,6 +5846,26 @@ export default function App() {
       ? [...(project.updates || []), ...logEntries]
       : project.updates || [];
 
+    // Capture IPI snapshot for time-weighted history
+    const snapState = {
+      ...project,
+      status, progress, plannedProgress, startDate, plannedEnd,
+      budget, actualCost, milestones,
+      documents: documents ?? project.documents,
+    };
+    const { ipi: snapIPI, components: snapComp } = calcProjectIPIFull(snapState);
+    const ipiSnap = {
+      date: today,
+      ipi:  snapIPI,
+      spi:  snapComp.spiFinal,
+      cpi:  snapComp.cpi,
+      mci:  snapComp.mci,
+    };
+    const prevHistory = project.ipiHistory || [];
+    const ipiHistory  = prevHistory.some(h => h.date === today)
+      ? prevHistory.map(h => h.date === today ? ipiSnap : h)
+      : [...prevHistory, ipiSnap];
+
     const updated = {
       ...project,
       status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
@@ -5844,6 +5874,7 @@ export default function App() {
       milestones, risks, benefits,
       ...(documents ? { documents } : {}),
       updates: newUpdates, lastUpdate: today,
+      ipiHistory,
       // PM submission: flag for PMO validation; other roles leave pmoStatus unchanged
       ...(userRole === ROLE_PM ? { pmoStatus: "Submitted", lastSubmittedBy: currentUserName, lastSubmittedDate: today } : {}),
     };

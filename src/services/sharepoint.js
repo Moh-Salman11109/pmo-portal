@@ -86,6 +86,7 @@ export const SP_FIELD_MAP = {
   updates:             "UpdatesJSON",
   health:              "HealthJSON",
   requiredDocs:        "RequiredDocsJSON",
+  ipiHistory:          "IPIHistoryJSON",
 };
 
 // ─── HELPERS ─────────────────────────────────────────────────────
@@ -176,6 +177,7 @@ export function mapSPItemToProject(item) {
     updates:             safeJSON(item[f.updates],     []),
     health:              safeJSON(item[f.health],      {}),
     requiredDocs:        safeJSON(item[f.requiredDocs],[]),
+    ipiHistory:          safeJSON(item[f.ipiHistory],  []),
   };
 }
 
@@ -280,6 +282,7 @@ export function mapProjectToSPItem(project) {
     [f.updates]:           js(project.updates),
     [f.health]:            js(project.health),
     [f.requiredDocs]:      js(project.requiredDocs),
+    [f.ipiHistory]:        js(project.ipiHistory),
   };
 }
 

@@ -165,7 +165,40 @@ function projectWeight(p) {
 }
 
 /**
- * Department IPI — budget×priority weighted average of project IPIs.
+ * Time-weighted average IPI over the project's saved update history.
+ * Each snapshot covers the period from its date until the next snapshot (or today).
+ * Prevents a single good/bad month from dominating the displayed score.
+ * Falls back to current-snapshot IPI when no history exists yet.
+ */
+export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
+  const raw = project.ipiHistory || [];
+  const history = raw
+    .filter(h => h.date && h.ipi != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!history.length) return calcProjectIPI(project);
+
+  let totalWeighted = 0;
+  let totalDays = 0;
+
+  for (let i = 0; i < history.length; i++) {
+    const from = history[i].date;
+    const to   = i + 1 < history.length ? history[i + 1].date : asOfDate;
+    // min 1 day so today's snapshot is always reflected immediately
+    const days = Math.max(1, Math.floor(
+      (new Date(to) - new Date(from)) / 86_400_000
+    ));
+    totalWeighted += history[i].ipi * days;
+    totalDays     += days;
+  }
+
+  return totalDays > 0
+    ? Math.round(totalWeighted / totalDays)
+    : history[history.length - 1].ipi;
+}
+
+/**
+ * Department IPI — budget×priority weighted average of project time-weighted IPIs.
  * Returns null when no projects (display as "—").
  */
 export function calcDeptIPI(deptId, projects) {
@@ -173,7 +206,7 @@ export function calcDeptIPI(deptId, projects) {
   if (!dp.length) return null;
   const totalW = dp.reduce((s, p) => s + projectWeight(p), 0);
   return Math.round(
-    dp.reduce((s, p) => s + calcProjectIPI(p) * projectWeight(p), 0) / totalW
+    dp.reduce((s, p) => s + calcTimeWeightedIPI(p) * projectWeight(p), 0) / totalW
   );
 }
 
@@ -186,7 +219,7 @@ export function calcPortfolioIPI(projects) {
   if (!active.length) return null;
   const totalW = active.reduce((s, p) => s + projectWeight(p), 0);
   return Math.round(
-    active.reduce((s, p) => s + calcProjectIPI(p) * projectWeight(p), 0) / totalW
+    active.reduce((s, p) => s + calcTimeWeightedIPI(p) * projectWeight(p), 0) / totalW
   );
 }
 
