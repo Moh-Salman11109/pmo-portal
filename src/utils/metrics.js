@@ -62,9 +62,17 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     // pv=0 means no milestone was due yet — neutral (null→1.0), not a reward
     spi = pv === 0 ? null : Math.min(cap, ev / pv);
   } else {
-    // Fallback: simple progress vs planned
-    ev = (project.progress      ?? 0) / 100;
-    pv = (project.plannedProgress ?? 0) / 100;
+    // Fallback: derive PV from project dates if available (accurate), else from plannedProgress
+    ev = (project.progress ?? 0) / 100;
+    if (project.startDate && project.plannedEnd) {
+      const msStart = new Date(project.startDate).getTime();
+      const msEnd   = new Date(project.plannedEnd).getTime();
+      const msNow   = new Date(asOfDate).getTime();
+      const duration = msEnd - msStart;
+      pv = duration > 0 ? Math.max(0, Math.min(1, (msNow - msStart) / duration)) : 0;
+    } else {
+      pv = (project.plannedProgress ?? 0) / 100;
+    }
     spi = pv === 0 ? null : Math.min(cap, ev / pv);
   }
 
