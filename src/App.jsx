@@ -2891,7 +2891,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 {" "}→ <strong style={{ color: T.accent }}>{ipiResult.components.spiFinal ?? "N/A"}</strong> × 50%
               </div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {ipiResult.components.cpi ?? "N/A"} × 25%</div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {ipiResult.components.mci === null ? "— (no docs yet)" : `${Math.round(ipiResult.components.mci * 100)}% docs`} × 25%</div>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {Math.round(ipiResult.components.mci * 100)}% docs × 25%</div>
               {project.roadmapDeadline && (
                 <div style={{ color: ipiResult.components.penalty < 1 ? "#f87171" : "#86efac", marginTop: 2 }}>
                   {ipiResult.components.penalty < 1
@@ -4683,8 +4683,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
     const ipiResults = dp.map(p => calcProjectIPIFull(p));
     const avgSPI = dp.length ? dp.reduce((s, _, i) => s + (ipiResults[i].components.spiFinal ?? ipiResults[i].components.spi ?? 1), 0) / dp.length : null;
     const avgCPI = dp.length ? dp.reduce((s, _, i) => s + (ipiResults[i].components.cpi ?? 1), 0) / dp.length : null;
-    const mciArr = dp.map((_, i) => ipiResults[i].components.mci).filter(v => v !== null);
-    const avgMCI = mciArr.length ? mciArr.reduce((s, v) => s + v, 0) / mciArr.length : null;
+    const avgMCI = dp.length ? dp.reduce((s, _, i) => s + ipiResults[i].components.mci, 0) / dp.length : 0;
 
     // docs compliance across all dept docs
     const allDocs = dp.flatMap(p => p.documents ?? []);
@@ -4825,7 +4824,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
               {[
                 { label: "SPI ×50%", value: d.avgSPI != null ? d.avgSPI.toFixed(2) : "—", pts: d.avgSPI != null ? Math.min(d.avgSPI, 1.05) * 50 : 0, color: d.avgSPI == null ? "#6b7280" : d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
                 { label: "CPI ×25%", value: d.avgCPI != null ? d.avgCPI.toFixed(2) : "—", pts: d.avgCPI != null ? Math.min(d.avgCPI, 1.05) * 25 : 0, color: d.avgCPI == null ? "#6b7280" : d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "MCI ×25%", value: d.avgMCI === null ? "—" : `${Math.round(d.avgMCI * 100)}%`, pts: (d.avgMCI ?? 1) * 25, color: d.avgMCI === null ? "#6b7280" : d.avgMCI >= 0.8 ? "#16a34a" : "#dc2626" },
+                { label: "MCI ×25%", value: `${Math.round((d.avgMCI || 0) * 100)}%`, pts: (d.avgMCI || 0) * 25, color: (d.avgMCI || 0) >= 0.8 ? "#16a34a" : "#dc2626" },
               ].map(({ label, value, pts, color }) => (
                 <div key={label} style={{ textAlign: "center", padding: "8px 4px", background: T.bg, borderRadius: 8 }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color }}>{value}</div>
