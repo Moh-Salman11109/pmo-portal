@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcDeptIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, HealthBadge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -2807,13 +2807,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const remaining = project.budget - project.actualCost;
 
   // ── IPI ──────────────────────────────────────────────────────────
-  const ipi = calcProjectIPI(project);
+  const ipiResult = calcProjectIPIFull(project);
+  const ipi  = ipiResult.ipi;
   const ipiC = ipiColor(ipi);
-  const reqDocs = project.documents?.filter(d => d.required === true) ?? [];
-  const docsReady = reqDocs.filter(d =>
-    ["Approved","Final","Received","Current","Submitted"].includes(d.status)
-  ).length;
-  const docsCompliance = reqDocs.length > 0 ? Math.round((docsReady / reqDocs.length) * 100) : 0;
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const infoCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -2868,10 +2864,24 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi}</div>
               <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 700 }}>IPI Score</div>
             </div>
-            <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.8, opacity: 0.85 }}>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>SPI</span> {project.spi?.toFixed(2)} × 50% = <strong style={{ color: T.accent }}>{((Math.min(project.spi ?? 1, 1.2)) * 0.5 * 100).toFixed(0)}pts</strong></div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {project.cpi?.toFixed(2)} × 25% = <strong style={{ color: T.accent }}>{((Math.min(project.cpi ?? 1, 1.2)) * 0.25 * 100).toFixed(0)}pts</strong></div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>Docs</span> {docsCompliance}% × 25% = <strong style={{ color: T.accent }}>{(docsCompliance * 0.25).toFixed(0)}pts</strong></div>
+            <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
+              <div>
+                <span style={{ color: T.accent, fontWeight: 700 }}>SPI</span>
+                {" "}{ipiResult.components.spi ?? "N/A"}
+                {ipiResult.components.penalty < 1 && (
+                  <span style={{ color: "#f87171", fontWeight: 700 }}> × {ipiResult.components.penalty} penalty</span>
+                )}
+                {" "}→ <strong style={{ color: T.accent }}>{ipiResult.components.spiFinal ?? "N/A"}</strong> × 50%
+              </div>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {ipiResult.components.cpi ?? "N/A"} × 25%</div>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {Math.round((ipiResult.components.mci ?? 0) * 100)}% docs × 25%</div>
+              {project.roadmapDeadline && (
+                <div style={{ color: ipiResult.components.penalty < 1 ? "#f87171" : "#86efac", marginTop: 2 }}>
+                  {ipiResult.components.penalty < 1
+                    ? `⚠ ${Math.round((1 - ipiResult.components.penalty) * 90)}d past roadmap (${project.roadmapDeadline})`
+                    : `✓ Within roadmap (${project.roadmapDeadline})`}
+                </div>
+              )}
             </div>
           </div>
           <div style={{ background: ipiC.bg, color: ipiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{ipiC.label}</div>
@@ -5315,7 +5325,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     status: "Not Started", priority: "Medium", riskLevel: "Low",
     budgetStatus: "On Budget", classification: "Strategic", strategic: "",
     objective: "", businessCase: "",
-    startDate: today, plannedEnd: "",
+    startDate: today, plannedEnd: "", roadmapDeadline: "",
     progress: 0, plannedProgress: 0,
     budget: 0, forecast: 0, actualCost: 0,
     spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "0",
@@ -5422,6 +5432,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16 }}>
         <FField label="Start Date"><input type="date" value={form.startDate || ""} onChange={e => set("startDate", e.target.value)} style={s} /></FField>
         <FField label="Planned End Date"><input type="date" value={form.plannedEnd || ""} onChange={e => set("plannedEnd", e.target.value)} style={s} /></FField>
+        <FField label="Roadmap Deadline" title="The strategic deadline from the roadmap. Overrunning this date applies a daily IPI penalty."><input type="date" value={form.roadmapDeadline || ""} onChange={e => set("roadmapDeadline", e.target.value)} style={s} /></FField>
         <FField label="Progress (%)"><input type="number" min={0} max={100} value={form.progress} onChange={e => set("progress", Number(e.target.value))} style={s} /></FField>
         <FField label="Planned Progress (%)"><input type="number" min={0} max={100} value={form.plannedProgress} onChange={e => set("plannedProgress", Number(e.target.value))} style={s} /></FField>
         <FField label="Budget (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>

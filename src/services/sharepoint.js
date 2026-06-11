@@ -74,6 +74,7 @@ export const SP_FIELD_MAP = {
   lastSubmittedBy:     "LastSubmittedBy",
   lastSubmittedDate:   "LastSubmittedDate",
   pmoNotes:            "PMONotes",
+  roadmapDeadline:     "RoadmapDeadline",
   // JSON columns — stored as multi-line text in SP, parsed with safeJSON()
   gates:               "GatesJSON",
   milestones:          "MilestonesJSON",
@@ -163,6 +164,7 @@ export function mapSPItemToProject(item) {
     lastSubmittedBy:     item[f.lastSubmittedBy]      || "",
     lastSubmittedDate:   safeDate(item[f.lastSubmittedDate]),
     pmoNotes:            item[f.pmoNotes]             || "",
+    roadmapDeadline:     safeDate(item[f.roadmapDeadline]),
     // JSON sub-objects
     gates:               safeJSON(item[f.gates],       []),
     milestones:          safeJSON(item[f.milestones],  []),
@@ -267,6 +269,7 @@ export function mapProjectToSPItem(project) {
     [f.lastSubmittedBy]:   ns(project.lastSubmittedBy),
     [f.lastSubmittedDate]: nd(project.lastSubmittedDate),
     [f.pmoNotes]:          ns(project.pmoNotes),
+    [f.roadmapDeadline]:   nd(project.roadmapDeadline),
     [f.gates]:             js(project.gates),
     [f.milestones]:        js(project.milestones),
     [f.risks]:             js(project.risks),
