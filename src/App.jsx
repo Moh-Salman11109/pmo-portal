@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, HealthBadge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -2368,7 +2368,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
         <KPICard label="Delayed" value={stats.delayed} color="#dc2626" icon="🔴" />
         <KPICard label="Completed" value={stats.completed} color="#3b82f6" icon="🏁" />
         <KPICard label="Portfolio Health" value={`${stats.health}%`} color={T.primary} icon="💪" />
-        {(() => { const di = calcDeptIPI(deptId, projects); const c = ipiColor(di); return <KPICard label="Dept IPI" value={di} color={c.color} icon="📊" sub={c.label} />; })()}
+        {(() => { const di = calcDeptIPI(deptId, projects); const c = ipiColor(di); return <KPICard label="Dept IPI" value={di ?? "—"} color={c.color} icon="📊" sub={c.label} />; })()}
       </div>
 
       {/* Filters */}
@@ -2642,11 +2642,28 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
           </div>
         </div>
         <div>
-          <SL>PERFORMANCE INDICES</SL>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div><FL>SPI</FL>{numInput(spi, setSpi, 0.01)}</div>
-            <div><FL>CPI</FL>{numInput(cpi, setCpi, 0.01)}</div>
-          </div>
+          <SL>PERFORMANCE INDICES (AUTO-CALCULATED)</SL>
+          {(() => {
+            const r = calcProjectIPIFull({ ...project, budget, actualCost, progress, milestones });
+            const spiV = r.components.spiFinal ?? r.components.spi;
+            const cpiV = r.components.cpi;
+            const spiC = spiV == null ? T.muted : spiV >= 1 ? "#16a34a" : "#dc2626";
+            const cpiC = cpiV == null ? T.muted : cpiV >= 1 ? "#16a34a" : "#dc2626";
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ background: T.bg, borderRadius: 8, padding: "12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: spiC }}>{spiV != null ? spiV.toFixed(2) : "—"}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>SPI {r.components.penalty < 1 ? `(×${r.components.penalty.toFixed(2)} penalty)` : ""}</div>
+                  <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>From milestone progress</div>
+                </div>
+                <div style={{ background: T.bg, borderRadius: 8, padding: "12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: cpiC }}>{cpiV != null ? cpiV.toFixed(2) : "—"}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>CPI</div>
+                  <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>BCWP / Actual Cost</div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         <div>
           <SL>SCHEDULE VARIANCE</SL>
@@ -3101,12 +3118,16 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
                 <div style={{ textAlign: "center", padding: 12, background: T.bg, borderRadius: 10 }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: T.primary }}>{project.spi.toFixed(2)}</div>
-                  <div style={{ fontSize: 11, color: T.muted }}>SPI</div>
+                  {(() => { const v = ipiResult.components.spiFinal ?? ipiResult.components.spi; const c = v == null ? T.muted : v >= 1 ? "#16a34a" : "#dc2626"; return <>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: c }}>{v != null ? v.toFixed(2) : "—"}</div>
+                    <div style={{ fontSize: 11, color: T.muted }}>SPI {v != null && ipiResult.components.penalty < 1 ? "(×penalty)" : ""}</div>
+                  </>; })()}
                 </div>
                 <div style={{ textAlign: "center", padding: 12, background: T.bg, borderRadius: 10 }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: T.primary }}>{project.cpi.toFixed(2)}</div>
-                  <div style={{ fontSize: 11, color: T.muted }}>CPI</div>
+                  {(() => { const v = ipiResult.components.cpi; const c = v == null ? T.muted : v >= 1 ? "#16a34a" : "#dc2626"; return <>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: c }}>{v != null ? v.toFixed(2) : "—"}</div>
+                    <div style={{ fontSize: 11, color: T.muted }}>CPI (auto)</div>
+                  </>; })()}
                 </div>
               </div>
             </div>
@@ -3193,11 +3214,20 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 4 }}>
                         <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.name}</span>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {m.weight > 1 && <span style={{ background: T.surface, color: T.muted, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, border: `1px solid ${T.border}` }}>W:{m.weight}</span>}
                           {isOverdue && <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20, letterSpacing: "0.04em" }}>OVERDUE</span>}
                           <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>{m.status}</span>
                         </div>
                       </div>
-                      <div style={{ fontSize: 12, color: T.muted }}>Target: {m.date} · Owner: {m.owner}</div>
+                      <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>
+                        {m.startDate ? `${m.startDate} → ${m.date || "—"}` : (m.date ? `Target: ${m.date}` : "No date set")} · Owner: {m.owner || "—"}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1, height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${m.progress ?? (m.status === "Completed" ? 100 : 0)}%`, background: s.lineColor, borderRadius: 3, transition: "width 0.3s" }} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: s.text, minWidth: 32 }}>{m.progress ?? (m.status === "Completed" ? 100 : 0)}%</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3218,7 +3248,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               { label: "Actual Cost to Date", value: fmtSAR(project.actualCost), sub: `${budgetUtil}% of budget consumed` },
               { label: "Remaining Budget", value: fmtSAR(remaining), sub: "Available to spend", color: remaining < 0 ? "#dc2626" : "#16a34a" },
               { label: "Cost Variance", value: fmtSAR(project.budget - project.actualCost), sub: "Positive = under budget", color: project.budget >= project.actualCost ? "#16a34a" : "#dc2626" },
-              { label: "Cost Performance Index", value: project.cpi.toFixed(2), sub: "> 1.0 = under budget", color: project.cpi >= 1 ? "#16a34a" : "#dc2626" },
+              { label: "Cost Performance Index", value: ipiResult.components.cpi != null ? ipiResult.components.cpi.toFixed(2) : "—", sub: "> 1.0 = under budget (auto-calculated)", color: (ipiResult.components.cpi ?? 1) >= 1 ? "#16a34a" : "#dc2626" },
             ].map(({ label, value, sub, color }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
                 <div>
@@ -3732,7 +3762,7 @@ const DeptCRUD = ({ projects }) => {
                   </div>
                 </td>
                 <td style={{ padding: "12px 14px" }}>
-                  <span style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{dIPI}</span>
+                  <span style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{dIPI ?? "—"}</span>
                 </td>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -4649,9 +4679,11 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
     const deptIPI = calcDeptIPI(d.id, activeProjects);
     const ipiC = ipiColor(deptIPI);
 
-    // avg SPI / CPI across dept projects
-    const avgSPI = dp.length ? (dp.reduce((s, p) => s + (p.spi ?? 1), 0) / dp.length) : 1;
-    const avgCPI = dp.length ? (dp.reduce((s, p) => s + (p.cpi ?? 1), 0) / dp.length) : 1;
+    // avg SPI / CPI / MCI from computed IPI components
+    const ipiResults = dp.map(p => calcProjectIPIFull(p));
+    const avgSPI = dp.length ? dp.reduce((s, _, i) => s + (ipiResults[i].components.spiFinal ?? ipiResults[i].components.spi ?? 1), 0) / dp.length : null;
+    const avgCPI = dp.length ? dp.reduce((s, _, i) => s + (ipiResults[i].components.cpi ?? 1), 0) / dp.length : null;
+    const avgMCI = dp.length ? dp.reduce((s, _, i) => s + ipiResults[i].components.mci, 0) / dp.length : 0;
 
     // docs compliance across all dept docs
     const allDocs = dp.flatMap(p => p.documents ?? []);
@@ -4662,22 +4694,20 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
     const openIssues = dp.flatMap(p => p.issues ?? []).filter(i => i.status !== "Closed").length;
     const escalated = dp.flatMap(p => p.issues ?? []).filter(i => i.escalated).length;
 
-    return { ...d, dp, stats, deptIPI, ipiC, avgSPI, avgCPI, docsCompliance, openRisks, openIssues, escalated };
+    return { ...d, dp, stats, deptIPI, ipiC, avgSPI, avgCPI, avgMCI, docsCompliance, openRisks, openIssues, escalated };
   }), [activeProjects, departments]);
 
   const sorted = useMemo(() => {
     const arr = [...deptData];
-    if (sort === "ipi-desc") arr.sort((a, b) => b.deptIPI - a.deptIPI);
-    if (sort === "ipi-asc")  arr.sort((a, b) => a.deptIPI - b.deptIPI);
+    if (sort === "ipi-desc") arr.sort((a, b) => (b.deptIPI ?? -1) - (a.deptIPI ?? -1));
+    if (sort === "ipi-asc")  arr.sort((a, b) => (a.deptIPI ?? 101) - (b.deptIPI ?? 101));
     if (sort === "projects")  arr.sort((a, b) => b.stats.total - a.stats.total);
     if (sort === "name")      arr.sort((a, b) => a.name.localeCompare(b.name));
     return arr;
   }, [deptData, sort]);
 
-  // portfolio-level IPI = avg of dept IPIs
-  const portfolioIPI = deptData.length
-    ? Math.round(deptData.reduce((s, d) => s + d.deptIPI, 0) / deptData.length)
-    : 0;
+  // portfolio IPI = budget×priority weighted across all active projects (not avg of dept IPIs)
+  const portfolioIPI = calcPortfolioIPI(activeProjects);
   const portfolioIpiC = ipiColor(portfolioIPI);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
@@ -4704,13 +4734,13 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
       {/* Portfolio IPI banner */}
       <div style={{ background: T.headerBg, borderRadius: 16, padding: "20px 28px", marginBottom: 28, display: "flex", alignItems: "center", gap: 24, color: T.headerText }}>
         <div style={{ background: portfolioIpiC.bg, borderRadius: 14, padding: "14px 28px", textAlign: "center" }}>
-          <div style={{ fontSize: 36, fontWeight: 900, color: portfolioIpiC.color, lineHeight: 1 }}>{portfolioIPI}</div>
+          <div style={{ fontSize: 36, fontWeight: 900, color: portfolioIpiC.color, lineHeight: 1 }}>{portfolioIPI ?? "—"}</div>
           <div style={{ fontSize: 11, color: portfolioIpiC.color, fontWeight: 700, marginTop: 2 }}>Portfolio IPI</div>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: T.headerText, marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
           <div style={{ fontSize: 12, color: T.headerText, opacity: 0.7, marginBottom: 12 }}>
-            Weighted average of all department IPIs — Formula: SPI×50% + CPI×25% + Docs Compliance×25%
+            Budget × Priority weighted across all active projects — SPI (auto from milestones) ×50% + CPI (auto from budget) ×25% + MCI ×25%
           </div>
           <div style={{ display: "flex", gap: 20 }}>
             {[
@@ -4738,7 +4768,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
                   .replace("Operations", "Ops")
                   .replace("Performance", "Perf")
                   .split(" ")[0],
-                ipi: d.deptIPI,
+                ipi: d.deptIPI ?? 0,
               }))}
               barSize={15}
               margin={{ top: 4, right: 4, left: 0, bottom: 28 }}
@@ -4757,7 +4787,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
               <Tooltip formatter={v => [`IPI: ${v}`, ""]} {...ttStyle()} />
               <Bar dataKey="ipi" radius={[3, 3, 0, 0]}>
                 {deptData.map((d, i) => (
-                  <Cell key={i} fill={ipiColor(d.deptIPI).color} />
+                  <Cell key={i} fill={ipiColor(d.deptIPI ?? 0).color} />
                 ))}
               </Bar>
             </BarChart>
@@ -4784,7 +4814,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
               </div>
               {/* IPI score */}
               <div style={{ background: d.ipiC.bg, borderRadius: 12, padding: "8px 16px", textAlign: "center" }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: d.ipiC.color, lineHeight: 1 }}>{d.deptIPI}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: d.ipiC.color, lineHeight: 1 }}>{d.deptIPI ?? "—"}</div>
                 <div style={{ fontSize: 9, color: d.ipiC.color, fontWeight: 700 }}>IPI</div>
               </div>
             </div>
@@ -4792,9 +4822,9 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             {/* IPI breakdown */}
             <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               {[
-                { label: "SPI ×50%", value: d.avgSPI.toFixed(2), pts: Math.min(d.avgSPI, 1.2) * 50, color: d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "CPI ×25%", value: d.avgCPI.toFixed(2), pts: Math.min(d.avgCPI, 1.2) * 25, color: d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "Docs ×25%", value: `${d.docsCompliance}%`, pts: d.docsCompliance * 0.25, color: d.docsCompliance >= 80 ? "#16a34a" : "#dc2626" },
+                { label: "SPI ×50%", value: d.avgSPI != null ? d.avgSPI.toFixed(2) : "—", pts: d.avgSPI != null ? Math.min(d.avgSPI, 1.05) * 50 : 0, color: d.avgSPI == null ? "#6b7280" : d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
+                { label: "CPI ×25%", value: d.avgCPI != null ? d.avgCPI.toFixed(2) : "—", pts: d.avgCPI != null ? Math.min(d.avgCPI, 1.05) * 25 : 0, color: d.avgCPI == null ? "#6b7280" : d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
+                { label: "MCI ×25%", value: `${Math.round((d.avgMCI || 0) * 100)}%`, pts: (d.avgMCI || 0) * 25, color: (d.avgMCI || 0) >= 0.8 ? "#16a34a" : "#dc2626" },
               ].map(({ label, value, pts, color }) => (
                 <div key={label} style={{ textAlign: "center", padding: "8px 4px", background: T.bg, borderRadius: 8 }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color }}>{value}</div>
@@ -5014,50 +5044,95 @@ const fInputStyle = (T, err) => ({
 
 const MilestoneListEditor = ({ items, onChange }) => {
   const T = useT();
-  const [draft, setDraft] = useState({ name: "", date: "", status: "Upcoming", owner: "" });
+  const blank = { name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1 };
+  const [draft, setDraft] = useState(blank);
   const [adding, setAdding] = useState(false);
   const s = fInputStyle(T, false);
+  const ss = { ...s, background: T.selectBg };
   const add = () => {
     if (!draft.name.trim()) return;
-    onChange([...items, { ...draft, id: `M${Date.now()}` }]);
-    setDraft({ name: "", date: "", status: "Upcoming", owner: "" });
+    onChange([...items, { ...draft, id: `M${Date.now()}`, progress: Number(draft.progress || 0), weight: Number(draft.weight || 1) }]);
+    setDraft(blank);
     setAdding(false);
   };
   const remove = id => onChange(items.filter(m => m.id !== id));
   const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
-  const cols = "2fr 130px 130px 130px 32px";
+  const totalW = items.reduce((s, m) => s + (m.weight || 1), 0);
+
+  const MsCard = ({ m, isNew = false, data, setData }) => {
+    const vals = isNew ? data : m;
+    const set  = isNew ? (k, v) => setData(p => ({ ...p, [k]: v })) : (k, v) => upd(m.id, k, v);
+    const thisW = Number(vals.weight || 1);
+    const baseW = isNew ? totalW : totalW;
+    const wPct  = baseW > 0 ? Math.round((thisW / (baseW + (isNew ? thisW : 0))) * 100) : 0;
+    const sc = { Completed: { bg: "#dcfce7", text: "#15803d" }, "In Progress": { bg: "#fef9c3", text: "#854d0e" }, Upcoming: { bg: "#f3f4f6", text: "#6b7280" }, Delayed: { bg: "#fee2e2", text: "#991b1b" } };
+    const c = sc[vals.status] || sc.Upcoming;
+    return (
+      <div style={{ background: T.bg, borderRadius: 12, padding: 14, border: `1px solid ${T.border}`, marginBottom: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, marginBottom: 10, alignItems: "center" }}>
+          <input value={vals.name} onChange={e => set("name", e.target.value)} placeholder="Milestone name *"
+            autoFocus={isNew} style={{ ...s, fontWeight: 600 }} />
+          <span style={{ background: c.bg, color: c.text, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{vals.status}</span>
+          {!isNew && <button onClick={() => remove(m.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px" }}>×</button>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Start Date</div>
+            <input type="date" value={vals.startDate || ""} onChange={e => set("startDate", e.target.value)} style={s} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>End Date</div>
+            <input type="date" value={vals.date || ""} onChange={e => set("date", e.target.value)} style={s} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Status</div>
+            <select value={vals.status} onChange={e => set("status", e.target.value)} style={ss}>
+              {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Owner</div>
+            <input value={vals.owner} onChange={e => set("owner", e.target.value)} placeholder="Owner" style={s} />
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12, alignItems: "center" }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 10, color: T.muted }}>Progress</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{vals.progress ?? 0}%</span>
+            </div>
+            <input type="range" min={0} max={100} step={5}
+              value={vals.progress ?? 0}
+              onChange={e => set("progress", Number(e.target.value))}
+              style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Weight ({wPct}% of plan)</div>
+            <input type="number" min={1} max={10} value={vals.weight ?? 1}
+              onChange={e => set("weight", Math.max(1, Number(e.target.value)))} style={s} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Milestones</div>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Milestones</span>
+          {items.length > 0 && <span style={{ fontSize: 11, color: T.muted, fontWeight: 400, marginLeft: 8 }}>Total weight: {totalW} · SPI computed automatically</span>}
+        </div>
         {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add</button>}
       </div>
-      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet</div>}
-      {items.map(m => (
-        <div key={m.id} style={{ display: "grid", gridTemplateColumns: cols, gap: 6, marginBottom: 6, alignItems: "center" }}>
-          <input value={m.name} onChange={e => upd(m.id, "name", e.target.value)} style={s} />
-          <input type="date" value={m.date || ""} onChange={e => upd(m.id, "date", e.target.value)} style={s} />
-          <select value={m.status} onChange={e => upd(m.id, "status", e.target.value)} style={{ ...s, background: T.selectBg }}>
-            {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
-          </select>
-          <input value={m.owner} onChange={e => upd(m.id, "owner", e.target.value)} placeholder="Owner" style={s} />
-          <button onClick={() => remove(m.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 15, padding: "4px" }}>×</button>
-        </div>
-      ))}
+      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet — add milestones to enable automatic SPI calculation</div>}
+      {items.map(m => <MsCard key={m.id} m={m} />)}
       {adding && (
-        <div style={{ background: T.cardHover, borderRadius: 10, padding: 12, border: `1px solid ${T.border}` }}>
-          <div style={{ display: "grid", gridTemplateColumns: cols, gap: 6, marginBottom: 10, alignItems: "center" }}>
-            <input autoFocus value={draft.name} onChange={e => setDraft(p => ({ ...p, name: e.target.value }))} placeholder="Milestone name *" style={s} />
-            <input type="date" value={draft.date} onChange={e => setDraft(p => ({ ...p, date: e.target.value }))} style={s} />
-            <select value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value }))} style={{ ...s, background: T.selectBg }}>
-              {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
-            </select>
-            <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} placeholder="Owner" style={s} />
-            <div />
-          </div>
+        <div>
+          <MsCard isNew m={null} data={draft} setData={setDraft} />
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add</button>
-            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add Milestone</button>
+            <button onClick={() => { setAdding(false); setDraft(blank); }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
           </div>
         </div>
       )}
@@ -5438,8 +5513,6 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         <FField label="Budget (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>
         <FField label="Forecast (SAR)"><input type="number" min={0} step={10000} value={form.forecast} onChange={e => set("forecast", Number(e.target.value))} style={s} /></FField>
         <FField label="Actual Cost (SAR)"><input type="number" min={0} step={10000} value={form.actualCost} onChange={e => set("actualCost", Number(e.target.value))} style={s} /></FField>
-        <FField label="SPI (Schedule Performance Index)"><input type="number" min={0} max={3} step={0.01} value={form.spi} onChange={e => set("spi", Number(e.target.value))} style={s} /></FField>
-        <FField label="CPI (Cost Performance Index)"><input type="number" min={0} max={3} step={0.01} value={form.cpi} onChange={e => set("cpi", Number(e.target.value))} style={s} /></FField>
         <FField label="Days Remaining"><input type="number" min={0} value={form.daysRemaining} onChange={e => set("daysRemaining", Number(e.target.value))} style={s} /></FField>
       </div>
     );
