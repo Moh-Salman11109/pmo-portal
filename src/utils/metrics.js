@@ -123,9 +123,10 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const spiVal = spiFinal ?? 1.0;
   const cpiVal = cpi       ?? 1.0;
   const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mci;
-  const ipi = Math.max(0, Math.min(100, Math.round(ipiDecimal * 100)));
+  const ipi = Math.max(0, Math.round(ipiDecimal * 100));
 
-  const status = ipiDecimal >= 1.00 ? "On Track"
+  const status = ipiDecimal >  1.00 ? "Over Achieved"
+               : ipiDecimal >= 1.00 ? "On Track"
                : ipiDecimal >= 0.90 ? "Watch"
                :                      "At Risk";
 
@@ -189,9 +190,9 @@ export function calcPortfolioIPI(projects) {
   );
 }
 
-/** Updated bands to match spec: 100=OnTrack, 90–99=Watch, <90=AtRisk */
 export function ipiColor(score) {
   if (score == null) return { color: "#6b7280", bg: "#f3f4f6", label: "No Data" };
+  if (score > 100)  return { color: "#166534", bg: "#bbf7d0", label: "Over Achieved" };
   if (score >= 100) return { color: "#15803d", bg: "#dcfce7", label: "On Track" };
   if (score >=  90) return { color: "#854d0e", bg: "#fef9c3", label: "Watch" };
   if (score >=  70) return { color: "#c05621", bg: "#fed7aa", label: "At Risk" };
