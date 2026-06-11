@@ -2664,25 +2664,42 @@ const UpdatePanel = ({ project, onClose, onSubmit }) => {
 
     if (tab === "Documents") return (
       <div>
-        <SL>DOCUMENT STATUS</SL>
+        <SL>DOCUMENT STATUS & LINKS</SL>
         {documents.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>No documents on this project yet.</div>}
         {documents.map((doc, i) => (
-          <div key={doc.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.name}</div>
-              <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · Required" : ""}</div>
+          <div key={doc.id || i} style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.name}</div>
+                <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · Required" : ""}</div>
+              </div>
+              <select value={doc.status || "Pending"}
+                onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d))}
+                style={{ ...ss, width: 140, fontSize: 12 }}>
+                {["Pending","Draft","Under Review","Submitted","Approved","Final","Received","Current"].map(o => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
             </div>
-            <select value={doc.status || "Pending"}
-              onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d))}
-              style={{ ...ss, width: 150, fontSize: 12 }}>
-              {["Pending","Draft","Under Review","Submitted","Approved","Final","Received","Current"].map(o => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="url"
+                value={doc.url || ""}
+                onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, url: e.target.value } : d))}
+                placeholder="Paste SharePoint link here…"
+                style={{ ...s, fontSize: 12, flex: 1 }}
+              />
+              {doc.url && (
+                <a href={doc.url} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 12, color: T.accent, whiteSpace: "nowrap", fontWeight: 600 }}>
+                  Open ↗
+                </a>
+              )}
+            </div>
           </div>
         ))}
         <div style={{ marginTop: 14, fontSize: 12, color: T.muted, fontStyle: "italic" }}>
-          Changes will be logged automatically in the Updates tab.
+          Paste the SharePoint file link — it will be saved and shown as a clickable link.
         </div>
       </div>
     );
