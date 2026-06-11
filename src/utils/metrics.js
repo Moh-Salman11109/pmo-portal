@@ -82,12 +82,17 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   }
 
   // ── MCI: artifact / doc delivery ─────────────────────────────────────────
-  const reqDocs = (project.documents ?? []).filter(d => d.required);
-  const mci = reqDocs.length === 0
-    ? 1
-    : Math.min(1, reqDocs.filter(d =>
-        ["Approved", "Final", "Received", "Current", "Submitted"].includes(d.status)
-      ).length / reqDocs.length);
+  const allDocs  = project.documents ?? [];
+  const reqDocs  = allDocs.filter(d => d.required);
+  // null = no documents at all (PM hasn't set up docs yet) → shows "—", defaults to 1.0 in IPI
+  // 1    = docs exist but none marked required → full compliance assumed
+  const mci = allDocs.length === 0
+    ? null
+    : reqDocs.length === 0
+      ? 1
+      : Math.min(1, reqDocs.filter(d =>
+          ["Approved", "Final", "Received", "Current", "Submitted"].includes(d.status)
+        ).length / reqDocs.length);
 
   // ── Roadmap-deadline penalty (hits SPI only) ──────────────────────────────
   const roadmapDeadline = project.roadmapDeadline;
@@ -108,8 +113,9 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
 
   const spiVal = spiFinal ?? 1.0;
   const cpiVal = cpi       ?? 1.0;
+  const mciVal = mci       ?? 1.0; // null = no docs yet, treat as neutral (not 0)
 
-  const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mci;
+  const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mciVal;
   const ipi = Math.max(0, Math.min(100, Math.round(ipiDecimal * 100)));
 
   const status = ipiDecimal >= 1.00 ? "On Track"
@@ -124,7 +130,7 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
       penalty:  +penalty.toFixed(3),
       spiFinal: spiFinal === null ? null : +spiFinal.toFixed(3),
       cpi:      cpi     === null ? null : +cpi.toFixed(3),
-      mci:      +mci.toFixed(3),
+      mci:      mci === null ? null : +mci.toFixed(3),
     },
     ev: +ev.toFixed(3),
     pv: +pv.toFixed(3),
