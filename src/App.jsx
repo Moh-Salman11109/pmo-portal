@@ -2719,15 +2719,17 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterRisk, setFilterRisk] = useState("All");
   const [filterType, setFilterType] = useState("All");
+  const [filterRoadmap, setFilterRoadmap] = useState(false);
   const [view, setView] = useState("table");
 
   const filtered = useMemo(() => deptProjects.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "All" || p.status === filterStatus;
-    const matchRisk   = filterRisk   === "All" || p.riskLevel === filterRisk;
-    const matchType   = filterType   === "All" || p.projectType === filterType;
-    return matchSearch && matchStatus && matchRisk && matchType;
-  }), [deptProjects, search, filterStatus, filterRisk, filterType]);
+    const matchSearch  = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
+    const matchStatus  = filterStatus  === "All" || p.status     === filterStatus;
+    const matchRisk    = filterRisk    === "All" || p.riskLevel  === filterRisk;
+    const matchType    = filterType    === "All" || p.projectType === filterType;
+    const matchRoadmap = !filterRoadmap || p.isRoadmap === true;
+    return matchSearch && matchStatus && matchRisk && matchType && matchRoadmap;
+  }), [deptProjects, search, filterStatus, filterRisk, filterType, filterRoadmap]);
 
   if (!dept) return <div style={{ padding: 32 }}>Department not found</div>;
 
@@ -2779,6 +2781,9 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
           <option value="All">All Types</option>
           {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
+        <button onClick={() => setFilterRoadmap(v => !v)} style={{ background: filterRoadmap ? T.primary : T.surface, color: filterRoadmap ? "#fff" : T.muted, border: `1px solid ${filterRoadmap ? T.primary : T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontWeight: filterRoadmap ? 700 : 400 }}>
+          🗺 Roadmap{filterRoadmap ? " ✓" : ""}
+        </button>
         <button onClick={() => { const dm = Object.fromEntries([...(departments || [])].map(d => [d.id, d.name])); exportExcel(filtered, `${dept?.name?.replace(/\s+/g,"-") || "dept"}-${TODAY}.xls`, dm); }}
           style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>
           ↓ Export XLS
@@ -2816,7 +2821,10 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>{p.code}</td>
                   <td style={{ padding: "12px 14px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</span>
+                      {p.isRoadmap && <span style={{ fontSize: 9, fontWeight: 800, background: T.primary, color: "#fff", borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap" }}>ROADMAP</span>}
+                    </div>
                     <div style={{ fontSize: 11, color: T.muted }}>{p.sponsor}</div>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{p.pm}</td>
@@ -3379,6 +3387,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               {(() => { const sla = getGateSLA(project); return <span style={{ background: sla && sla.days > 30 ? "rgba(220,38,38,0.35)" : "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>{project.gate}{sla && <span style={{ fontSize: 9, fontWeight: 800, opacity: 0.9 }}>· Day {sla.days}</span>}</span>; })()}
               <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
               <TypeBadge type={project.projectType || "Project"} />
+              {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>🗺 Roadmap</span>}
             </div>
             <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
             <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
@@ -5534,20 +5543,22 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
   const [filterStatus, setFilterStatus] = useState(route?.filterStatus || "All");
   const [filterDept, setFilterDept] = useState("All");
   const [filterType, setFilterType] = useState("All");
+  const [filterRoadmap, setFilterRoadmap] = useState(false);
   const [showCompleted, setShowCompleted] = useState(route?.filterStatus === "Completed");
 
   const active = projects.filter(p => !p.archived);
   const completedCount = active.filter(p => p.status === "Completed").length;
 
   const filtered = useMemo(() => active.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.pm.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "All"
+    const matchSearch  = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.pm.toLowerCase().includes(search.toLowerCase());
+    const matchStatus  = filterStatus === "All"
       ? (showCompleted || p.status !== "Completed")
       : p.status === filterStatus;
-    const matchDept = filterDept === "All" || p.deptId === filterDept;
-    const matchType = filterType === "All" || p.projectType === filterType;
-    return matchSearch && matchStatus && matchDept && matchType;
-  }), [active, search, filterStatus, filterDept, filterType, showCompleted]);
+    const matchDept    = filterDept    === "All" || p.deptId      === filterDept;
+    const matchType    = filterType    === "All" || p.projectType === filterType;
+    const matchRoadmap = !filterRoadmap || p.isRoadmap === true;
+    return matchSearch && matchStatus && matchDept && matchType && matchRoadmap;
+  }), [active, search, filterStatus, filterDept, filterType, filterRoadmap, showCompleted]);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
 
@@ -5578,6 +5589,9 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
           <option value="All">All Types</option>
           {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
+        <button onClick={() => setFilterRoadmap(v => !v)} style={{ background: filterRoadmap ? T.primary : T.surface, color: filterRoadmap ? "#fff" : T.muted, border: `1px solid ${filterRoadmap ? T.primary : T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontWeight: filterRoadmap ? 700 : 400 }}>
+          🗺 Roadmap{filterRoadmap ? " ✓" : ""}
+        </button>
         <button onClick={() => setShowCompleted(v => !v)} style={{ background: showCompleted ? T.btnPrimBg : T.surface, color: showCompleted ? T.btnPrimText : T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
           {showCompleted ? "Hide Completed" : `+ ${completedCount} Completed`}
         </button>
@@ -5605,7 +5619,12 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   onMouseEnter={e => e.currentTarget.style.background = themeStore.dark ? '#132820' : '#f0f7f4'}
                   onMouseLeave={e => e.currentTarget.style.background = p.status === "Delayed" ? (themeStore.dark ? "rgba(220,38,38,0.07)" : "rgba(220,38,38,0.04)") : (i % 2 === 0 ? 'transparent' : T.bg)}>
                   <td style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: T.primary }}>{p.code}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{p.name}</span>
+                      {p.isRoadmap && <span style={{ fontSize: 9, fontWeight: 800, background: T.primary, color: "#fff", borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap" }}>ROADMAP</span>}
+                    </div>
+                  </td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -6039,6 +6058,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     documents: [...MANDATORY_DOCS], requiredDocs: [],
     gates: GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" })),
     updateCadence: "Biweekly", archived: false, pmoStatus: "Draft", dataReliabilityFlag: "Pending",
+    isRoadmap: false,
     _newUpdate: "",
   });
 
@@ -6131,6 +6151,17 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         </div>
         <FField label="Objective"><textarea value={form.objective} onChange={e => set("objective", e.target.value)} rows={3} style={{ ...s, resize: "vertical" }} /></FField>
         <FField label="Business Case"><textarea value={form.businessCase} onChange={e => set("businessCase", e.target.value)} rows={3} style={{ ...s, resize: "vertical" }} /></FField>
+        {/* Roadmap toggle */}
+        <div onClick={() => set("isRoadmap", !form.isRoadmap)}
+          style={{ background: form.isRoadmap ? `${T.primary}18` : T.bg, border: `1.5px solid ${form.isRoadmap ? T.primary : T.border}`, borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", transition: "all 0.15s" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>🗺 Roadmap Project</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Tag this project as part of the strategic roadmap — enables Roadmap filter across all views</div>
+          </div>
+          <div style={{ width: 44, height: 24, borderRadius: 12, background: form.isRoadmap ? T.primary : T.border, position: "relative", flexShrink: 0, transition: "background 0.2s", marginLeft: 16 }}>
+            <div style={{ position: "absolute", top: 2, left: form.isRoadmap ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
+          </div>
+        </div>
       </div>
     );
     if (step === 1) return (
