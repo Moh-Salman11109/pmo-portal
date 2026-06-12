@@ -1934,6 +1934,190 @@ const GRCDashboard = ({ canEdit = false }) => {
     return cells;
   }, [riskReg]);
 
+  const printGRCReport = () => {
+    const now = new Date();
+    const dateStr = now.toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" });
+    const fmtScore = (l, i) => {
+      const s = Number(l) * Number(i);
+      if (s >= 15) return `<span style="color:#991b1b;font-weight:700">${s} Critical</span>`;
+      if (s >= 9)  return `<span style="color:#b45309;font-weight:700">${s} High</span>`;
+      if (s >= 4)  return `<span style="color:#854d0e">${s} Medium</span>`;
+      return `<span style="color:#15803d">${s} Low</span>`;
+    };
+    const ragBadge = (rag) => {
+      const c = { Red: "#dc2626", Amber: "#d97706", Green: "#16a34a" }[rag] || "#6b7280";
+      return `<span style="display:inline-block;background:${c};color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:700">${rag || "—"}</span>`;
+    };
+    const sev = (s) => {
+      const c = { Critical: "#dc2626", High: "#c2410c", Medium: "#d97706", Low: "#16a34a" }[s] || "#6b7280";
+      return `<span style="color:${c};font-weight:700">${s || "—"}</span>`;
+    };
+
+    const kriRows = kriWithLatest.map(k => {
+      const r = k.latest;
+      return `<tr>
+        <td>${k.Title || "—"}<br><span style="color:#6b7280;font-size:10px">${k.KRIOwner?.Title || k.KRICategory || ""}</span></td>
+        <td>${k.KRICategory || "—"}</td>
+        <td style="text-align:center;font-weight:700">${r?.ActualValue ?? "—"} ${k.MeasurementUnit || ""}</td>
+        <td style="text-align:center">${ragBadge(r?.RAGStatus)}</td>
+        <td style="text-align:center">${r?.Trend === "Improving" ? "↑ Improving" : r?.Trend === "Worsening" ? "↓ Worsening" : r?.Trend === "Stable" ? "→ Stable" : "—"}</td>
+        <td style="text-align:center">${r?.EscalationRequired ? "⚠ Yes" : "No"}</td>
+        <td style="color:#6b7280;font-size:10px">${r?.Comments || ""}</td>
+      </tr>`;
+    }).join("");
+
+    const sortedRisks = [...riskReg]
+      .filter(r => r.RiskStatus !== "Closed")
+      .sort((a, b) => (Number(b.LikelihoodScore) * Number(b.ImpactScore)) - (Number(a.LikelihoodScore) * Number(a.ImpactScore)));
+    const riskRows = sortedRisks.map(r => `<tr>
+      <td>${r.Title || "—"}<br><span style="color:#6b7280;font-size:10px">${r.RiskOwner?.Title || ""} · ${r.BusinessUnit || ""}</span></td>
+      <td>${r.RiskCategory || "—"}</td>
+      <td style="text-align:center">${fmtScore(r.LikelihoodScore, r.ImpactScore)}</td>
+      <td style="text-align:center">${r.RiskStatus || "—"}</td>
+      <td style="text-align:center">${r.RiskAppetiteBreached ? '<span style="color:#dc2626;font-weight:700">⚠ Yes</span>' : "No"}</td>
+      <td style="font-size:10px;color:#374151">${r.MitigationSummary || ""}</td>
+    </tr>`).join("");
+
+    const appRows = appetite.map(a => {
+      const pct = a.MaxTolerableScore > 0 ? Math.min(100, Math.round((a.CurrentExposureScore / a.MaxTolerableScore) * 100)) : 0;
+      const barColor = a.AppetiteStatus === "Breached" ? "#dc2626" : a.AppetiteStatus === "At Risk" ? "#d97706" : "#16a34a";
+      const bar = `<div style="background:#e5e7eb;border-radius:4px;height:8px;width:100%;margin-top:4px"><div style="background:${barColor};height:8px;border-radius:4px;width:${pct}%"></div></div>`;
+      return `<tr>
+        <td>${a.RiskCategory || "—"}</td>
+        <td style="font-size:10px">${a.AppetiteStatement || "—"}</td>
+        <td style="text-align:center">${a.MaxTolerableScore ?? "—"}</td>
+        <td style="text-align:center;font-weight:700">${a.CurrentExposureScore ?? "—"}</td>
+        <td style="min-width:80px">${bar}<span style="font-size:10px;color:#6b7280">${pct}%</span></td>
+        <td style="text-align:center"><span style="color:${barColor};font-weight:700">${a.AppetiteStatus || "—"}</span></td>
+      </tr>`;
+    }).join("");
+
+    const bySev = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    auditFindings.forEach(f => { if (f.FindingSeverity in bySev) bySev[f.FindingSeverity]++; });
+    const openAF = auditFindings.filter(f => f.Status !== "Closed").length;
+    const afRows = auditFindings.map(f => `<tr>
+      <td>${f.Title || "—"}</td>
+      <td>${sev(f.FindingSeverity)}</td>
+      <td>${f.BusinessUnit || "—"}</td>
+      <td>${f.Status || "—"}</td>
+      <td>${f.DueDate ? new Date(f.DueDate).toLocaleDateString("en-GB") : "—"}</td>
+    </tr>`).join("");
+
+    const caComplete = correctiveActions.filter(c => c.Status === "Completed").length;
+    const caOpen = correctiveActions.filter(c => c.Status !== "Completed").length;
+    const avgCompletion = correctiveActions.length > 0
+      ? Math.round(correctiveActions.reduce((s, c) => s + (Number(c.CompletionPercentage) || 0), 0) / correctiveActions.length)
+      : 0;
+    const caRows = correctiveActions.map(c => {
+      const pct = Number(c.CompletionPercentage) || 0;
+      const overdue = c.TargetDate && new Date(c.TargetDate) < now && c.Status !== "Completed";
+      return `<tr>
+        <td>${c.Title || "—"}<br><span style="color:#6b7280;font-size:10px">Finding: ${c.LinkedFindingID || "—"}</span></td>
+        <td style="text-align:center">
+          <div style="background:#e5e7eb;border-radius:4px;height:8px;width:80px;display:inline-block;vertical-align:middle">
+            <div style="background:${pct >= 100 ? "#16a34a" : "#3b82f6"};height:8px;border-radius:4px;width:${Math.min(100,pct)}%"></div>
+          </div> ${pct}%
+        </td>
+        <td>${c.Status || "—"}</td>
+        <td style="${overdue ? "color:#dc2626;font-weight:700" : ""}">${c.TargetDate ? new Date(c.TargetDate).toLocaleDateString("en-GB") : "—"}${overdue ? " ⚠" : ""}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html lang="en"><head>
+      <meta charset="UTF-8">
+      <title>GRC Risk Intelligence Report — ${dateStr}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
+        .cover { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #2563eb 100%); color: #fff; padding: 48px 56px; min-height: 180px; }
+        .cover h1 { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
+        .cover .sub { opacity: 0.65; font-size: 13px; margin-bottom: 24px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin: 32px 40px 0; }
+        .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+        .kpi .val { font-size: 26px; font-weight: 900; line-height: 1; }
+        .kpi .lbl { font-size: 10px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+        section { margin: 32px 40px 0; }
+        section h2 { font-size: 14px; font-weight: 800; color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: 6px; margin-bottom: 14px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #f1f5f9; padding: 7px 10px; text-align: left; font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        .footer { margin: 40px 40px 0; padding: 16px 0; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; color: #9ca3af; font-size: 10px; }
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          section { page-break-inside: avoid; }
+          .cover { page-break-after: avoid; }
+        }
+      </style>
+    </head><body>
+      <div class="cover">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+          <span style="font-size:32px">🛡️</span>
+          <div>
+            <h1>GRC Risk Intelligence Report</h1>
+            <div class="sub">Key Risk Indicators · Risk Register · Risk Appetite · Audit Findings · Corrective Actions</div>
+          </div>
+        </div>
+        <div style="opacity:0.5;font-size:11px">Generated: ${dateStr} &nbsp;|&nbsp; PMO Enterprise Portal</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi"><div class="val">${kriWithLatest.length}</div><div class="lbl">Total KRIs</div></div>
+        <div class="kpi"><div class="val" style="color:#dc2626">${redCount}</div><div class="lbl">Breaching (Red)</div></div>
+        <div class="kpi"><div class="val" style="color:#d97706">${amberCount}</div><div class="lbl">At Risk (Amber)</div></div>
+        <div class="kpi"><div class="val" style="color:#16a34a">${greenCount}</div><div class="lbl">Within Limits</div></div>
+        <div class="kpi"><div class="val" style="color:#7c3aed">${escalCount}</div><div class="lbl">Escalations</div></div>
+        <div class="kpi"><div class="val" style="color:#dc2626">${appBreaches}</div><div class="lbl">Appetite Breaches</div></div>
+      </div>
+
+      <section>
+        <h2>KRI Status Board</h2>
+        ${kriWithLatest.length === 0
+          ? '<p style="color:#9ca3af;padding:12px 0">No active KRIs.</p>'
+          : `<table><thead><tr><th>KRI / Owner</th><th>Category</th><th>Current Value</th><th>RAG</th><th>Trend</th><th>Escalate</th><th>Comments</th></tr></thead><tbody>${kriRows}</tbody></table>`}
+      </section>
+
+      <section>
+        <h2>Risk Register — Open Risks (sorted by score)</h2>
+        ${sortedRisks.length === 0
+          ? '<p style="color:#9ca3af;padding:12px 0">No open risks.</p>'
+          : `<table><thead><tr><th>Risk / Owner</th><th>Category</th><th>Score</th><th>Status</th><th>Appetite Breached</th><th>Mitigation</th></tr></thead><tbody>${riskRows}</tbody></table>`}
+      </section>
+
+      <section>
+        <h2>Risk Appetite Monitor</h2>
+        ${appetite.length === 0
+          ? '<p style="color:#9ca3af;padding:12px 0">No appetite thresholds defined.</p>'
+          : `<table><thead><tr><th>Risk Category</th><th>Appetite Statement</th><th>Max Tolerable</th><th>Current Exposure</th><th>Utilisation</th><th>Status</th></tr></thead><tbody>${appRows}</tbody></table>`}
+      </section>
+
+      <section>
+        <h2>Audit Findings — ${auditFindings.length} total, ${openAF} open &nbsp;|&nbsp; Critical: ${bySev.Critical} &nbsp; High: ${bySev.High} &nbsp; Medium: ${bySev.Medium} &nbsp; Low: ${bySev.Low}</h2>
+        ${auditFindings.length === 0
+          ? '<p style="color:#9ca3af;padding:12px 0">No audit findings.</p>'
+          : `<table><thead><tr><th>Finding</th><th>Severity</th><th>Business Unit</th><th>Status</th><th>Due Date</th></tr></thead><tbody>${afRows}</tbody></table>`}
+      </section>
+
+      <section>
+        <h2>Corrective Actions — ${correctiveActions.length} total &nbsp;|&nbsp; Completed: ${caComplete} &nbsp; Open: ${caOpen} &nbsp; Avg Completion: ${avgCompletion}%</h2>
+        ${correctiveActions.length === 0
+          ? '<p style="color:#9ca3af;padding:12px 0">No corrective actions.</p>'
+          : `<table><thead><tr><th>Action</th><th>Completion</th><th>Status</th><th>Target Date</th></tr></thead><tbody>${caRows}</tbody></table>`}
+      </section>
+
+      <div class="footer">
+        <span>PMO Enterprise Portal — GRC Risk Intelligence Report</span>
+        <span>Generated ${dateStr}</span>
+      </div>
+    </body></html>`;
+
+    const win = window.open("", "_blank", "width=1100,height=850");
+    if (!win) { alert("Pop-up blocked — please allow pop-ups for this site."); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 500);
+  };
+
   const pad = bp === "mobile" ? "16px" : "32px";
 
   if (loading) return (
@@ -1967,6 +2151,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             <div style={{ fontSize: 12, fontWeight: 600 }}>{new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</div>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={load} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>↻ Refresh</button>
+              <button onClick={printGRCReport} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>🖨 Print Report</button>
               {canEdit && (
                 <button onClick={() => setGlobalEdit(g => !g)} style={{ background: globalEdit ? "#00ffb3" : "rgba(255,255,255,0.1)", border: globalEdit ? "none" : "1px solid rgba(255,255,255,0.25)", color: globalEdit ? "#061210" : "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, fontWeight: globalEdit ? 800 : 400, cursor: "pointer" }}>
                   {globalEdit ? "✓ Edit Mode ON" : "✎ Global Edit"}
