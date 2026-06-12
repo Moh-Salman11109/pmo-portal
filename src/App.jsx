@@ -3271,11 +3271,18 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     if (tab === "Risks")      return <RiskListEditor      items={risks}      onChange={setRisks} />;
     if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
 
-    if (tab === "Documents") return (
+    if (tab === "Documents") {
+      const isPMTier = userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD;
+      const docOpts  = isPMTier
+        ? ["Pending", "Draft", "Submitted"]
+        : ["Pending", "Draft", "Under Review", "Submitted", "Received", "Current", "Approved", "Final"];
+      return (
       <div>
         <SL>DOCUMENT STATUS & LINKS</SL>
         {documents.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>No documents on this project yet.</div>}
-        {documents.map((doc, i) => (
+        {documents.map((doc, i) => {
+          const docLocked = isPMTier && !docOpts.includes(doc.status);
+          return (
           <div key={doc.id || i} style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
@@ -3283,9 +3290,10 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
                 <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · Required" : ""}</div>
               </div>
               <select value={doc.status || "Pending"}
+                disabled={docLocked}
                 onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d))}
-                style={{ ...ss, width: 140, fontSize: 12 }}>
-                {["Pending","Draft","Under Review","Submitted","Approved","Final","Received","Current"].map(o => (
+                style={{ ...ss, width: 140, fontSize: 12, opacity: docLocked ? 0.6 : 1, cursor: docLocked ? "not-allowed" : "pointer" }}>
+                {(docLocked ? [doc.status] : docOpts).map(o => (
                   <option key={o} value={o}>{o}</option>
                 ))}
               </select>
@@ -3306,12 +3314,14 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
         <div style={{ marginTop: 14, fontSize: 12, color: T.muted, fontStyle: "italic" }}>
           Paste the SharePoint file link — it will be saved and shown as a clickable link.
         </div>
       </div>
-    );
+      );
+    }
 
     if (tab === "Note") return (
       <div>
