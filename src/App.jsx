@@ -2015,7 +2015,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         <td>${c.Title || "—"}<br><span style="color:#6b7280;font-size:10px">Finding: ${c.LinkedFindingID || "—"}</span></td>
         <td style="text-align:center">
           <div style="background:#e5e7eb;border-radius:4px;height:8px;width:80px;display:inline-block;vertical-align:middle">
-            <div style="background:${pct >= 100 ? "#16a34a" : "#3b82f6"};height:8px;border-radius:4px;width:${Math.min(100,pct)}%"></div>
+            <div style="background:${pct >= 100 ? "#16a34a" : "#003932"};height:8px;border-radius:4px;width:${Math.min(100,pct)}%"></div>
           </div> ${pct}%
         </td>
         <td>${c.Status || "—"}</td>
@@ -2029,7 +2029,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
-        .cover { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #2563eb 100%); color: #fff; padding: 48px 56px; min-height: 180px; }
+        .cover { background: linear-gradient(135deg, #001f1a 0%, #003932 60%, #005c4a 100%); color: #fff; padding: 48px 56px; min-height: 180px; }
         .cover h1 { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
         .cover .sub { opacity: 0.65; font-size: 13px; margin-bottom: 24px; }
         .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin: 32px 40px 0; }
@@ -2037,7 +2037,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         .kpi .val { font-size: 26px; font-weight: 900; line-height: 1; }
         .kpi .lbl { font-size: 10px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
         section { margin: 32px 40px 0; }
-        section h2 { font-size: 14px; font-weight: 800; color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: 6px; margin-bottom: 14px; }
+        section h2 { font-size: 14px; font-weight: 800; color: #003932; border-bottom: 2px solid #003932; padding-bottom: 6px; margin-bottom: 14px; }
         table { width: 100%; border-collapse: collapse; font-size: 11px; }
         th { background: #f1f5f9; padding: 7px 10px; text-align: left; font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
         td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
