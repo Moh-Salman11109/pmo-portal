@@ -6538,9 +6538,6 @@ export default function App() {
         setUserRole(role);
         setUserDeptId(deptId);
         setRoleResolved(true);
-        if (role === ROLE_GRC || role === ROLE_GRC_ADMIN) {
-          setRoute({ view: "department", deptId: "grc" });
-        }
       })
       .catch(() => { setRoleResolved(true); }); // fail-open: keep exec default
   }, [currentUserEmail]);
