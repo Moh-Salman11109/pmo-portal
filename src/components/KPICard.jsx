@@ -7,7 +7,7 @@ export const KPICard = ({ label, value, sub, color, icon, onClick }) => {
   return (
     <div
       onClick={onClick}
-      onMouseEnter={() => onClick && setHovered(true)}
+      onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         background: T.surface,
@@ -18,8 +18,9 @@ export const KPICard = ({ label, value, sub, color, icon, onClick }) => {
         flexDirection: "column",
         gap: 6,
         cursor: onClick ? "pointer" : "default",
-        transition: "box-shadow 0.15s, border-color 0.15s",
-        boxShadow: hovered ? `0 4px 18px rgba(0,0,0,0.12)` : "none",
+        transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
+        boxShadow: hovered ? `0 6px 22px rgba(0,0,0,0.11)` : "none",
+        transform: hovered ? "translateY(-3px)" : "translateY(0)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

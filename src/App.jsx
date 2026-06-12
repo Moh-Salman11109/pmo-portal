@@ -244,6 +244,40 @@ const RiskMatrix = ({ risks }) => {
   );
 };
 
+// ─── GLOBAL ANIMATION KEYFRAMES ──────────────────────────────────
+const AnimStyles = () => (
+  <style>{`
+    @keyframes pmo-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(234,179,8,0.45); }
+      55%      { box-shadow: 0 0 0 10px rgba(234,179,8,0); }
+    }
+    @keyframes pmo-fadein {
+      from { opacity:0; transform:translateY(7px); }
+      to   { opacity:1; transform:translateY(0);   }
+    }
+    .pmo-tab-content { animation: pmo-fadein 0.22s cubic-bezier(0.4,0,0.2,1); }
+  `}</style>
+);
+
+// ─── COUNT-UP HOOK ────────────────────────────────────────────────
+function useCountUp(target, duration = 750) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (target === 0) { setVal(0); return; }
+    let raf;
+    const t0 = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const e = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(target * e));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
 // ─── GATE TRACKER COMPONENT ──────────────────────────────────────
 const GateTracker = ({ gates, currentGate, startDate }) => {
   const T = useT();
@@ -309,6 +343,7 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
                   fontSize: 16, color: s.text, fontWeight: 900,
                   transition: "transform 0.15s",
                   transform: expanded === def.id ? "scale(1.15)" : "scale(1)",
+                  animation: g.status === "In Progress" ? "pmo-pulse 2s ease-in-out infinite" : "none",
                 }}>
                   {s.icon}
                 </div>
@@ -3515,6 +3550,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const ipiC       = ipiColor(ipi);
   const twIpiC     = ipiColor(twIPI);
   const hasHistory = (project.ipiHistory || []).length > 0;
+  const countedIPI = useCountUp(twIPI);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const infoCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -3567,7 +3603,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
             <div style={{ background: twIpiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{twIPI}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{countedIPI}</div>
               <div style={{ fontSize: 10, color: twIpiC.color, fontWeight: 700 }}>
                 {hasHistory ? "IPI (Weighted)" : "IPI Score"}
               </div>
@@ -3684,6 +3720,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       {/* ── Submit Update Panel ─────────────────────────────────── */}
       {showUpdate && <UpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} userRole={userRole} />}
 
+      <div key={activeTab} className="pmo-tab-content">
       {/* EXEC SUMMARY TAB */}
       {activeTab === "Exec Summary" && (() => {
         const nextMilestone = [...(project.milestones || [])].filter(m => m.status !== "Completed").sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
@@ -4348,6 +4385,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           )}
         </div>
       )}
+      </div>{/* /pmo-tab-content */}
     </div>
   );
 };
@@ -6814,6 +6852,7 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} currentUserName={currentUserName} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
+          <AnimStyles />
           {/* Portfolio-level views — blocked for PM role */}
           {route.view === "home"        && userRole !== ROLE_PM && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
           {route.view === "departments" && userRole !== ROLE_PM && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
