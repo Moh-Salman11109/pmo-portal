@@ -36,64 +36,208 @@ const MANDATORY_DOCS = [
 // ─── RISK MATRIX COMPONENT ───────────────────────────────────────
 const RiskMatrix = ({ risks }) => {
   const T = useT();
-  const PROBS = ["High", "Medium", "Low"];
-  const IMPACTS = ["Low", "Medium", "High"];
+  const [activeCell, setActiveCell] = useState(null);
 
   const normLevel = v => {
     const s = String(v || "").toLowerCase();
-    if (s.includes("critical") || s.includes("very") || s.includes("high")) return "High";
+    if (s.includes("critical") || s.includes("very high") || s.includes("high")) return "High";
     if (s.includes("medium") || s.includes("mod")) return "Medium";
     return "Low";
   };
 
-  const cellMeta = (prob, impact) => {
-    const score = (PROBS.length - 1 - PROBS.indexOf(prob)) + IMPACTS.indexOf(impact);
-    if (score >= 3) return { bg: "#fee2e2", border: "#dc2626" };
-    if (score === 2) return { bg: "#fef3c7", border: "#f59e0b" };
-    if (score === 1) return { bg: "#fef9c3", border: "#eab308" };
-    return { bg: "#dcfce7", border: "#16a34a" };
+  // Zone definitions per cell — industry-standard color zones
+  const ZONE_MAP = {
+    "High-Low":      { bg: "#fffbeb", fill: "#fef3c7", accent: "#f59e0b", text: "#78350f", zone: "Medium"   },
+    "High-Medium":   { bg: "#fff7ed", fill: "#ffedd5", accent: "#f97316", text: "#7c2d12", zone: "High"     },
+    "High-High":     { bg: "#fef2f2", fill: "#fee2e2", accent: "#dc2626", text: "#7f1d1d", zone: "Critical" },
+    "Medium-Low":    { bg: "#fefce8", fill: "#fef9c3", accent: "#eab308", text: "#713f12", zone: "Low"      },
+    "Medium-Medium": { bg: "#fffbeb", fill: "#fef3c7", accent: "#f59e0b", text: "#78350f", zone: "Medium"   },
+    "Medium-High":   { bg: "#fff7ed", fill: "#ffedd5", accent: "#f97316", text: "#7c2d12", zone: "High"     },
+    "Low-Low":       { bg: "#f0fdf4", fill: "#dcfce7", accent: "#16a34a", text: "#14532d", zone: "Low"      },
+    "Low-Medium":    { bg: "#f0fdf4", fill: "#d1fae5", accent: "#059669", text: "#064e3b", zone: "Low"      },
+    "Low-High":      { bg: "#fefce8", fill: "#fef9c3", accent: "#eab308", text: "#713f12", zone: "Medium"   },
+  };
+  const ZONE_META = {
+    Critical: { color: "#dc2626", bg: "#fee2e2", label: "Critical" },
+    High:     { color: "#ea580c", bg: "#ffedd5", label: "High"     },
+    Medium:   { color: "#d97706", bg: "#fef3c7", label: "Medium"   },
+    Low:      { color: "#16a34a", bg: "#dcfce7", label: "Low"      },
   };
 
-  const inCell = (prob, impact) =>
-    risks.filter(r => normLevel(r.probability) === prob && normLevel(r.impact) === impact);
+  const openRisks = risks.filter(r => r.status !== "Closed");
+  const cellRisks = (prob, impact) => openRisks.filter(r => normLevel(r.probability) === prob && normLevel(r.impact) === impact);
 
-  const items = [];
-  items.push(<div key="c0" />);
-  IMPACTS.forEach(impact => items.push(
-    <div key={`hi-${impact}`} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: T.muted, padding: "4px 0", textTransform: "uppercase", letterSpacing: "0.05em" }}>{impact}</div>
-  ));
-  PROBS.forEach(prob => {
-    items.push(
-      <div key={`lbl-${prob}`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{prob}</div>
-    );
-    IMPACTS.forEach(impact => {
-      const meta = cellMeta(prob, impact);
-      const cellRisks = inCell(prob, impact);
-      items.push(
-        <div key={`${prob}-${impact}`} style={{ background: meta.bg, border: `2px solid ${meta.border}`, borderRadius: 8, minHeight: 60, padding: 6, display: "flex", flexDirection: "column", gap: 3 }}>
-          {cellRisks.map(r => (
-            <span key={r.id} title={r.title} style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 6, background: "rgba(255,255,255,0.75)", color: "#1f2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-              {r.title.length > 22 ? r.title.slice(0, 20) + "…" : r.title}
-            </span>
-          ))}
-        </div>
-      );
-    });
-  });
+  const zoneCounts = Object.entries(ZONE_META).map(([z, meta]) => ({
+    ...meta, zone: z,
+    count: openRisks.filter(r => ZONE_MAP[`${normLevel(r.probability)}-${normLevel(r.impact)}`]?.zone === z).length,
+  }));
+
+  const PROBS   = ["High", "Medium", "Low"];
+  const IMPACTS = ["Low", "Medium", "High"];
 
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Risk Matrix</h3>
-        <span style={{ fontSize: 11, color: T.muted }}>Probability × Impact</span>
-      </div>
-      <div style={{ display: "flex", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>PROBABILITY</span>
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 20, boxShadow: `0 1px 4px ${T.border}80` }}>
+
+      {/* ── Header strip ── */}
+      <div style={{ padding: "18px 24px 14px", borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>Risk Matrix</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>Probability × Impact · open risks</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {zoneCounts.filter(z => z.count > 0).map(z => (
+              <div key={z.zone} style={{ background: z.bg, color: z.color, border: `1px solid ${z.color}55`, borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: z.color, display: "inline-block" }} />
+                {z.count} {z.label}
+              </div>
+            ))}
+            {openRisks.length === 0 && <span style={{ fontSize: 11, color: T.muted, fontStyle: "italic" }}>No open risks</span>}
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 1fr 1fr", gap: 6 }}>{items}</div>
-          <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 6 }}>IMPACT</div>
+      </div>
+
+      {/* ── Matrix grid ── */}
+      <div style={{ padding: "20px 24px 16px", overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 10, minWidth: 380 }}>
+
+          {/* Y-axis label */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
+            <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em" }}>Probability</span>
+          </div>
+
+          <div style={{ flex: 1 }}>
+            {/* Column headers */}
+            <div style={{ display: "grid", gridTemplateColumns: "50px 1fr 1fr 1fr", gap: 6, marginBottom: 6 }}>
+              <div />
+              {IMPACTS.map(imp => (
+                <div key={imp} style={{ textAlign: "center" }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", display: "inline-block", background: T.bg, borderRadius: 6, padding: "3px 8px" }}>{imp}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Rows */}
+            {PROBS.map((prob, pi) => (
+              <div key={prob} style={{ display: "grid", gridTemplateColumns: "50px 1fr 1fr 1fr", gap: 6, marginBottom: pi < PROBS.length - 1 ? 6 : 0 }}>
+                {/* Row label */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 10 }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", display: "inline-block", background: T.bg, borderRadius: 6, padding: "3px 8px" }}>{prob}</span>
+                </div>
+
+                {/* Cells */}
+                {IMPACTS.map(impact => {
+                  const key  = `${prob}-${impact}`;
+                  const z    = ZONE_MAP[key];
+                  const cr   = cellRisks(prob, impact);
+                  const n    = cr.length;
+                  const isActive = activeCell === key;
+                  return (
+                    <div key={key}
+                      onClick={() => setActiveCell(isActive ? null : (n > 0 ? key : null))}
+                      style={{
+                        background: isActive ? z.fill : z.bg,
+                        border: `1.5px solid ${isActive ? z.accent : `${z.accent}50`}`,
+                        borderRadius: 10,
+                        minHeight: 76,
+                        padding: "8px 10px 26px",
+                        position: "relative",
+                        cursor: n > 0 ? "pointer" : "default",
+                        transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+                        boxShadow: isActive ? `0 0 0 3px ${z.accent}28, 0 4px 14px ${z.accent}22` : "none",
+                      }}>
+
+                      {/* Zone watermark */}
+                      <div style={{ position: "absolute", top: 7, right: 9, fontSize: 8, fontWeight: 900, color: `${z.accent}90`, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                        {z.zone}
+                      </div>
+
+                      {/* Risk chips */}
+                      {cr.slice(0, 2).map(r => (
+                        <div key={r.id} title={r.title} style={{
+                          fontSize: 9, fontWeight: 700, color: z.text,
+                          background: "rgba(255,255,255,0.82)",
+                          borderLeft: `3px solid ${z.accent}`,
+                          borderRadius: "0 5px 5px 0",
+                          padding: "3px 7px",
+                          marginBottom: 3,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {r.title.length > 20 ? r.title.slice(0, 18) + "…" : r.title}
+                        </div>
+                      ))}
+                      {n > 2 && (
+                        <div style={{ fontSize: 9, fontWeight: 800, color: z.accent, paddingLeft: 4, marginTop: 1 }}>+{n - 2} more</div>
+                      )}
+
+                      {/* Count badge */}
+                      {n > 0 && (
+                        <div style={{
+                          position: "absolute", bottom: 7, right: 9,
+                          minWidth: 20, height: 20, borderRadius: 10,
+                          background: z.accent, color: "#fff",
+                          fontSize: 9, fontWeight: 900,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          padding: "0 5px",
+                        }}>
+                          {n}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* X-axis label */}
+            <div style={{ textAlign: "center", fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 10 }}>Impact</div>
+
+            {/* Expanded risk detail */}
+            {activeCell && (() => {
+              const z    = ZONE_MAP[activeCell];
+              const [p, imp] = activeCell.split("-");
+              const cr   = cellRisks(p, imp);
+              return (
+                <div style={{ marginTop: 14, background: z.fill, border: `1.5px solid ${z.accent}`, borderRadius: 12, padding: "14px 16px", animation: "fadeIn 0.15s" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: z.text }}>{p} Prob · {imp} Impact</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: z.accent, background: "rgba(255,255,255,0.7)", padding: "2px 10px", borderRadius: 20, textTransform: "uppercase", letterSpacing: "0.05em" }}>{z.zone} Zone</span>
+                    </div>
+                    <button onClick={() => setActiveCell(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: z.accent, lineHeight: 1, padding: "0 2px" }}>×</button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {cr.map(r => (
+                      <div key={r.id} style={{ background: "rgba(255,255,255,0.88)", borderRadius: 8, padding: "9px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937" }}>{r.title}</div>
+                          {r.description && <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>{r.description}</div>}
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: z.accent, background: z.bg, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap", border: `1px solid ${z.accent}40`, flexShrink: 0 }}>
+                          {r.status || "Open"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Zone legend */}
+            <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+              {[
+                { zone: "Low",      color: "#16a34a", fill: "#dcfce7" },
+                { zone: "Medium",   color: "#d97706", fill: "#fef3c7" },
+                { zone: "High",     color: "#ea580c", fill: "#ffedd5" },
+                { zone: "Critical", color: "#dc2626", fill: "#fee2e2" },
+              ].map(z => (
+                <div key={z.zone} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: T.muted }}>
+                  <div style={{ width: 14, height: 10, background: z.fill, border: `2px solid ${z.color}`, borderRadius: 3 }} />
+                  {z.zone}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
