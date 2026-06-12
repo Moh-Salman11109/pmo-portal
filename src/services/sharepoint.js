@@ -334,7 +334,8 @@ export const SPService = {
     if (role === "pm" && email) {
       filterQuery = `ProjectManagerEmail eq '${email.replace(/'/g, "''")}'`;
     } else if (role === "dept_head" && deptId) {
-      filterQuery = `DepartmentID eq '${deptId.replace(/'/g, "''")}'`;
+      const isMulti = deptId.includes(",") || deptId.trim().toLowerCase() === "all";
+      if (!isMulti) filterQuery = `DepartmentID eq '${deptId.replace(/'/g, "''")}'`;
     }
     const items = await fetchAllItems(SP_CONFIG.projectsListName, "", "", filterQuery);
     return items.map(mapSPItemToProject);
@@ -726,7 +727,7 @@ Object.assign(SPService, {
 
   /** Look up the current user's role from PMO_Users SP list.
    *  Returns: { role: "pmo_admin"|"pm"|"executive"|"dept_head", deptId: string|null }
-   *  Defaults to { role: "pmo_admin", deptId: null } on any error or missing record (fail-open). */
+   *  Defaults to { role: "executive", deptId: null } on any error or missing record (fail-open). */
   async getUserRole(email) {
     const fallback = { role: "executive", deptId: null };
     if (!email) return fallback;

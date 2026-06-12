@@ -6610,10 +6610,6 @@ export default function App() {
     return projects;
   }, [projects, userRole, currentUserName, userDeptId]);
 
-  const updateProject = useCallback((id, data) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data, lastUpdate: new Date().toISOString().split("T")[0] } : p));
-  }, []);
-
   const archiveProject = useCallback(async (id) => {
     const today = new Date().toISOString().split("T")[0];
     const project = projects.find(p => p.id === id);
@@ -6689,10 +6685,11 @@ export default function App() {
       ? prevHistory.map(h => h.date === today ? ipiSnap : h)
       : [...prevHistory, ipiSnap];
 
+    const isPMOrDeptHead = userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD;
     const updated = {
       ...project,
       status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
-      roadmapDeadline,
+      roadmapDeadline: isPMOrDeptHead ? project.roadmapDeadline : roadmapDeadline,
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
       milestones, risks, benefits,
       ...(documents ? { documents } : {}),
@@ -6709,7 +6706,7 @@ export default function App() {
       await SPService.updateProject(project.spId, updated, omit);
     }
     setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
-  }, [projects, userRole]);
+  }, [projects, userRole, currentUserName]);
 
   // ── PMO validate / return a PM update ───────────────────────────
   const validateUpdate = useCallback(async (projectId, { approved, note }) => {
