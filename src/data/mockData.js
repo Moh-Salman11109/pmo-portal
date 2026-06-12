@@ -797,6 +797,14 @@ export const MOCK_GATE_SUBMISSIONS = [
 export const MOCK_CLOSURE_SUBMISSIONS = [];
 
 // ─── MOCK USERS (role lookup) ─────────────────────────────────────
-// Shape mirrors PMO_Users SP list: email (Title) + Role
-// Role values: "pmo_admin" | "pm" | "executive"
-export const MOCK_USERS = [];
+// Shape mirrors PMO_Users SP list: email (Title) + Role + DeptId
+// Switch active user in browser console (no server restart needed):
+//   localStorage.setItem('pmo_mock_email', 'pm.strategy@pmo.test'); location.reload();
+export const MOCK_USERS = [
+  { email: "admin@pmo.test",        role: "pmo_admin",  deptId: null },
+  { email: "pm.strategy@pmo.test",  role: "pm",         deptId: "strategy" },
+  { email: "pm.digital@pmo.test",   role: "pm",         deptId: "digital" },
+  { email: "head.digital@pmo.test", role: "dept_head",  deptId: "digital" },
+  { email: "head.it@pmo.test",      role: "dept_head",  deptId: "it" },
+  { email: "exec@pmo.test",         role: "executive",  deptId: null },
+];
