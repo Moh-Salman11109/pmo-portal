@@ -728,6 +728,50 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
         </p>
       </div>
 
+      {/* ── PRINT BUTTON ──────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button onClick={() => {
+          const win = window.open("", "_blank", "width=1100,height=800");
+          if (!win) return;
+          const rows = allProjects.map(p => {
+            const ipiVal = calcProjectIPI(p);
+            const col = p.status === "On Track" ? "#16a34a" : p.status === "Delayed" ? "#dc2626" : p.status === "At Risk" ? "#d97706" : "#6b7280";
+            return `<tr><td>${p.code}</td><td>${p.name}</td><td style="color:${col};font-weight:700">${p.status}</td><td>${p.priority}</td><td>${p.progress}%</td><td style="font-weight:700">${ipiVal}</td><td>${p.pm || "—"}</td><td>${p.plannedEnd || "—"}</td></tr>`;
+          }).join("");
+          const pIPI = calcPortfolioIPI(allProjects) ?? "—";
+          win.document.write(`<!DOCTYPE html><html><head><title>PMO Report ${TODAY}</title><style>
+            body{font-family:Arial,sans-serif;margin:32px;color:#111;font-size:13px}
+            h1{font-size:20px;margin:0 0 4px}
+            .sub{color:#666;font-size:12px;margin-bottom:20px}
+            .kpis{display:flex;gap:16px;margin-bottom:20px}
+            .kpi{border:1px solid #e5e7eb;border-radius:8px;padding:10px 18px;text-align:center}
+            .kv{font-size:26px;font-weight:900}.kl{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.04em}
+            table{width:100%;border-collapse:collapse}
+            th{background:#f9fafb;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:2px solid #e5e7eb}
+            td{padding:7px 10px;border-bottom:1px solid #f3f4f6}
+            @media print{button{display:none!important}}
+          </style></head><body>
+            <h1>PMO Portfolio Status Report</h1>
+            <div class="sub">Generated: ${TODAY} &nbsp;·&nbsp; ${allProjects.length} projects</div>
+            <div class="kpis">
+              <div class="kpi"><div class="kv" style="color:#003932">${pIPI}</div><div class="kl">Portfolio IPI</div></div>
+              <div class="kpi"><div class="kv">${allProjects.length}</div><div class="kl">Total</div></div>
+              <div class="kpi"><div class="kv" style="color:#dc2626">${allProjects.filter(p=>p.status==="Delayed").length}</div><div class="kl">Delayed</div></div>
+              <div class="kpi"><div class="kv" style="color:#d97706">${allProjects.filter(p=>p.status==="At Risk").length}</div><div class="kl">At Risk</div></div>
+              <div class="kpi"><div class="kv" style="color:#16a34a">${allProjects.filter(p=>p.status==="On Track").length}</div><div class="kl">On Track</div></div>
+              <div class="kpi"><div class="kv" style="color:#16a34a">${allProjects.filter(p=>p.status==="Completed").length}</div><div class="kl">Completed</div></div>
+            </div>
+            <table><thead><tr><th>Code</th><th>Project</th><th>Status</th><th>Priority</th><th>Progress</th><th>IPI</th><th>PM</th><th>Planned End</th></tr></thead>
+            <tbody>${rows}</tbody></table>
+            <div style="margin-top:28px;font-size:10px;color:#999;border-top:1px solid #e5e7eb;padding-top:8px">PMO Portal — Confidential · ${TODAY}</div>
+            <script>window.onload=()=>setTimeout(()=>window.print(),400)</script>
+          </body></html>`);
+          win.document.close();
+        }} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: T.text, display: "flex", alignItems: "center", gap: 6 }}>
+          🖨 Print Report
+        </button>
+      </div>
+
       {/* ── EXECUTIVE INTERVENTION PANEL ───────────────────────── */}
       {interventionFlags.length === 0 && (
         <div style={{ background: dark ? "rgba(22,163,74,0.08)" : "#f0fdf4", border: `1px solid ${dark ? "rgba(22,163,74,0.3)" : "#86efac"}`, borderRadius: 14, padding: "14px 24px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
@@ -1008,6 +1052,99 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
           </div>
         </div>
       </div>
+
+      {/* ── PORTFOLIO TIMELINE ──────────────────────────────────── */}
+      {(() => {
+        const gps = [...activeProjects].filter(p => p.startDate && p.plannedEnd).sort((a, b) => a.startDate.localeCompare(b.startDate));
+        if (gps.length < 2) return null;
+        const minTs = Math.min(...gps.map(p => new Date(p.startDate).getTime()));
+        const maxTs = Math.max(...gps.map(p => new Date(p.plannedEnd).getTime()));
+        const span = maxTs - minTs || 1;
+        const todayTs = new Date(TODAY).getTime();
+        const tPct = Math.max(0, Math.min(100, ((todayTs - minTs) / span) * 100));
+        const barCol = s => s === "On Track" ? "#16a34a" : s === "At Risk" ? "#f59e0b" : s === "Delayed" ? "#dc2626" : s === "Completed" ? "#3b82f6" : "#94a3b8";
+        const lbls = [];
+        const cur = new Date(minTs); cur.setDate(1);
+        while (cur.getTime() <= maxTs) {
+          const p = ((cur.getTime() - minTs) / span) * 100;
+          if (p >= 0 && p <= 100) lbls.push({ l: cur.toLocaleDateString("en-US", { month: "short", year: "2-digit" }), p });
+          cur.setMonth(cur.getMonth() + 3);
+        }
+        return (
+          <div style={{ marginBottom: 24 }}>
+            <SectionHeader title="Portfolio Timeline" subtitle={`${gps.length} projects with scheduled dates`} />
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "14px 20px", overflowX: "auto" }}>
+              <div style={{ position: "relative", height: 22, marginLeft: 180, marginBottom: 4, minWidth: 500 }}>
+                {lbls.map(({ l, p }) => <div key={l} style={{ position: "absolute", left: `${p}%`, transform: "translateX(-50%)", fontSize: 10, color: T.muted, whiteSpace: "nowrap" }}>{l}</div>)}
+                {tPct > 2 && tPct < 98 && <div style={{ position: "absolute", left: `${tPct}%`, transform: "translateX(-50%)", fontSize: 9, color: T.accent, fontWeight: 800, whiteSpace: "nowrap" }}>▼ TODAY</div>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 500 }}>
+                {gps.map(p => {
+                  const lp = ((new Date(p.startDate).getTime() - minTs) / span) * 100;
+                  const wp = Math.max(0.5, ((new Date(p.plannedEnd).getTime() - new Date(p.startDate).getTime()) / span) * 100);
+                  return (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", height: 28 }}>
+                      <div style={{ width: 180, flexShrink: 0, paddingRight: 10, overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column" }} onClick={() => setRoute({ view: "project", projectId: p.id })}>
+                        <span style={{ fontSize: 9, color: T.accent, fontWeight: 700, textTransform: "uppercase" }}>{p.code}</span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                      </div>
+                      <div style={{ flex: 1, position: "relative", height: 20, background: T.bg, borderRadius: 4 }}>
+                        <div style={{ position: "absolute", left: `${lp}%`, width: `${wp}%`, height: "100%", background: barCol(p.status), borderRadius: 4, opacity: 0.82, cursor: "pointer", display: "flex", alignItems: "center", paddingLeft: 6, overflow: "hidden" }}
+                          onClick={() => setRoute({ view: "project", projectId: p.id })} title={`${p.name} · ${p.startDate} → ${p.plannedEnd} · ${p.progress}%`}>
+                          <span style={{ fontSize: 9, color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>{p.progress}%</span>
+                        </div>
+                        {tPct > 0 && tPct < 100 && <div style={{ position: "absolute", left: `${tPct}%`, top: -2, bottom: -2, width: 2, background: T.accent, opacity: 0.8, pointerEvents: "none" }} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, marginLeft: 180 }}>
+                {[["On Track","#16a34a"],["At Risk","#f59e0b"],["Delayed","#dc2626"],["Not Started","#94a3b8"]].map(([l,c]) => (
+                  <span key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 8, background: c, borderRadius: 2, display: "inline-block", opacity: 0.82 }} /><span style={{ color: T.muted }}>{l}</span></span>
+                ))}
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 2, height: 12, background: T.accent, display: "inline-block" }} /><span style={{ color: T.muted }}>Today</span></span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── RESOURCE LOAD ─────────────────────────────────────────── */}
+      {(() => {
+        const pm = {};
+        activeProjects.forEach(p => {
+          if (!p.pm) return;
+          if (!pm[p.pm]) pm[p.pm] = { n: p.pm, t: 0, ok: 0, ar: 0, dl: 0 };
+          pm[p.pm].t++;
+          if (p.status === "On Track") pm[p.pm].ok++;
+          else if (p.status === "At Risk") pm[p.pm].ar++;
+          else if (p.status === "Delayed") pm[p.pm].dl++;
+        });
+        const rows = Object.values(pm).sort((a, b) => b.t - a.t);
+        if (!rows.length) return null;
+        return (
+          <div style={{ marginBottom: 24 }}>
+            <SectionHeader title="Resource Load" subtitle="Active project assignments per Project Manager" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+              {rows.map(r => (
+                <div key={r.n} style={{ background: T.surface, border: `1px solid ${r.t >= 4 ? "#dc2626" : r.t >= 3 ? "#f59e0b" : T.border}`, borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>{r.n}</div>
+                    <span style={{ fontSize: 22, fontWeight: 900, color: r.t >= 4 ? "#dc2626" : r.t >= 3 ? "#f59e0b" : "#16a34a" }}>{r.t}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", fontSize: 10 }}>
+                    {r.ok > 0 && <span style={{ background: "#dcfce7", color: "#15803d", borderRadius: 10, padding: "1px 7px" }}>{r.ok} On Track</span>}
+                    {r.ar > 0 && <span style={{ background: "#fef9c3", color: "#854d0e", borderRadius: 10, padding: "1px 7px" }}>{r.ar} At Risk</span>}
+                    {r.dl > 0 && <span style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 10, padding: "1px 7px" }}>{r.dl} Delayed</span>}
+                  </div>
+                  {r.t >= 4 && <div style={{ marginTop: 6, fontSize: 10, color: "#dc2626", fontWeight: 700 }}>⚠ Overloaded</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── DEPARTMENT CARDS ─────────────────────────────────────── */}
       <SectionHeader title="Department Portfolio Overview" subtitle="Click a department to view its projects" />
@@ -3510,12 +3647,23 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             {project.approvals.map(a => {
               const c = { "Approved": { color: "#16a34a", bg: "#dcfce7" }, "Pending": { color: "#eab308", bg: "#fef9c3" }, "Returned": { color: "#dc2626", bg: "#fee2e2" }, "Rejected": { color: "#991b1b", bg: "#fee2e2" } };
               const style = c[a.status] || c["Pending"];
+              const approvalFormUrl = a.status === "Pending"
+                ? (a.gate?.includes("3") ? FORM_URLS.gate3
+                  : a.gate?.includes("5") || a.gate?.toLowerCase().includes("closure") ? FORM_URLS.closure
+                  : FORM_URLS.gate1)
+                : null;
               return (
                 <div key={a.id} style={{ padding: "16px 20px", background: T.bg, borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderLeft: `4px solid ${style.color}` }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{a.title}</div>
                     <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>{a.gate} · Approval Owner: {a.owner}</div>
                     {a.comments && <div style={{ fontSize: 12, color: T.muted, marginTop: 4, fontStyle: "italic" }}>"{a.comments}"</div>}
+                    {approvalFormUrl && (
+                      <a href={approvalFormUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ display: "inline-block", marginTop: 10, background: "#fef9c3", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "5px 14px", borderRadius: 8, textDecoration: "none", border: "1px solid #fde68a" }}>
+                        Submit Decision →
+                      </a>
+                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <span style={{ background: style.bg, color: style.color, fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 20 }}>{a.status}</span>
@@ -3556,6 +3704,17 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   <span style={{ fontSize: 11, color: T.muted }}>realized</span>
                   <span style={{ fontSize: 11, background: "#e8f5f0", color: T.primary, fontWeight: 600, padding: "2px 8px", borderRadius: 6 }}>{b.contribution} impact</span>
                 </div>
+                {b.expectedDate && (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+                    <span style={{ color: T.muted }}>Expected: {b.expectedDate}</span>
+                    {b.realization >= 100
+                      ? <span style={{ background: "#dcfce7", color: "#15803d", fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>✓ Realized</span>
+                      : b.expectedDate < TODAY
+                        ? <span style={{ background: "#fee2e2", color: "#dc2626", fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>Overdue — not yet realized</span>
+                        : <span style={{ background: "#fef9c3", color: "#854d0e", padding: "2px 8px", borderRadius: 10 }}>Pending</span>
+                    }
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -5358,7 +5517,7 @@ const IssueListEditor = ({ items, onChange }) => {
   const T = useT();
   const today = new Date().toISOString().split("T")[0];
   const [adding, setAdding] = useState(false);
-  const blank = { title: "", severity: "Medium", status: "Open", owner: "", raised: today, escalated: false };
+  const blank = { title: "", severity: "Medium", status: "Open", owner: "", raised: today, escalated: false, targetDate: "" };
   const [draft, setDraft] = useState(blank);
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
@@ -5386,6 +5545,7 @@ const IssueListEditor = ({ items, onChange }) => {
             <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.severity}</span>
             <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.status}</span>
             {i.escalated && <span style={{ background: "#dc2626", color: "#fff", borderRadius: 10, padding: "2px 8px" }}>Escalated</span>}
+            {i.targetDate && <span style={{ background: i.targetDate < today && i.status !== "Resolved" ? "#fee2e2" : "#f3f4f6", color: i.targetDate < today && i.status !== "Resolved" ? "#dc2626" : "#6b7280", borderRadius: 10, padding: "2px 8px" }}>Due: {i.targetDate}</span>}
           </div>
         </div>
       ))}
@@ -5405,6 +5565,10 @@ const IssueListEditor = ({ items, onChange }) => {
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Owner</div>
               <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Target Close Date</div>
+              <input type="date" value={draft.targetDate} onChange={e => setDraft(p => ({ ...p, targetDate: e.target.value }))} style={s} />
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Escalated?</div>
@@ -5436,7 +5600,7 @@ const BenefitListEditor = ({ items, onChange }) => {
   const T = useT();
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
-  const blank = { kpi: "", category: "Financial", owner: "", baseline: "0", target: "0", current: "0", realization: 0, contribution: "Medium" };
+  const blank = { kpi: "", category: "Financial", owner: "", baseline: "0", target: "0", current: "0", realization: 0, contribution: "Medium", expectedDate: "" };
   const [draft, setDraft] = useState(blank);
   const [adding, setAdding] = useState(false);
   const add = () => {
@@ -5463,7 +5627,7 @@ const BenefitListEditor = ({ items, onChange }) => {
             </div>
             <button onClick={() => remove(b.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 4, cursor: "pointer", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px" }}>Remove</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div>
               <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Current</div>
               <input value={b.current} onChange={e => upd(b.id, "current", e.target.value)} style={s} />
@@ -5475,6 +5639,10 @@ const BenefitListEditor = ({ items, onChange }) => {
             <div>
               <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Owner</div>
               <input value={b.owner || ""} onChange={e => upd(b.id, "owner", e.target.value)} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Expected Date</div>
+              <input type="date" value={b.expectedDate || ""} onChange={e => upd(b.id, "expectedDate", e.target.value)} style={s} />
             </div>
           </div>
         </div>
@@ -5511,6 +5679,10 @@ const BenefitListEditor = ({ items, onChange }) => {
               <select value={draft.contribution} onChange={e => setDraft(p => ({ ...p, contribution: e.target.value }))} style={ss}>
                 {["Low","Medium","High"].map(o => <option key={o}>{o}</option>)}
               </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Expected Realization Date</div>
+              <input type="date" value={draft.expectedDate || ""} onChange={e => setDraft(p => ({ ...p, expectedDate: e.target.value }))} style={s} />
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
