@@ -3200,6 +3200,134 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   );
 };
 
+// ─── MILESTONE GANTT ──────────────────────────────────────────────
+const MilestoneGantt = ({ milestones, project }) => {
+  const T = useT();
+
+  const withDates = milestones.filter(m => m.startDate || m.date);
+  if (withDates.length === 0) return null;
+
+  const allDates = milestones.flatMap(m => [m.startDate, m.date].filter(Boolean)).sort();
+  let spanStart = allDates[0];
+  let spanEnd   = allDates[allDates.length - 1];
+  if (project?.startDate  && project.startDate  < spanStart) spanStart = project.startDate;
+  if (project?.plannedEnd && project.plannedEnd  > spanEnd)  spanEnd   = project.plannedEnd;
+
+  const t0   = new Date(spanStart).getTime() - 7 * 86_400_000;
+  const t1   = new Date(spanEnd).getTime()   + 7 * 86_400_000;
+  const span = t1 - t0;
+  const toPct = d => d ? Math.max(0, Math.min(100, ((new Date(d).getTime() - t0) / span) * 100)) : null;
+  const todayPct = toPct(TODAY);
+
+  const ticks = [];
+  const cur = new Date(t0);
+  cur.setDate(1);
+  while (cur.getTime() <= t1) {
+    ticks.push({ p: toPct(cur.toISOString().slice(0, 10)), label: cur.toLocaleString("en-GB", { month: "short", year: "2-digit" }) });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  const SC = {
+    Completed:     { track: "#dcfce7", fill: "#16a34a", border: "#15803d", lbl: "#15803d" },
+    "In Progress": { track: "#fef9c3", fill: "#eab308", border: "#d97706", lbl: "#854d0e" },
+    Delayed:       { track: "#fee2e2", fill: "#ef4444", border: "#dc2626", lbl: "#991b1b" },
+    Upcoming:      { track: "#f1f5f9", fill: "#94a3b8", border: "#cbd5e1", lbl: "#64748b" },
+  };
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px 14px", marginBottom: 20, overflowX: "auto" }}>
+      <div style={{ fontWeight: 800, fontSize: 13, color: T.text, marginBottom: 12 }}>Gantt Chart</div>
+      <div style={{ minWidth: 520 }}>
+
+        {/* Month labels */}
+        <div style={{ display: "flex", marginBottom: 4 }}>
+          <div style={{ width: 165, flexShrink: 0 }} />
+          <div style={{ flex: 1, position: "relative", height: 20 }}>
+            {ticks.map((t, i) => (
+              <div key={i} style={{ position: "absolute", left: `${t.p}%`, transform: "translateX(-50%)", fontSize: 9, color: T.muted, fontWeight: 700, whiteSpace: "nowrap" }}>{t.label}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* Milestone rows */}
+        {milestones.map((m, i) => {
+          const sc  = SC[m.status] || SC.Upcoming;
+          const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
+          const c   = isOverdue ? SC.Delayed : sc;
+          const sp  = toPct(m.startDate || m.date);
+          const ep  = toPct(m.date      || m.startDate);
+          const hasDuration = !!(m.startDate && m.date && m.startDate !== m.date);
+          const left  = sp != null ? Math.min(sp, ep ?? sp) : (ep ?? 0);
+          const right = ep != null ? Math.max(ep, sp ?? ep) : (sp ?? 0);
+          const width = Math.max(right - left, 1.2);
+          const pct   = m.progress ?? (m.status === "Completed" ? 100 : 0);
+
+          return (
+            <div key={m.id || i} style={{ display: "flex", alignItems: "center", height: 34, borderTop: `1px solid ${T.border}` }}>
+              <div style={{ width: 165, flexShrink: 0, paddingRight: 12, fontSize: 11, fontWeight: 600, color: sp == null && ep == null ? T.muted : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }} title={m.name}>
+                {m.name}
+              </div>
+              <div style={{ flex: 1, position: "relative", height: "100%" }}>
+                {ticks.map((t, ti) => (
+                  <div key={ti} style={{ position: "absolute", left: `${t.p}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: 0.4 }} />
+                ))}
+                {todayPct != null && (
+                  <div style={{ position: "absolute", left: `${todayPct}%`, top: 0, bottom: 0, width: 2, background: T.accent, opacity: 0.85, zIndex: 3 }} />
+                )}
+                {sp == null && ep == null
+                  ? <div style={{ position: "absolute", top: 12, left: 8, fontSize: 10, color: T.muted, fontStyle: "italic" }}>No dates</div>
+                  : hasDuration
+                    ? (
+                      <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: 6, height: 22, background: c.track, border: `1.5px solid ${c.border}`, borderRadius: 5, overflow: "hidden", zIndex: 1 }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: c.fill, opacity: 0.9, borderRadius: 4 }} />
+                        {pct > 15 && (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: c.lbl }}>{pct}%</div>
+                        )}
+                      </div>
+                    )
+                    : (
+                      <div style={{ position: "absolute", left: `calc(${left}% - 10px)`, top: 7, width: 20, height: 20, background: c.fill, border: `2px solid ${c.border}`, borderRadius: 3, transform: "rotate(45deg)", zIndex: 2 }} />
+                    )
+                }
+                {m.date && ep != null && (
+                  <div style={{ position: "absolute", left: `calc(${ep}% + 6px)`, top: 10, fontSize: 9, color: T.muted, whiteSpace: "nowrap", zIndex: 4 }}>
+                    {new Date(m.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Today label */}
+        {todayPct != null && (
+          <div style={{ display: "flex" }}>
+            <div style={{ width: 165, flexShrink: 0 }} />
+            <div style={{ flex: 1, position: "relative", height: 16 }}>
+              <div style={{ position: "absolute", left: `${todayPct}%`, transform: "translateX(-50%)", fontSize: 9, color: T.accent, fontWeight: 800, whiteSpace: "nowrap" }}>▲ Today</div>
+            </div>
+          </div>
+        )}
+
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
+          <div style={{ width: 165, flexShrink: 0 }} />
+          {[["#16a34a","Completed"],["#eab308","In Progress"],["#ef4444","Delayed / Overdue"],["#94a3b8","Upcoming"]].map(([col, lbl]) => (
+            <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
+              <div style={{ width: 14, height: 8, background: col, borderRadius: 2 }} />
+              {lbl}
+            </div>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
+            <div style={{ width: 2, height: 14, background: T.accent, borderRadius: 1 }} />
+            Today
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
 const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
 const PROJECT_TABS_PM    = ["Overview", "Health", "Milestones", "Risks & Issues", "Benefits", "Documents"];
@@ -3634,8 +3762,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
 
       {/* MILESTONES TAB */}
       {activeTab === "Milestones" && (
+        <div>
+        <MilestoneGantt milestones={project.milestones} project={project} />
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-          <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Milestone Timeline</h3>
+          <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Milestone Details</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {project.milestones.map((m, i) => {
               const statusStyles = {
@@ -3679,6 +3809,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               );
             })}
           </div>
+        </div>
         </div>
       )}
 
