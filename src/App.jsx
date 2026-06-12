@@ -637,6 +637,18 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
   const overdueOld          = overdueMilestones.filter(m => m.daysOverdue > 30);
   const overdueProjectCount = useMemo(() => new Set(overdueMilestones.map(m => m.projectId)).size, [overdueMilestones]);
 
+  // ── Portfolio Risk Register (High + Critical open risks across all active projects) ──
+  const portfolioRisks = useMemo(() =>
+    activeProjects.flatMap(p =>
+      (p.risks || [])
+        .filter(r => (r.level === "Critical" || r.level === "High") && r.status !== "Closed" && r.status !== "Mitigated")
+        .map(r => ({ ...r, projectId: p.id, projectCode: p.code, projectName: p.name }))
+    ).sort((a, b) => {
+      const lvl = { Critical: 3, High: 2 };
+      return (lvl[b.level] || 0) - (lvl[a.level] || 0);
+    }),
+  [activeProjects]);
+
   // ── Pending approvals ──────────────────────────────────────────
   const pendingApprovals = useMemo(() =>
     (gateSubmissions || [])
@@ -760,6 +772,67 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── PORTFOLIO RISK REGISTER ────────────────────────────── */}
+      {userRole !== ROLE_PM && portfolioRisks.length > 0 && (
+        <details style={{ marginBottom: 24 }} open={portfolioRisks.filter(r => r.level === "Critical").length > 0}>
+          <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 24px", background: T.surface, border: `1px solid ${dark ? "rgba(220,38,38,0.35)" : "#fca5a5"}`, borderRadius: 14, fontSize: 14, fontWeight: 800, color: T.text }}>
+            <span style={{ fontSize: 16 }}>⚠</span>
+            <span>Portfolio Risk Register</span>
+            {portfolioRisks.filter(r => r.level === "Critical").length > 0 && (
+              <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>
+                {portfolioRisks.filter(r => r.level === "Critical").length} Critical
+              </span>
+            )}
+            <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>
+              {portfolioRisks.filter(r => r.level === "High").length} High
+            </span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: T.muted, fontWeight: 400 }}>click to toggle</span>
+          </summary>
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 14px 14px", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: T.bg }}>
+                  {["Project", "Risk", "Level", "Owner", "Due Date", "Status"].map(h => (
+                    <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {portfolioRisks.slice(0, 25).map((r, i) => (
+                  <tr key={`${r.projectId}-${r.id}`} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", transition: "background 0.15s" }}
+                    onClick={() => setRoute({ view: "project", projectId: r.projectId })}
+                    onMouseEnter={e => e.currentTarget.style.background = T.bg}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ padding: "10px 14px" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{r.projectCode}</div>
+                      <div style={{ fontSize: 11, color: T.muted, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.projectName}</div>
+                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, maxWidth: 200 }}>
+                      <div style={{ fontWeight: 600 }}>{r.title}</div>
+                      {r.mitigation && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>↳ {r.mitigation}</div>}
+                    </td>
+                    <td style={{ padding: "10px 14px" }}><RiskBadge level={r.level} /></td>
+                    <td style={{ padding: "10px 14px", fontSize: 12 }}>{r.owner || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: r.dueDate && r.dueDate < TODAY ? "#dc2626" : T.muted }}>
+                      {r.dueDate || "—"}
+                      {r.dueDate && r.dueDate < TODAY && <span style={{ display: "block", fontSize: 10, color: "#dc2626" }}>overdue</span>}
+                    </td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: r.status === "Open" ? "#dc2626" : "#eab308" }}>{r.status}</span>
+                    </td>
+                  </tr>
+                ))}
+                {portfolioRisks.length > 25 && (
+                  <tr><td colSpan={6} style={{ padding: "10px 14px", fontSize: 12, color: T.muted, textAlign: "center" }}>
+                    +{portfolioRisks.length - 25} more — drill into departments to see all
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </details>
       )}
 
       {/* ── KPI ROW ─────────────────────────────────────────────── */}
@@ -962,10 +1035,10 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
               <Progress value={stats.health} color={stats.health > 70 ? T.accent : stats.health > 50 ? "#eab308" : "#dc2626"} height={6} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 16 }}>
                 {[
-                  { label: "Active",  value: stats.active,                                                  color: "#16a34a" },
-                  { label: "At Risk", value: stats.total - stats.active - stats.delayed - stats.completed,  color: "#eab308" },
-                  { label: "Delayed", value: stats.delayed,                                                 color: "#dc2626" },
-                  { label: "Done",    value: stats.completed,                                               color: "#3b82f6" },
+                  { label: "On Track", value: stats.onTrack,   color: "#16a34a" },
+                  { label: "At Risk",  value: stats.atRisk,   color: "#eab308" },
+                  { label: "Delayed",  value: stats.delayed,  color: "#dc2626" },
+                  { label: "Done",     value: stats.completed, color: "#3b82f6" },
                 ].map(s => (
                   <div key={s.label} style={{ textAlign: "center", padding: "8px 4px", background: T.bg, borderRadius: 8 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -3186,12 +3259,12 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             ))}
           </div>
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Performance Indicators</h3>
+            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Performance Indicators (Auto-Calculated)</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               {[
-                { label: "Schedule Performance Index (SPI)", value: project.spi, threshold: 0.9, format: (v) => v.toFixed(2) },
-                { label: "Cost Performance Index (CPI)", value: project.cpi, threshold: 0.9, format: (v) => v.toFixed(2) },
-                { label: "Budget Utilisation", value: budgetUtil, threshold: 90, format: (v) => `${v}%` },
+                { label: "SPI — Schedule", value: ipiResult.components.spiFinal ?? 1, threshold: 0.9, format: v => v.toFixed(2) },
+                { label: "CPI — Cost",     value: ipiResult.components.cpi      ?? 1, threshold: 0.9, format: v => v.toFixed(2) },
+                { label: "MCI — Docs",     value: ipiResult.components.mci,           threshold: 0.8, format: v => `${Math.round(v * 100)}%` },
               ].map(({ label, value, threshold, format }) => (
                 <div key={label} style={{ padding: "16px 20px", background: T.bg, borderRadius: 12 }}>
                   <div style={{ fontSize: 12, color: T.muted, marginBottom: 6 }}>{label}</div>
@@ -3202,7 +3275,37 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 </div>
               ))}
             </div>
+            <div style={{ marginTop: 12, fontSize: 11, color: T.muted }}>
+              Budget Utilisation: <strong style={{ color: budgetUtil > 95 ? "#dc2626" : budgetUtil > 85 ? "#eab308" : T.primary }}>{budgetUtil}%</strong>
+              {budgetUtil > 95 && <span style={{ color: "#dc2626", marginLeft: 8 }}>⚠ Over budget</span>}
+            </div>
           </div>
+          {(project.ipiHistory || []).length > 1 && (() => {
+            const histData = [...project.ipiHistory]
+              .filter(h => h.date && h.ipi != null)
+              .sort((a, b) => a.date.localeCompare(b.date))
+              .map(h => ({ ...h, date: h.date.slice(5) }));
+            return (
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginTop: 16 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>IPI Trend</h3>
+                <div style={{ fontSize: 11, color: T.muted, marginBottom: 16 }}>{histData.length} updates recorded</div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={histData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.muted }} />
+                    <YAxis domain={[0, 110]} tick={{ fontSize: 10, fill: T.muted }} width={30} />
+                    <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontSize: 12 }} />
+                    <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 2" />
+                    <ReferenceLine y={90}  stroke="#eab308" strokeDasharray="4 2" />
+                    <Line type="monotone" dataKey="ipi" stroke={T.accent} strokeWidth={2.5} dot={{ r: 4, fill: T.accent }} name="IPI" />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 10, color: T.muted }}>
+                  <span style={{ color: "#16a34a" }}>— On Track (100)</span>
+                  <span style={{ color: "#eab308" }}>— Watch (90)</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         );
       })()}
@@ -3347,23 +3450,42 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Issue Log</h3>
-              <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.issues.filter(i => i.escalated).length} Escalated</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                {project.issues.filter(i => { const d = daysSince(i.raised); return d != null && d > 30 && i.status === "Open"; }).length > 0 && (
+                  <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>
+                    {project.issues.filter(i => { const d = daysSince(i.raised); return d != null && d > 30 && i.status === "Open"; }).length} Stale 30d+
+                  </span>
+                )}
+                {project.issues.filter(i => i.escalated).length > 0 && (
+                  <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.issues.filter(i => i.escalated).length} Escalated</span>
+                )}
+              </div>
             </div>
             {project.issues.length === 0 ? (
               <div style={{ textAlign: "center", padding: "24px", color: "#16a34a", fontSize: 13 }}>✓ No open issues</div>
             ) : (
-              project.issues.map(issue => (
-                <div key={issue.id} style={{ padding: "14px 16px", background: T.bg, borderRadius: 10, marginBottom: 10, borderLeft: `4px solid ${issue.escalated ? "#dc2626" : issue.severity === "High" ? "#eab308" : T.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700, fontSize: 13 }}>{issue.title}</span>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {issue.escalated && <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>ESCALATED</span>}
-                      <RiskBadge level={issue.severity} />
+              project.issues.map(issue => {
+                const issueDays = daysSince(issue.raised);
+                const isStale   = issueDays != null && issueDays > 30 && issue.status === "Open";
+                const borderCol = issue.escalated ? "#dc2626" : isStale ? "#f97316" : issue.severity === "High" ? "#eab308" : T.border;
+                return (
+                  <div key={issue.id} style={{ padding: "14px 16px", background: T.bg, borderRadius: 10, marginBottom: 10, borderLeft: `4px solid ${borderCol}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{issue.title}</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {isStale && <span style={{ background: "#ffedd5", color: "#c2410c", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{issueDays}d open</span>}
+                        {issue.escalated && <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>ESCALATED</span>}
+                        <RiskBadge level={issue.severity} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: T.muted }}>
+                      Owner: {issue.owner} · Raised: {issue.raised}
+                      {issue.targetDate && <span> · Target: <span style={{ color: issue.targetDate < TODAY && issue.status === "Open" ? "#dc2626" : T.muted }}>{issue.targetDate}</span></span>}
+                      {" · "}Status: <span style={{ fontWeight: 600, color: issue.status === "Open" ? "#dc2626" : issue.status === "Resolved" ? "#16a34a" : T.muted }}>{issue.status}</span>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: T.muted }}>Owner: {issue.owner} · Raised: {issue.raised} · Status: <span style={{ fontWeight: 600 }}>{issue.status}</span></div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -5,7 +5,8 @@ export function getDeptStats(deptId, projects) {
   const dp        = projects.filter(p => p.deptId === deptId);
   const total     = dp.length;
   const onTrack   = dp.filter(p => p.status === "On Track").length;
-  const active    = dp.filter(p => p.status === "On Track" || p.status === "At Risk").length;
+  const atRisk    = dp.filter(p => p.status === "At Risk").length;
+  const active    = onTrack + atRisk;
   const delayed   = dp.filter(p => p.status === "Delayed").length;
   const completed = dp.filter(p => p.status === "Completed").length;
   const highRisk  = dp.filter(p => p.riskLevel === "High" || p.riskLevel === "Critical").length;
@@ -13,7 +14,7 @@ export function getDeptStats(deptId, projects) {
   const totalBudget = dp.reduce((s, p) => s + p.budget, 0);
   const actualCost  = dp.reduce((s, p) => s + p.actualCost, 0);
   const budgetUtil  = totalBudget ? Math.round((actualCost / totalBudget) * 100) : 0;
-  return { total, onTrack, active, delayed, completed, highRisk, health, totalBudget, actualCost, budgetUtil };
+  return { total, onTrack, atRisk, active, delayed, completed, highRisk, health, totalBudget, actualCost, budgetUtil };
 }
 
 // ─── IPI Global Defaults ─────────────────────────────────────────────────────
