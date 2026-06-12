@@ -537,7 +537,7 @@ export const MOCK_PROJECTS = [
     progress: 100, plannedProgress: 100, startDate: "2024-07-01", plannedEnd: "2025-04-30",
     budget: 2200000, forecast: 2100000, actualCost: 2050000,
     riskLevel: "Low", budgetStatus: "On Budget", strategic: "Quality & Excellence",
-    lastUpdate: "2025-05-01", classification: "Compliance",
+    lastUpdate: "2025-05-01", actualFinishDate: "2025-05-01", classification: "Compliance",
     objective: "Achieve ISO 9001:2025 certification across all business units",
     businessCase: "Required for key client contracts and regulatory requirements",
     projectType: "Enterprise Project",

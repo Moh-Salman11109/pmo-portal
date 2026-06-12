@@ -6696,9 +6696,15 @@ export default function App() {
       : [...prevHistory, ipiSnap];
 
     const isPMOrDeptHead = userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD;
+    const nowCompleted  = status === "Completed";
+    const wasCompleted  = project.status === "Completed";
+    const capturedFinish = nowCompleted && !project.actualFinishDate ? today
+                         : !nowCompleted && wasCompleted              ? null
+                         : project.actualFinishDate;
     const updated = {
       ...project,
       status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+      actualFinishDate: capturedFinish,
       roadmapDeadline: isPMOrDeptHead ? project.roadmapDeadline : roadmapDeadline,
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
       milestones, risks, benefits,
@@ -6748,7 +6754,10 @@ export default function App() {
     const updates = newUpdate
       ? [...(form.updates || []), { id: `U${Date.now()}`, date: todayStr, owner: form.pm, note: newUpdate }]
       : (form.updates || []);
-    const full = { ...form, updates, _newUpdate: undefined, lastUpdate: todayStr };
+    const capturedFinish = form.status === "Completed"
+      ? (form.actualFinishDate || todayStr)
+      : null;
+    const full = { ...form, updates, _newUpdate: undefined, lastUpdate: todayStr, actualFinishDate: capturedFinish };
 
     if (!isUsingMock()) {
       if (mode === "create") {

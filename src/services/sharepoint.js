@@ -76,6 +76,7 @@ export const SP_FIELD_MAP = {
   pmoNotes:            "PMONotes",
   roadmapDeadline:     "RoadmapDeadline",
   isRoadmap:           "IsRoadmapProject",
+  actualFinishDate:    "ActualFinishDate",
   // JSON columns — stored as multi-line text in SP, parsed with safeJSON()
   gates:               "GatesJSON",
   milestones:          "MilestonesJSON",
@@ -168,6 +169,7 @@ export function mapSPItemToProject(item) {
     pmoNotes:            item[f.pmoNotes]             || "",
     roadmapDeadline:     safeDate(item[f.roadmapDeadline]),
     isRoadmap:           Boolean(item[f.isRoadmap]),
+    actualFinishDate:    safeDate(item[f.actualFinishDate]),
     // JSON sub-objects
     gates:               safeJSON(item[f.gates],       []),
     milestones:          safeJSON(item[f.milestones],  []),
@@ -275,6 +277,7 @@ export function mapProjectToSPItem(project) {
     [f.pmoNotes]:          ns(project.pmoNotes),
     [f.roadmapDeadline]:   nd(project.roadmapDeadline),
     [f.isRoadmap]:         Boolean(project.isRoadmap),
+    [f.actualFinishDate]:  nd(project.actualFinishDate),
     [f.gates]:             js(project.gates),
     [f.milestones]:        js(project.milestones),
     [f.risks]:             js(project.risks),

@@ -131,7 +131,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const roadmapDeadline = project.roadmapDeadline;
   let penalty = 1;
   if (roadmapDeadline) {
-    const finishDate = project.status === "Completed" ? (project.lastUpdate || asOfDate) : null;
+    const finishDate = project.status === "Completed"
+      ? (project.actualFinishDate || project.lastUpdate || asOfDate) : null;
     const measurementDate = finishDate || asOfDate;
     if (measurementDate > roadmapDeadline) {
       const daysOverdue = Math.floor(
