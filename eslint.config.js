@@ -1,0 +1,66 @@
+import js from "@eslint/js";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
+
+export default [
+  { ignores: ["dist/", "node_modules/"] },
+  {
+    files: ["**/*.{js,jsx}"],
+    ...js.configs.recommended,
+    plugins: {
+      "react-hooks": reactHooks,
+      "react-refresh": reactRefresh,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+    },
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        console: "readonly",
+        localStorage: "readonly",
+        sessionStorage: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        fetch: "readonly",
+        FormData: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        Blob: "readonly",
+        FileReader: "readonly",
+        HTMLElement: "readonly",
+        Event: "readonly",
+        Promise: "readonly",
+        Map: "readonly",
+        Set: "readonly",
+        WeakMap: "readonly",
+        Symbol: "readonly",
+        Intl: "readonly",
+        Math: "readonly",
+        Date: "readonly",
+        JSON: "readonly",
+        Number: "readonly",
+        Boolean: "readonly",
+        String: "readonly",
+        Array: "readonly",
+        Object: "readonly",
+        Error: "readonly",
+        parseInt: "readonly",
+        parseFloat: "readonly",
+        isNaN: "readonly",
+        isFinite: "readonly",
+        encodeURIComponent: "readonly",
+        decodeURIComponent: "readonly",
+      },
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+    },
+  },
+];
