@@ -3548,19 +3548,19 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const [noteDraft,  setNoteDraft]  = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
 
+  // ── IPI — must run before early return so hook call count is stable ─
+  const ipiResult  = project ? calcProjectIPIFull(project)  : { ipi: 0 };
+  const ipi        = ipiResult.ipi;
+  const twIPI      = project ? calcTimeWeightedIPI(project) : 0;
+  const ipiC       = ipiColor(ipi);
+  const twIpiC     = ipiColor(twIPI);
+  const hasHistory = project ? (project.ipiHistory || []).length > 0 : false;
+  const countedIPI = useCountUp(twIPI);
+
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
 
   const budgetUtil = project.budget > 0 ? Math.round((project.actualCost / project.budget) * 100) : 0;
   const remaining = project.budget - project.actualCost;
-
-  // ── IPI ──────────────────────────────────────────────────────────
-  const ipiResult  = calcProjectIPIFull(project);
-  const ipi        = ipiResult.ipi;                       // current snapshot
-  const twIPI      = calcTimeWeightedIPI(project);        // time-weighted official score
-  const ipiC       = ipiColor(ipi);
-  const twIpiC     = ipiColor(twIPI);
-  const hasHistory = (project.ipiHistory || []).length > 0;
-  const countedIPI = useCountUp(twIPI);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const infoCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -6615,7 +6615,7 @@ export default function App() {
       return projects.filter(p => ids.includes((p.deptId || "").toLowerCase()));
     }
     return projects;
-  }, [projects, userRole, currentUserName, userDeptId]);
+  }, [projects, userRole, currentUserEmail, currentUserName, userDeptId]);
 
   const archiveProject = useCallback(async (id) => {
     const today = new Date().toISOString().split("T")[0];
