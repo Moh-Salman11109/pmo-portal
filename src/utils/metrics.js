@@ -59,7 +59,27 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
 
     ev = earnedWeight / totalWeight;
     pv = plannedWeight / totalWeight;
-    // pv=0 means no milestone was due yet — neutral (null→1.0), not a reward
+
+    // EV ceiling: milestone statuses (e.g. "In Progress" → 50%) can inflate EV above
+    // what the PM actually reports as overall progress. Cap EV at reported progress so
+    // a milestone-heavy project can't auto-claim more completion than the PM stated.
+    ev = Math.min(ev, (project.progress ?? 0) / 100);
+
+    // PV floor: if only 1-2 milestones have past due dates the denominator is tiny and
+    // SPI spikes. Enforce the timeline-based PV as a minimum — the clock doesn't stop
+    // ticking just because most milestones have future dates.
+    if (project.startDate && project.plannedEnd) {
+      const msStart  = new Date(project.startDate).getTime();
+      const msEnd    = new Date(project.plannedEnd).getTime();
+      const msNow    = new Date(asOfDate).getTime();
+      const duration = msEnd - msStart;
+      if (duration > 0) {
+        const datePV = Math.max(0, Math.min(1, (msNow - msStart) / duration));
+        pv = Math.max(pv, datePV);
+      }
+    }
+
+    // pv=0 means no milestone was due yet AND project hasn't started — neutral
     spi = pv === 0 ? null : Math.min(cap, ev / pv);
   } else {
     // Fallback: derive PV from project dates if available (accurate), else from plannedProgress
