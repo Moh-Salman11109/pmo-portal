@@ -116,13 +116,16 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const reqDocs  = allDocs.filter(d => d.required);
   // 0    = no documents at all → penalized, PM hasn't submitted anything
   // 1    = docs exist but none marked required → full compliance assumed
+  // Credit tiers: Approved/Final/Received/Current = 1.0 · Submitted = 0.5 (uploaded but pending review)
   const mci = allDocs.length === 0
     ? 0
     : reqDocs.length === 0
       ? 1
-      : Math.min(1, reqDocs.filter(d =>
-          ["Approved", "Final", "Received", "Current", "Submitted"].includes(d.status)
-        ).length / reqDocs.length);
+      : Math.min(1, reqDocs.reduce((s, d) => {
+          if (["Approved", "Final", "Received", "Current"].includes(d.status)) return s + 1.0;
+          if (d.status === "Submitted") return s + 0.5;
+          return s;
+        }, 0) / reqDocs.length);
 
   // ── Roadmap-deadline penalty (hits SPI only) ──────────────────────────────
   const roadmapDeadline = project.roadmapDeadline;
