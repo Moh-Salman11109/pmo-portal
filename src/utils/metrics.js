@@ -198,9 +198,10 @@ function projectWeight(p) {
 export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
   const raw = project.ipiHistory || [];
   const history = raw
-    .filter(h => h.date && h.ipi != null)
+    .filter(h => h.date && h.ipi != null && h.date <= asOfDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Acceptable approximation until history accrues for this date range
   if (!history.length) return calcProjectIPI(project);
 
   let totalWeighted = 0;
@@ -239,12 +240,12 @@ export function calcDeptIPI(deptId, projects) {
  * Portfolio IPI — budget×priority weighted across all non-archived projects.
  * Returns null when no active projects.
  */
-export function calcPortfolioIPI(projects) {
+export function calcPortfolioIPI(projects, asOfDate = TODAY) {
   const active = projects.filter(p => !p.archived);
   if (!active.length) return null;
   const totalW = active.reduce((s, p) => s + projectWeight(p), 0);
   return Math.round(
-    active.reduce((s, p) => s + calcTimeWeightedIPI(p) * projectWeight(p), 0) / totalW
+    active.reduce((s, p) => s + calcTimeWeightedIPI(p, asOfDate) * projectWeight(p), 0) / totalW
   );
 }
 

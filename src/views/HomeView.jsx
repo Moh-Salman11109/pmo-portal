@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useT, themeStore, ttStyle } from "../theme.js";
 import { useBp } from "../hooks/useBp.js";
@@ -22,6 +22,12 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
   // ── Stable derived arrays (memoized to prevent re-computation on theme/resize) ──
   const allProjects    = useMemo(() => projects.filter(p => !p.archived),                [projects]);
   const activeProjects = useMemo(() => allProjects.filter(p => p.status !== "Completed"),[allProjects]);
+
+  const portfolioIPI    = useMemo(() => calcPortfolioIPI(allProjects), [allProjects]);
+  const d30             = useMemo(() => { const d = new Date(TODAY); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]; }, []);
+  const prevIPI         = useMemo(() => calcPortfolioIPI(allProjects, d30), [allProjects, d30]);
+  const overrunProjects = useMemo(() => allProjects.filter(p => p.budget > 0 && (p.forecast || 0) > p.budget), [allProjects]);
+  const overrunExposure = useMemo(() => overrunProjects.reduce((s, p) => s + ((p.forecast || 0) - p.budget), 0), [overrunProjects]);
 
   // ── Status counts ──────────────────────────────────────────────
   const byStatus = { "On Track": 0, "At Risk": 0, "Delayed": 0, "Completed": 0, "Not Started": 0 };
@@ -140,6 +146,10 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
   const kpiCols   = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
   const chartCols = bp === "mobile" || bp === "tablet" ? "1fr" : "2fr 1fr";
   const deptCols  = bp === "mobile" ? "1fr" : bp === "tablet" ? "repeat(2, 1fr)" : "repeat(3, 1fr)";
+  const heroCols  = bp === "mobile" || bp === "tablet" ? "1fr" : "2fr 1fr";
+
+  const [ipiHovered,     setIpiHovered]     = useState(false);
+  const [overrunHovered, setOverrunHovered] = useState(false);
 
   return (
     <div style={{ padding: pad, maxWidth: 1500 }}>
@@ -303,6 +313,64 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
           </div>
         </details>
       )}
+
+      {/* ── PORTFOLIO IPI + FORECAST OVERRUN ─────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: heroCols, gap: 14, marginBottom: 24 }}>
+        <div
+          onClick={() => setRoute({ view: "departments" })}
+          onMouseEnter={() => setIpiHovered(true)}
+          onMouseLeave={() => setIpiHovered(false)}
+          style={{
+            background: T.surface, border: `1px solid ${ipiHovered ? T.accent : T.border}`,
+            borderRadius: 12, padding: "20px 24px", cursor: "pointer",
+            transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
+            boxShadow: ipiHovered ? "0 6px 22px rgba(0,0,0,0.11)" : "none",
+            transform: ipiHovered ? "translateY(-3px)" : "translateY(0)",
+          }}
+        >
+          <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>Portfolio IPI</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0" }}>
+            <span style={{ fontSize: 40, fontWeight: 900, color: ipiColor(portfolioIPI).color, lineHeight: 1 }}>
+              {portfolioIPI ?? "—"}
+            </span>
+            {portfolioIPI != null && (
+              <span style={{ fontSize: 12, fontWeight: 700, color: ipiColor(portfolioIPI).color, background: ipiColor(portfolioIPI).bg, borderRadius: 20, padding: "3px 12px" }}>
+                {ipiColor(portfolioIPI).label}
+              </span>
+            )}
+          </div>
+          {prevIPI != null && portfolioIPI != null && (() => {
+            const delta = portfolioIPI - prevIPI;
+            const color = delta > 0 ? "#16a34a" : delta < 0 ? "#dc2626" : T.muted;
+            const text  = delta > 0 ? `▲ +${delta} vs last month` : delta < 0 ? `▼ ${delta} vs last month` : "— unchanged vs last month";
+            return <div style={{ fontSize: 12, color, fontWeight: 600 }}>{text}</div>;
+          })()}
+          <div style={{ marginTop: 8, fontSize: 11, color: T.muted }}>SPI 50% · CPI 25% · Docs 25%</div>
+        </div>
+
+        <div
+          onClick={() => setRoute({ view: "projects", filterOverrun: true })}
+          onMouseEnter={() => setOverrunHovered(true)}
+          onMouseLeave={() => setOverrunHovered(false)}
+          style={{
+            background: T.surface, border: `1px solid ${overrunHovered ? (overrunProjects.length > 0 ? "#dc2626" : T.accent) : T.border}`,
+            borderRadius: 12, padding: "20px 24px", cursor: "pointer",
+            transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
+            boxShadow: overrunHovered ? "0 6px 22px rgba(0,0,0,0.11)" : "none",
+            transform: overrunHovered ? "translateY(-3px)" : "translateY(0)",
+          }}
+        >
+          <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>Forecast Overrun</span>
+          <div style={{ fontSize: 40, fontWeight: 900, color: overrunProjects.length > 0 ? "#dc2626" : "#16a34a", lineHeight: 1, margin: "8px 0" }}>
+            {overrunProjects.length}
+          </div>
+          <div style={{ fontSize: 11, color: T.muted }}>
+            {overrunProjects.length > 0
+              ? <span style={{ color: "#dc2626", fontWeight: 600 }}>{fmtSAR(overrunExposure)} exposure</span>
+              : "No forecast overruns"}
+          </div>
+        </div>
+      </div>
 
       {/* ── KPI ROW ─────────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>

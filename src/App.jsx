@@ -3609,6 +3609,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
   const [filterType, setFilterType] = useState("All");
   const [filterRoadmap, setFilterRoadmap] = useState(false);
   const [showCompleted, setShowCompleted] = useState(route?.filterStatus === "Completed");
+  const [filterOverrun, setFilterOverrun] = useState(!!route?.filterOverrun);
 
   const active = projects.filter(p => !p.archived);
   const completedCount = active.filter(p => p.status === "Completed").length;
@@ -3620,9 +3621,10 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
       : p.status === filterStatus;
     const matchDept    = filterDept    === "All" || p.deptId      === filterDept;
     const matchType    = filterType    === "All" || p.projectType === filterType;
-    const matchRoadmap = !filterRoadmap || p.isRoadmap === true;
-    return matchSearch && matchStatus && matchDept && matchType && matchRoadmap;
-  }), [active, search, filterStatus, filterDept, filterType, filterRoadmap, showCompleted]);
+    const matchRoadmap  = !filterRoadmap  || p.isRoadmap === true;
+    const matchOverrun  = !filterOverrun  || (p.budget > 0 && (p.forecast || 0) > p.budget);
+    return matchSearch && matchStatus && matchDept && matchType && matchRoadmap && matchOverrun;
+  }), [active, search, filterStatus, filterDept, filterType, filterRoadmap, showCompleted, filterOverrun]);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
 
@@ -3663,6 +3665,12 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
           style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", color: T.text, whiteSpace: "nowrap", fontWeight: 600 }}>
           ↓ Export XLS
         </button>
+        {filterOverrun && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#991b1b", fontWeight: 600, whiteSpace: "nowrap" }}>
+            Forecast Overrun
+            <button onClick={() => setFilterOverrun(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#991b1b", fontSize: 14, padding: 0, lineHeight: 1, fontWeight: 700, marginLeft: 2 }}>×</button>
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", fontSize: 13, color: T.muted, whiteSpace: "nowrap" }}>{filtered.length} results</div>
       </div>
       <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
