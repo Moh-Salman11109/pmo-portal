@@ -255,7 +255,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
 
       {/* ── PORTFOLIO RISK REGISTER ────────────────────────────── */}
       {userRole !== ROLE_PM && portfolioRisks.length > 0 && (
-        <details style={{ marginBottom: 24 }} open={portfolioRisks.filter(r => r.level === "Critical").length > 0}>
+        <details style={{ marginBottom: 24 }}>
           <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 24px", background: T.surface, border: `1px solid ${dark ? "rgba(220,38,38,0.35)" : "#fca5a5"}`, borderRadius: 14, fontSize: 14, fontWeight: 800, color: T.text }}>
             <span style={{ fontSize: 16 }}>⚠</span>
             <span>Portfolio Risk Register</span>
