@@ -25,7 +25,8 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
 
   const portfolioIPI    = useMemo(() => calcPortfolioIPI(allProjects), [allProjects]);
   const d30             = useMemo(() => { const d = new Date(TODAY); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]; }, []);
-  const prevIPI         = useMemo(() => calcPortfolioIPI(allProjects, d30), [allProjects, d30]);
+  const hasD30History   = useMemo(() => allProjects.some(p => (p.ipiHistory || []).some(h => h.date && h.date <= d30)), [allProjects, d30]);
+  const prevIPI         = useMemo(() => hasD30History ? calcPortfolioIPI(allProjects, d30) : null, [hasD30History, allProjects, d30]);
   const overrunProjects = useMemo(() => allProjects.filter(p => p.budget > 0 && (p.forecast || 0) > p.budget), [allProjects]);
   const overrunExposure = useMemo(() => overrunProjects.reduce((s, p) => s + ((p.forecast || 0) - p.budget), 0), [overrunProjects]);
 
