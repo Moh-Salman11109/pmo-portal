@@ -807,4 +807,6 @@ export const MOCK_USERS = [
   { email: "head.digital@pmo.test", role: "dept_head",  deptId: "digital" },
   { email: "head.it@pmo.test",      role: "dept_head",  deptId: "it" },
   { email: "exec@pmo.test",         role: "executive",  deptId: null },
+  { email: "grc@pmo.test",          role: "grc",        deptId: "grc" },
+  { email: "grcadmin@pmo.test",     role: "grc_admin",  deptId: "grc" },
 ];
