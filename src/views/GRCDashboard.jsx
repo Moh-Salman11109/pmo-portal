@@ -25,17 +25,40 @@ const GRCModal = ({ title, onClose, children }) => {
   );
 };
 
+// ── Period helpers (Q1..Q4 / H1..H2 / YYYY) ───────────────────────
+const _now = new Date();
+const _yr = _now.getFullYear();
+const _qNow = `${_yr}-Q${Math.floor(_now.getMonth() / 3) + 1}`;
+const _hNow = `${_yr}-H${_now.getMonth() < 6 ? 1 : 2}`;
+const _yearList = (n = 6) => Array.from({ length: n }, (_, i) => String(_yr - i));
+const _quarterList = (n = 8) => {
+  const out = [];
+  for (let y = _yr; y >= _yr - 1; y--) for (let q = 4; q >= 1; q--) out.push(`${y}-Q${q}`);
+  return out.slice(0, n);
+};
+const _halfList = (n = 6) => {
+  const out = [];
+  for (let y = _yr; y >= _yr - 2; y--) for (let h = 2; h >= 1; h--) out.push(`${y}-H${h}`);
+  return out.slice(0, n);
+};
+
 // ── Add / Edit KRI Reading form ───────────────────────────────────
 const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
   const T = useT();
   const isEdit = reading && reading.ID != null;
+  const freq = (kri.ReportingFrequency || "Monthly");
+  const defaultPeriod =
+    freq === "Quarterly"   ? _qNow :
+    freq === "Semi-Annual" ? _hNow :
+    freq === "Annual"      ? String(_yr) :
+                             _now.toISOString().substring(0, 7);
   const [form, setForm] = useState({
     ID:                 reading?.ID ?? null,
     KRIID:              reading?.KRIID ?? kri.KRIID,
     KRIName:            reading?.KRIName ?? kri.Title,
     ActualValue:        reading?.ActualValue ?? "",
     PreviousValue:      reading?.PreviousValue ?? "",
-    Period:             reading?.Period ?? new Date().toISOString().substring(0, 7),
+    Period:             reading?.Period ?? defaultPeriod,
     RAGStatus:          reading?.RAGStatus || "Green",
     Trend:              reading?.Trend || "Stable",
     Comments:           reading?.Comments || "",
@@ -57,8 +80,27 @@ const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
         </div>
       </div>
       <div>
-        <label style={lbl}>Period (YYYY-MM) *</label>
-        <input type="month" value={form.Period} onChange={e => set("Period", e.target.value)} style={inp} />
+        <label style={lbl}>
+          Period * <span style={{ fontWeight: 400, color: T.muted, fontSize: 11 }}>· KRI is {freq}</span>
+        </label>
+        {freq === "Quarterly" && (
+          <select value={form.Period} onChange={e => set("Period", e.target.value)} style={inp}>
+            {_quarterList(12).map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+        {freq === "Semi-Annual" && (
+          <select value={form.Period} onChange={e => set("Period", e.target.value)} style={inp}>
+            {_halfList(8).map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+        {freq === "Annual" && (
+          <select value={form.Period} onChange={e => set("Period", e.target.value)} style={inp}>
+            {_yearList(6).map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+        {freq === "Monthly" && (
+          <input type="month" value={form.Period} onChange={e => set("Period", e.target.value)} style={inp} />
+        )}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
@@ -270,6 +312,7 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
     AmberThreshold: kri.AmberThreshold ?? "",
     RedThreshold: kri.RedThreshold ?? "",
     ThresholdDirection: kri.ThresholdDirection || "Lower is better",
+    ReportingFrequency: kri.ReportingFrequency || "Monthly",
     IsActive: kri.IsActive !== false,
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -334,12 +377,23 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
         <div><label style={lbl}>Amber Threshold</label><input value={form.AmberThreshold} onChange={e => set("AmberThreshold", e.target.value)} placeholder="e.g. - or In Between" style={inp} /></div>
         <div><label style={lbl}>Red Threshold</label><input value={form.RedThreshold} onChange={e => set("RedThreshold", e.target.value)} placeholder="e.g. >=1 or >10%" style={inp} /></div>
       </div>
-      <div>
-        <label style={lbl}>Threshold Direction</label>
-        <select value={form.ThresholdDirection} onChange={e => set("ThresholdDirection", e.target.value)} style={inp}>
-          <option>Lower is better</option>
-          <option>Higher is better</option>
-        </select>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <label style={lbl}>Threshold Direction</label>
+          <select value={form.ThresholdDirection} onChange={e => set("ThresholdDirection", e.target.value)} style={inp}>
+            <option>Lower is better</option>
+            <option>Higher is better</option>
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Reporting Frequency</label>
+          <select value={form.ReportingFrequency} onChange={e => set("ReportingFrequency", e.target.value)} style={inp}>
+            <option>Monthly</option>
+            <option>Quarterly</option>
+            <option>Semi-Annual</option>
+            <option>Annual</option>
+          </select>
+        </div>
       </div>
       {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
@@ -560,7 +614,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       const headers = { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" };
       const base    = `${GRC_SP_SITE}/_api/web/lists/getbytitle`;
       const [mR, rR, rrR, aR, afR, caR] = await Promise.all([
-        fetch(`${base}('GRC_KRI_Master')/items?$select=ID,Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive,SubCategory,RiskCategoryL1,Metric,BaseData,DataSource&$expand=KRIOwner&$top=500`, { headers }),
+        fetch(`${base}('GRC_KRI_Master')/items?$select=ID,Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive,SubCategory,RiskCategoryL1,Metric,BaseData,DataSource,ReportingFrequency&$expand=KRIOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_KRI_Readings')/items?$select=ID,Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskRegister')/items?$select=ID,Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskAppetite')/items?$select=ID,Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
@@ -690,6 +744,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         AmberThreshold:     form.AmberThreshold || "",
         RedThreshold:       form.RedThreshold   || "",
         ThresholdDirection: form.ThresholdDirection,
+        ReportingFrequency: form.ReportingFrequency || "Monthly",
         IsActive:           form.IsActive,
       };
       if (form.ID == null) await spPost("GRC_KRI_Master", payload);
@@ -1216,7 +1271,14 @@ const GRCDashboard = ({ canEdit = false }) => {
                       style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: isSelected ? "#f0f7ff" : "transparent", transition: "background 0.12s" }}>
                       <td style={{ padding: "11px 12px" }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{kri.Title}</div>
-                        <div style={{ fontSize: 11, color: T.muted }}>{kri.KRIID || "—"}</div>
+                        <div style={{ fontSize: 11, color: T.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span>{kri.KRIID || "—"}</span>
+                          {kri.ReportingFrequency && kri.ReportingFrequency !== "Monthly" && (
+                            <span style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.muted, fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                              🗓 {kri.ReportingFrequency}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>{kri.BusinessUnit || "—"}</td>
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{kri.KRICategory || "—"}</td>
