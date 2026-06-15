@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { useT } from "../theme.js";
 import { useBp } from "../hooks/useBp.js";
@@ -193,12 +193,69 @@ const GRCAppetiteForm = ({ item, onSave, saving, error, onCancel }) => {
   );
 };
 
-// ── Edit KRI Master form ──────────────────────────────────────────
+// ── Multi-select dropdown ─────────────────────────────────────────
+const MultiSelect = ({ label, options, selected, onChange }) => {
+  const T = useT();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const toggle = (opt) => onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt]);
+  const active = selected.length > 0;
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{
+          background: active ? T.primary : T.surface,
+          color: active ? "#fff" : T.text,
+          border: `1px solid ${active ? T.primary : T.border}`,
+          borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600,
+          cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 6,
+        }}>
+        <span>{label}{active ? ` · ${selected.length}` : ""}</span>
+        <span style={{ fontSize: 10, opacity: 0.8 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 30,
+          background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
+          boxShadow: "0 6px 22px rgba(0,0,0,0.12)", minWidth: 220, maxHeight: 320, overflowY: "auto", padding: 6,
+        }}>
+          {options.length === 0 && <div style={{ padding: 10, fontSize: 12, color: T.muted }}>No options</div>}
+          {options.map(opt => (
+            <label key={opt} style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
+              borderRadius: 6, cursor: "pointer", fontSize: 12, color: T.text,
+              background: selected.includes(opt) ? `${T.primary}14` : "transparent",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = selected.includes(opt) ? `${T.primary}22` : T.bg}
+              onMouseLeave={e => e.currentTarget.style.background = selected.includes(opt) ? `${T.primary}14` : "transparent"}>
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} style={{ cursor: "pointer", margin: 0 }} />
+              <span style={{ flex: 1 }}>{opt}</span>
+            </label>
+          ))}
+          {active && (
+            <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 6 }}>
+              <button onClick={() => onChange([])} style={{ width: "100%", background: "transparent", border: "none", color: T.muted, fontSize: 11, padding: "5px", cursor: "pointer", fontWeight: 600 }}>Clear selection</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Edit / Create KRI Master form ─────────────────────────────────
 const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
   const T = useT();
+  const isNew = kri.ID == null;
   const [form, setForm] = useState({
     ID: kri.ID,
     Title: kri.Title || "",
+    KRIID: kri.KRIID || "",
     KRICategory: kri.KRICategory || "Operational",
     BusinessUnit: kri.BusinessUnit || "",
     SubCategory: kri.SubCategory || "",
@@ -218,9 +275,19 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
   const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div>
-        <label style={lbl}>KRI Name *</label>
-        <input value={form.Title} onChange={e => set("Title", e.target.value)} style={inp} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={lbl}>KRI Name *</label>
+          <input value={form.Title} onChange={e => set("Title", e.target.value)} style={inp} placeholder="e.g. Delay in patch deployment" />
+        </div>
+        <div>
+          <label style={lbl}>KRI ID</label>
+          <input value={form.KRIID} onChange={e => set("KRIID", e.target.value)} style={{ ...inp, ...(isNew ? {} : { background: T.bg, cursor: "not-allowed" }) }} disabled={!isNew} placeholder="auto" />
+        </div>
+        <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
+          <input type="checkbox" id="kri-active-top" checked={form.IsActive} onChange={e => set("IsActive", e.target.checked)} style={{ cursor: "pointer" }} />
+          <label htmlFor="kri-active-top" style={{ fontSize: 13, color: T.text, cursor: "pointer", marginBottom: 8 }}>Active KRI</label>
+        </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
@@ -272,14 +339,10 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
           <option>Higher is better</option>
         </select>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <input type="checkbox" id="kri-active" checked={form.IsActive} onChange={e => set("IsActive", e.target.checked)} style={{ cursor: "pointer" }} />
-        <label htmlFor="kri-active" style={{ fontSize: 13, color: T.text, cursor: "pointer" }}>Active KRI</label>
-      </div>
       {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
         <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
-        <button onClick={() => onSave(form)} disabled={saving || !form.Title} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || !form.Title ? "not-allowed" : "pointer", opacity: saving || !form.Title ? 0.6 : 1 }}>{saving ? "Saving…" : "Save KRI"}</button>
+        <button onClick={() => onSave(form)} disabled={saving || !form.Title} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || !form.Title ? "not-allowed" : "pointer", opacity: saving || !form.Title ? 0.6 : 1 }}>{saving ? "Saving…" : (isNew ? "Create KRI" : "Save Changes")}</button>
       </div>
     </div>
   );
@@ -474,6 +537,12 @@ const GRCDashboard = ({ canEdit = false }) => {
   const [heatmapCell, setHeatmapCell] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  // KRI table filters
+  const [kriSearch,  setKriSearch]  = useState("");
+  const [filterDept, setFilterDept] = useState([]);
+  const [filterCat,  setFilterCat]  = useState([]);
+  const [filterSub,  setFilterSub]  = useState([]);
+  const [filterRAG,  setFilterRAG]  = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -592,8 +661,9 @@ const GRCDashboard = ({ canEdit = false }) => {
   const saveMasterEdit = async (form) => {
     setSaving(true); setSaveErr("");
     try {
-      await spPatch("GRC_KRI_Master", form.ID, {
+      const payload = {
         Title:              form.Title,
+        KRIID:              form.KRIID || "",
         KRICategory:        form.KRICategory,
         BusinessUnit:       form.BusinessUnit || "",
         SubCategory:        form.SubCategory || "",
@@ -607,11 +677,29 @@ const GRCDashboard = ({ canEdit = false }) => {
         RedThreshold:       form.RedThreshold   || "",
         ThresholdDirection: form.ThresholdDirection,
         IsActive:           form.IsActive,
-      });
+      };
+      if (form.ID == null) await spPost("GRC_KRI_Master", payload);
+      else                 await spPatch("GRC_KRI_Master", form.ID, payload);
       setMasterModal(null);
       await load();
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
+  };
+
+  const deleteKRI = async (kri) => {
+    if (!window.confirm(`Delete KRI "${kri.Title}"?\n\nThis cannot be undone.`)) return;
+    setSaving(true);
+    try { await spDelete("GRC_KRI_Master", kri.ID); await load(); }
+    catch(e) { window.alert(e.message); }
+    finally  { setSaving(false); }
+  };
+
+  const handleAddKRI = () => {
+    // Auto-generate next KRI-XXX id
+    const nums = kriMaster.map(k => parseInt((k.KRIID || "").replace(/^KRI-/, ""), 10)).filter(n => !isNaN(n));
+    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    setMasterModal({ ID: null, KRIID: "KRI-" + String(next).padStart(3, "0"), IsActive: true });
+    setSaveErr("");
   };
 
   const deleteRisk = async (id) => {
@@ -720,10 +808,38 @@ const GRCDashboard = ({ canEdit = false }) => {
     [activeKRIs, latestByKRI]
   );
 
-  const redCount    = kriWithLatest.filter(k => k.latest?.RAGStatus === "Red").length;
-  const amberCount  = kriWithLatest.filter(k => k.latest?.RAGStatus === "Amber").length;
-  const greenCount  = kriWithLatest.filter(k => k.latest?.RAGStatus === "Green").length;
-  const escalCount  = kriWithLatest.filter(k => k.latest?.EscalationRequired).length;
+  // Filter option lists — derived from the full active set so users can always pick any value
+  const deptOptions = useMemo(() => [...new Set(activeKRIs.map(k => k.BusinessUnit).filter(Boolean))].sort(), [activeKRIs]);
+  const catOptions  = useMemo(() => [...new Set(activeKRIs.map(k => k.KRICategory).filter(Boolean))].sort(), [activeKRIs]);
+  const subOptions  = useMemo(() => [...new Set(activeKRIs.map(k => k.SubCategory).filter(Boolean))].sort(), [activeKRIs]);
+  const ragOptions  = ["Red", "Amber", "Green", "No reading"];
+
+  const filteredKRIs = useMemo(() => {
+    const q = kriSearch.toLowerCase().trim();
+    return kriWithLatest.filter(k => {
+      if (filterDept.length && !filterDept.includes(k.BusinessUnit))   return false;
+      if (filterCat.length  && !filterCat.includes(k.KRICategory))     return false;
+      if (filterSub.length  && !filterSub.includes(k.SubCategory))     return false;
+      if (filterRAG.length) {
+        const rag = k.latest?.RAGStatus || "No reading";
+        if (!filterRAG.includes(rag)) return false;
+      }
+      if (q) {
+        const hay = [k.Title, k.KRIID, k.BusinessUnit, k.SubCategory, k.Metric, k.DataSource].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [kriWithLatest, kriSearch, filterDept, filterCat, filterSub, filterRAG]);
+
+  const anyFilterActive = filterDept.length + filterCat.length + filterSub.length + filterRAG.length > 0 || kriSearch.trim() !== "";
+  const clearAllFilters = () => { setFilterDept([]); setFilterCat([]); setFilterSub([]); setFilterRAG([]); setKriSearch(""); };
+
+  // KPI counts use the filtered list so they always match what the user sees in the table
+  const redCount    = filteredKRIs.filter(k => k.latest?.RAGStatus === "Red").length;
+  const amberCount  = filteredKRIs.filter(k => k.latest?.RAGStatus === "Amber").length;
+  const greenCount  = filteredKRIs.filter(k => k.latest?.RAGStatus === "Green").length;
+  const escalCount  = filteredKRIs.filter(k => k.latest?.EscalationRequired).length;
   const appBreaches = riskReg.filter(r => r.RiskAppetiteBreached && r.RiskStatus !== "Closed").length;
 
   const parsePeriodToDate = (period) => {
@@ -1013,7 +1129,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       {/* ── KPI Strip ── */}
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "Total KRIs",           value: kriWithLatest.length, color: T.text,     accent: T.primary },
+          { label: anyFilterActive ? `Filtered KRIs (of ${kriWithLatest.length})` : "Total KRIs", value: filteredKRIs.length, color: T.text,     accent: T.primary },
           { label: "Breaching — Red",      value: redCount,             color: "#dc2626",  accent: "#dc2626" },
           { label: "At Risk — Amber",      value: amberCount,           color: "#d97706",  accent: "#d97706" },
           { label: "Within Limits",        value: greenCount,           color: "#16a34a",  accent: "#16a34a" },
@@ -1028,21 +1144,55 @@ const GRCDashboard = ({ canEdit = false }) => {
 
       {/* ── KRI Status Board ── */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
-        <h2 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: T.text }}>KRI Status Board</h2>
-        {kriWithLatest.length === 0 ? (
-          <p style={{ color: T.muted, fontSize: 13 }}>No active KRIs found.</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>
+            KRI Status Board
+            <span style={{ fontSize: 12, fontWeight: 500, color: T.muted, marginLeft: 10 }}>
+              Showing {filteredKRIs.length} of {kriWithLatest.length}
+            </span>
+          </h2>
+          {canEdit && (
+            <button onClick={handleAddKRI}
+              style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+              + Add KRI
+            </button>
+          )}
+        </div>
+
+        {/* ── Filter bar ── */}
+        {kriWithLatest.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+            <input value={kriSearch} onChange={e => setKriSearch(e.target.value)} placeholder="🔍 Search name, ID, metric, source…"
+              style={{ flex: 1, minWidth: 220, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, outline: "none", background: T.inputBg, color: T.inputText }} />
+            <MultiSelect label="Department" options={deptOptions} selected={filterDept} onChange={setFilterDept} />
+            <MultiSelect label="Category"   options={catOptions}  selected={filterCat}  onChange={setFilterCat} />
+            <MultiSelect label="Sub-Cat"    options={subOptions}  selected={filterSub}  onChange={setFilterSub} />
+            <MultiSelect label="RAG"        options={ragOptions}  selected={filterRAG}  onChange={setFilterRAG} />
+            {anyFilterActive && (
+              <button onClick={clearAllFilters}
+                style={{ background: "transparent", color: T.muted, border: `1px dashed ${T.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+                ✕ Clear all
+              </button>
+            )}
+          </div>
+        )}
+
+        {filteredKRIs.length === 0 ? (
+          <p style={{ color: T.muted, fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+            {kriWithLatest.length === 0 ? "No active KRIs found." : "No KRIs match the current filters."}
+          </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
               <thead>
                 <tr style={{ background: T.bg }}>
-                  {["KRI Name / Owner","Category","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map(h => (
-                    <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  {["KRI Name / Owner","Department","Category","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
+                    <th key={h + i} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {kriWithLatest.map(kri => {
+                {filteredKRIs.map(kri => {
                   const r  = kri.latest;
                   const rc = RAG_COLOR[r?.RAGStatus];
                   const isSelected = selectedKRI === kri.KRIID;
@@ -1052,9 +1202,13 @@ const GRCDashboard = ({ canEdit = false }) => {
                       style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: isSelected ? "#f0f7ff" : "transparent", transition: "background 0.12s" }}>
                       <td style={{ padding: "11px 12px" }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{kri.Title}</div>
-                        <div style={{ fontSize: 11, color: T.muted }}>{kri.KRIOwner?.Title || "—"}</div>
+                        <div style={{ fontSize: 11, color: T.muted }}>{kri.KRIID || "—"}{kri.KRIOwner?.Title ? ` · ${kri.KRIOwner.Title}` : ""}</div>
                       </td>
-                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{kri.KRICategory || "—"}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>{kri.BusinessUnit || "—"}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>
+                        <div>{kri.KRICategory || "—"}</div>
+                        {kri.SubCategory && <div style={{ fontSize: 10, opacity: 0.75 }}>{kri.SubCategory}</div>}
+                      </td>
                       <td style={{ padding: "11px 12px" }}>
                         {r ? (
                           <span style={{ fontSize: 15, fontWeight: 900, color: rc?.text || T.text }}>
@@ -1084,10 +1238,16 @@ const GRCDashboard = ({ canEdit = false }) => {
                       )}
                       {globalEdit && (
                         <td style={{ padding: "11px 12px" }} onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setMasterModal(kri)}
-                            style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: T.text, whiteSpace: "nowrap" }}>
-                            Edit KRI
-                          </button>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => setMasterModal(kri)}
+                              style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: T.text, whiteSpace: "nowrap" }}>
+                              Edit
+                            </button>
+                            <button onClick={() => deleteKRI(kri)} disabled={saving}
+                              style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", color: "#991b1b", whiteSpace: "nowrap", opacity: saving ? 0.5 : 1 }}>
+                              🗑
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -1097,7 +1257,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             </table>
           </div>
         )}
-        {kriWithLatest.length > 0 && <p style={{ margin: "10px 0 0", fontSize: 11, color: T.muted }}>Click any row to view trend chart</p>}
+        {filteredKRIs.length > 0 && <p style={{ margin: "10px 0 0", fontSize: 11, color: T.muted }}>Click any row to view trend chart{canEdit && globalEdit ? " · Edit Mode is ON" : ""}</p>}
       </div>
 
       {/* ── KRI Trend Chart ── */}
@@ -1517,7 +1677,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         </GRCModal>
       )}
       {masterModal && (
-        <GRCModal title={`Edit KRI — ${masterModal.Title}`} onClose={() => { setMasterModal(null); setSaveErr(""); }}>
+        <GRCModal title={masterModal.ID == null ? "New KRI" : `Edit KRI — ${masterModal.Title}`} onClose={() => { setMasterModal(null); setSaveErr(""); }}>
           <GRCMasterForm kri={masterModal} onSave={saveMasterEdit} saving={saving} error={saveErr} onCancel={() => { setMasterModal(null); setSaveErr(""); }} />
         </GRCModal>
       )}
