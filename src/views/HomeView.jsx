@@ -560,42 +560,6 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
         );
       })()}
 
-      {/* ── RESOURCE LOAD ─────────────────────────────────────────── */}
-      {(() => {
-        const pm = {};
-        activeProjects.forEach(p => {
-          if (!p.pm) return;
-          if (!pm[p.pm]) pm[p.pm] = { n: p.pm, t: 0, ok: 0, ar: 0, dl: 0 };
-          pm[p.pm].t++;
-          if (p.status === "On Track") pm[p.pm].ok++;
-          else if (p.status === "At Risk") pm[p.pm].ar++;
-          else if (p.status === "Delayed") pm[p.pm].dl++;
-        });
-        const rows = Object.values(pm).sort((a, b) => b.t - a.t);
-        if (!rows.length) return null;
-        return (
-          <div style={{ marginBottom: 24 }}>
-            <SectionHeader title="Resource Load" subtitle="Active project assignments per Project Manager" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
-              {rows.map(r => (
-                <div key={r.n} style={{ background: T.surface, border: `1px solid ${r.t >= 4 ? "#dc2626" : r.t >= 3 ? "#f59e0b" : T.border}`, borderRadius: 12, padding: "14px 16px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>{r.n}</div>
-                    <span style={{ fontSize: 22, fontWeight: 900, color: r.t >= 4 ? "#dc2626" : r.t >= 3 ? "#f59e0b" : "#16a34a" }}>{r.t}</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", fontSize: 10 }}>
-                    {r.ok > 0 && <span style={{ background: "#dcfce7", color: "#15803d", borderRadius: 10, padding: "1px 7px" }}>{r.ok} On Track</span>}
-                    {r.ar > 0 && <span style={{ background: "#fef9c3", color: "#854d0e", borderRadius: 10, padding: "1px 7px" }}>{r.ar} At Risk</span>}
-                    {r.dl > 0 && <span style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 10, padding: "1px 7px" }}>{r.dl} Delayed</span>}
-                  </div>
-                  {r.t >= 4 && <div style={{ marginTop: 6, fontSize: 10, color: "#dc2626", fontWeight: 700 }}>⚠ Overloaded</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* ── DEPARTMENT CARDS ─────────────────────────────────────── */}
       <SectionHeader title="Department Portfolio Overview" subtitle="Click a department to view its projects" />
       <div style={{ display: "grid", gridTemplateColumns: deptCols, gap: 16 }}>
