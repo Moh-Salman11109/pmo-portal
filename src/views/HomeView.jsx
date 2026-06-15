@@ -7,7 +7,7 @@ import { SectionHeader } from "../shared.jsx";
 import { ROLE_PM } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
-import { getDeptStats, calcDeptIPI, calcPortfolioIPI, calcProjectIPI, ipiColor } from "../utils/metrics.js";
+import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor } from "../utils/metrics.js";
 import { fmtSAR } from "../utils/format.js";
 import { KPICard } from "../components/KPICard.jsx";
 import { Progress } from "../components/Progress.jsx";
@@ -162,50 +162,6 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
           Real-time portfolio overview · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           {loadedAt && <span style={{ color: T.accent, fontWeight: 600 }}> · Synced {loadedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>}
         </p>
-      </div>
-
-      {/* ── PRINT BUTTON ──────────────────────────────────────────── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <button onClick={() => {
-          const win = window.open("", "_blank", "width=1100,height=800");
-          if (!win) return;
-          const rows = allProjects.map(p => {
-            const ipiVal = calcProjectIPI(p);
-            const col = p.status === "On Track" ? "#16a34a" : p.status === "Delayed" ? "#dc2626" : p.status === "At Risk" ? "#d97706" : "#6b7280";
-            return `<tr><td>${p.code}</td><td>${p.name}</td><td style="color:${col};font-weight:700">${p.status}</td><td>${p.priority}</td><td>${p.progress}%</td><td style="font-weight:700">${ipiVal}</td><td>${p.pm || "—"}</td><td>${p.plannedEnd || "—"}</td></tr>`;
-          }).join("");
-          const pIPI = calcPortfolioIPI(allProjects) ?? "—";
-          win.document.write(`<!DOCTYPE html><html><head><title>PMO Report ${TODAY}</title><style>
-            body{font-family:Arial,sans-serif;margin:32px;color:#111;font-size:13px}
-            h1{font-size:20px;margin:0 0 4px}
-            .sub{color:#666;font-size:12px;margin-bottom:20px}
-            .kpis{display:flex;gap:16px;margin-bottom:20px}
-            .kpi{border:1px solid #e5e7eb;border-radius:8px;padding:10px 18px;text-align:center}
-            .kv{font-size:26px;font-weight:900}.kl{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.04em}
-            table{width:100%;border-collapse:collapse}
-            th{background:#f9fafb;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:2px solid #e5e7eb}
-            td{padding:7px 10px;border-bottom:1px solid #f3f4f6}
-            @media print{button{display:none!important}}
-          </style></head><body>
-            <h1>PMO Portfolio Status Report</h1>
-            <div class="sub">Generated: ${TODAY} &nbsp;·&nbsp; ${allProjects.length} projects</div>
-            <div class="kpis">
-              <div class="kpi"><div class="kv" style="color:#003932">${pIPI}</div><div class="kl">Portfolio IPI</div></div>
-              <div class="kpi"><div class="kv">${allProjects.length}</div><div class="kl">Total</div></div>
-              <div class="kpi"><div class="kv" style="color:#dc2626">${allProjects.filter(p=>p.status==="Delayed").length}</div><div class="kl">Delayed</div></div>
-              <div class="kpi"><div class="kv" style="color:#d97706">${allProjects.filter(p=>p.status==="At Risk").length}</div><div class="kl">At Risk</div></div>
-              <div class="kpi"><div class="kv" style="color:#16a34a">${allProjects.filter(p=>p.status==="On Track").length}</div><div class="kl">On Track</div></div>
-              <div class="kpi"><div class="kv" style="color:#16a34a">${allProjects.filter(p=>p.status==="Completed").length}</div><div class="kl">Completed</div></div>
-            </div>
-            <table><thead><tr><th>Code</th><th>Project</th><th>Status</th><th>Priority</th><th>Progress</th><th>IPI</th><th>PM</th><th>Planned End</th></tr></thead>
-            <tbody>${rows}</tbody></table>
-            <div style="margin-top:28px;font-size:10px;color:#999;border-top:1px solid #e5e7eb;padding-top:8px">PMO Portal — Confidential · ${TODAY}</div>
-            <script>window.onload=()=>setTimeout(()=>window.print(),400)</script>
-          </body></html>`);
-          win.document.close();
-        }} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: T.text, display: "flex", alignItems: "center", gap: 6 }}>
-          🖨 Print Report
-        </button>
       </div>
 
       {/* ── EXECUTIVE INTERVENTION PANEL ───────────────────────── */}
