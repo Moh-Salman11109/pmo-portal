@@ -1200,7 +1200,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
               <thead>
                 <tr style={{ background: T.bg }}>
-                  {["KRI Name","Department","Category","Sub-Category","Thresholds (G / A / R)","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
+                  {["KRI Name","Department","Category","Sub-Category","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
                     <th key={h + i} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -1221,13 +1221,6 @@ const GRCDashboard = ({ canEdit = false }) => {
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>{kri.BusinessUnit || "—"}</td>
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{kri.KRICategory || "—"}</td>
                       <td style={{ padding: "11px 12px", fontSize: 11, color: T.muted }}>{kri.SubCategory || "—"}</td>
-                      <td style={{ padding: "11px 12px" }}>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                          <span title="Green" style={{ background: "#dcfce7", color: "#15803d", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{kri.GreenThreshold || "—"}</span>
-                          <span title="Amber" style={{ background: "#fef3c7", color: "#854d0e", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{kri.AmberThreshold || "—"}</span>
-                          <span title="Red" style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{kri.RedThreshold || "—"}</span>
-                        </div>
-                      </td>
                       <td style={{ padding: "11px 12px" }}>
                         {r ? (
                           <span style={{ fontSize: 15, fontWeight: 900, color: rc?.text || T.text }}>
