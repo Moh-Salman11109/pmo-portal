@@ -25,19 +25,21 @@ const GRCModal = ({ title, onClose, children }) => {
   );
 };
 
-// ── Add KRI Reading form ──────────────────────────────────────────
-const GRCReadingForm = ({ kri, onSave, saving, error, onCancel }) => {
+// ── Add / Edit KRI Reading form ───────────────────────────────────
+const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
   const T = useT();
+  const isEdit = reading && reading.ID != null;
   const [form, setForm] = useState({
-    KRIID:              kri.KRIID,
-    KRIName:            kri.Title,
-    ActualValue:        "",
-    PreviousValue:      "",
-    Period:             new Date().toISOString().substring(0, 7),
-    RAGStatus:          "Green",
-    Trend:              "Stable",
-    Comments:           "",
-    EscalationRequired: false,
+    ID:                 reading?.ID ?? null,
+    KRIID:              reading?.KRIID ?? kri.KRIID,
+    KRIName:            reading?.KRIName ?? kri.Title,
+    ActualValue:        reading?.ActualValue ?? "",
+    PreviousValue:      reading?.PreviousValue ?? "",
+    Period:             reading?.Period ?? new Date().toISOString().substring(0, 7),
+    RAGStatus:          reading?.RAGStatus || "Green",
+    Trend:              reading?.Trend || "Stable",
+    Comments:           reading?.Comments || "",
+    EscalationRequired: reading?.EscalationRequired ?? false,
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
@@ -83,8 +85,8 @@ const GRCReadingForm = ({ kri, onSave, saving, error, onCancel }) => {
       {error && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 7, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
         <button onClick={onCancel} disabled={saving} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 18px", fontSize: 13, cursor: "pointer", color: T.text }}>Cancel</button>
-        <button onClick={() => onSave(form)} disabled={saving || !form.ActualValue} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || !form.ActualValue ? "not-allowed" : "pointer", opacity: saving || !form.ActualValue ? 0.6 : 1 }}>
-          {saving ? "Saving…" : "Save Reading"}
+        <button onClick={() => onSave(form)} disabled={saving || form.ActualValue === ""} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving || form.ActualValue === "" ? "not-allowed" : "pointer", opacity: saving || form.ActualValue === "" ? 0.6 : 1 }}>
+          {saving ? "Saving…" : (isEdit ? "Save Changes" : "Save Reading")}
         </button>
       </div>
     </div>
@@ -543,6 +545,7 @@ const GRCDashboard = ({ canEdit = false }) => {
   const [filterCat,  setFilterCat]  = useState([]);
   const [filterSub,  setFilterSub]  = useState([]);
   const [filterRAG,  setFilterRAG]  = useState([]);
+  const [editingReading, setEditingReading] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -610,23 +613,34 @@ const GRCDashboard = ({ canEdit = false }) => {
   const saveReading = async (form) => {
     setSaving(true); setSaveErr("");
     try {
-      await spPost("GRC_KRI_Readings", {
+      const payload = {
         Title:               `${form.KRIID}-${form.Period}`,
         KRIID:               form.KRIID,
         KRIName:             form.KRIName,
         ReadingDate:         new Date().toISOString(),
         ActualValue:         Number(form.ActualValue),
-        PreviousValue:       form.PreviousValue ? Number(form.PreviousValue) : null,
+        PreviousValue:       form.PreviousValue !== "" && form.PreviousValue != null ? Number(form.PreviousValue) : null,
         Period:              form.Period,
         RAGStatus:           form.RAGStatus,
         Trend:               form.Trend,
         Comments:            form.Comments || "",
         EscalationRequired:  form.EscalationRequired,
-      });
+      };
+      if (form.ID == null) await spPost("GRC_KRI_Readings", payload);
+      else                 await spPatch("GRC_KRI_Readings", form.ID, payload);
       setReadingModal(null);
+      setEditingReading(null);
       await load();
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
+  };
+
+  const deleteReading = async (r) => {
+    if (!window.confirm(`Delete reading for ${r.Period}?`)) return;
+    setSaving(true);
+    try { await spDelete("GRC_KRI_Readings", r.ID); await load(); }
+    catch(e) { window.alert(e.message); }
+    finally  { setSaving(false); }
   };
 
   const saveRisk = async (form) => {
@@ -1186,7 +1200,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
               <thead>
                 <tr style={{ background: T.bg }}>
-                  {["KRI Name / Owner","Department","Category","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
+                  {["KRI Name","Department","Category","Sub-Category","Thresholds (G / A / R)","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
                     <th key={h + i} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -1202,12 +1216,17 @@ const GRCDashboard = ({ canEdit = false }) => {
                       style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: isSelected ? "#f0f7ff" : "transparent", transition: "background 0.12s" }}>
                       <td style={{ padding: "11px 12px" }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{kri.Title}</div>
-                        <div style={{ fontSize: 11, color: T.muted }}>{kri.KRIID || "—"}{kri.KRIOwner?.Title ? ` · ${kri.KRIOwner.Title}` : ""}</div>
+                        <div style={{ fontSize: 11, color: T.muted }}>{kri.KRIID || "—"}</div>
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>{kri.BusinessUnit || "—"}</td>
-                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>
-                        <div>{kri.KRICategory || "—"}</div>
-                        {kri.SubCategory && <div style={{ fontSize: 10, opacity: 0.75 }}>{kri.SubCategory}</div>}
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{kri.KRICategory || "—"}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 11, color: T.muted }}>{kri.SubCategory || "—"}</td>
+                      <td style={{ padding: "11px 12px" }}>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          <span title="Green" style={{ background: "#dcfce7", color: "#15803d", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{kri.GreenThreshold || "—"}</span>
+                          <span title="Amber" style={{ background: "#fef3c7", color: "#854d0e", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{kri.AmberThreshold || "—"}</span>
+                          <span title="Red" style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{kri.RedThreshold || "—"}</span>
+                        </div>
                       </td>
                       <td style={{ padding: "11px 12px" }}>
                         {r ? (
@@ -1284,6 +1303,37 @@ const GRCDashboard = ({ canEdit = false }) => {
                 <Line type="monotone" dataKey="value" stroke={T.primary} strokeWidth={2.5} dot={{ r: 4, fill: T.primary }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
+
+            {/* ── Readings list — edit / delete each ── */}
+            {canEdit && kriHistory.length > 0 && (
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+                  All Readings ({kriHistory.length})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {[...kriHistory].sort((a, b) => (b.Period || "").localeCompare(a.Period || "")).map(r => {
+                    const rc = RAG_COLOR[r.RAGStatus];
+                    return (
+                      <div key={r.ID} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.bg, borderRadius: 8, fontSize: 12 }}>
+                        <span style={{ minWidth: 70, fontWeight: 700, color: T.text }}>{r.Period}</span>
+                        <span style={{ minWidth: 60, fontWeight: 800, color: rc?.text || T.text }}>{r.ActualValue}{kri?.MeasurementUnit ? ` ${kri.MeasurementUnit}` : ""}</span>
+                        {rc && <span style={{ background: rc.bg, color: rc.text, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20 }}>{r.RAGStatus}</span>}
+                        {r.Trend && <span style={{ fontSize: 14, color: trendColor(r.Trend) }}>{trendIcon(r.Trend)}</span>}
+                        <span style={{ flex: 1, fontSize: 11, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.Comments || ""}</span>
+                        <button onClick={() => { setReadingModal(kri); setEditingReading(r); }}
+                          style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: T.text, fontWeight: 600 }}>
+                          Edit
+                        </button>
+                        <button onClick={() => deleteReading(r)} disabled={saving}
+                          style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: saving ? "not-allowed" : "pointer", color: "#991b1b", fontWeight: 700, opacity: saving ? 0.5 : 1 }}>
+                          🗑
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1662,8 +1712,8 @@ const GRCDashboard = ({ canEdit = false }) => {
 
       {/* ── MODALS ── */}
       {readingModal && (
-        <GRCModal title={`Add KRI Reading — ${readingModal.Title}`} onClose={() => { setReadingModal(null); setSaveErr(""); }}>
-          <GRCReadingForm kri={readingModal} onSave={saveReading} saving={saving} error={saveErr} onCancel={() => { setReadingModal(null); setSaveErr(""); }} />
+        <GRCModal title={`${editingReading ? "Edit" : "Add"} KRI Reading — ${readingModal.Title}`} onClose={() => { setReadingModal(null); setEditingReading(null); setSaveErr(""); }}>
+          <GRCReadingForm kri={readingModal} reading={editingReading} onSave={saveReading} saving={saving} error={saveErr} onCancel={() => { setReadingModal(null); setEditingReading(null); setSaveErr(""); }} />
         </GRCModal>
       )}
       {riskModal && (
