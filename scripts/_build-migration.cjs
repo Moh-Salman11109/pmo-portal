@@ -166,12 +166,21 @@ const KRIS = ${JSON.stringify(kris, null, 2)};
   console.groupEnd();
 
   // ── Step 4: Insert KRIs ───────────────────────────────────────────────────
+  // Use nometadata content-type so we don't have to guess SP's entity type name.
   console.group('Step 4: Insert ' + KRIS.length + ' KRIs');
   let inserted = 0, failed = 0;
   for (const kri of KRIS) {
     digest = await getDigest();
-    const body = { __metadata: { type: 'SP.Data.GRC_KRI_MasterListItem' }, ...kri };
-    const r = await spPost(\`/_api/web/lists/getbytitle('\${LIST}')/items\`, body, digest);
+    const r = await fetch(SITE + \`/_api/web/lists/getbytitle('\${LIST}')/items\`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json;odata=nometadata',
+        'Content-Type': 'application/json;odata=nometadata',
+        'X-RequestDigest': digest,
+      },
+      credentials: 'include',
+      body: JSON.stringify(kri),
+    });
     if (r.ok) {
       inserted++;
       if (inserted % 10 === 0) console.log('  ✓ ' + inserted + '/' + KRIS.length);
