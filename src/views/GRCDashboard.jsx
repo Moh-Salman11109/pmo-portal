@@ -42,6 +42,29 @@ const _halfList = (n = 6) => {
   return out.slice(0, n);
 };
 
+// ── Auto-compute RAG from numeric thresholds + direction ──────────
+// Returns null when thresholds aren't pure numbers (fallback to manual).
+const computeAutoRAG = (value, kri) => {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return null;
+  const g = parseFloat(kri.GreenThreshold);
+  const r = parseFloat(kri.RedThreshold);
+  // Need at least Green and Red as numbers to compute reliably
+  if (!Number.isFinite(g) || !Number.isFinite(r)) return null;
+  const a = parseFloat(kri.AmberThreshold);
+  const hasAmber = Number.isFinite(a);
+  const dir = kri.ThresholdDirection || "Lower is better";
+  if (dir === "Lower is better") {
+    if (v <= g) return "Green";
+    if (v >= r) return "Red";
+    return hasAmber ? "Amber" : "Amber";
+  } else {
+    if (v >= g) return "Green";
+    if (v <= r) return "Red";
+    return "Amber";
+  }
+};
+
 // ── Add / Edit KRI Reading form ───────────────────────────────────
 const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
   const T = useT();
@@ -64,7 +87,18 @@ const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
     Comments:           reading?.Comments || "",
     EscalationRequired: reading?.EscalationRequired ?? false,
   });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const autoRAG = computeAutoRAG(form.ActualValue, kri);
+  // When the user types a value, snap RAG to the auto-computed one.
+  // Done in onChange (not useEffect) to avoid cascading renders.
+  // The user can still override the dropdown afterwards.
+  const set = (k, v) => setForm(f => {
+    const next = { ...f, [k]: v };
+    if (k === "ActualValue") {
+      const auto = computeAutoRAG(v, kri);
+      if (auto) next.RAGStatus = auto;
+    }
+    return next;
+  });
   const lbl = { fontSize: 12, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
   const inp = { width: "100%", border: `1px solid ${T.border}`, borderRadius: 7, padding: "8px 11px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box" };
   return (
@@ -104,7 +138,14 @@ const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={lbl}>RAG Status</label>
+          <label style={lbl}>
+            RAG Status
+            {autoRAG && (
+              <span style={{ fontWeight: 400, color: T.muted, fontSize: 10, marginLeft: 6 }}>
+                💡 auto: {autoRAG}
+              </span>
+            )}
+          </label>
           <select value={form.RAGStatus} onChange={e => set("RAGStatus", e.target.value)} style={inp}>
             {["Green","Amber","Red"].map(s => <option key={s}>{s}</option>)}
           </select>
