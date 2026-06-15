@@ -200,6 +200,12 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
     ID: kri.ID,
     Title: kri.Title || "",
     KRICategory: kri.KRICategory || "Operational",
+    BusinessUnit: kri.BusinessUnit || "",
+    SubCategory: kri.SubCategory || "",
+    RiskCategoryL1: kri.RiskCategoryL1 || "",
+    Metric: kri.Metric || "",
+    BaseData: kri.BaseData || "",
+    DataSource: kri.DataSource || "",
     MeasurementUnit: kri.MeasurementUnit || "",
     GreenThreshold: kri.GreenThreshold ?? "",
     AmberThreshold: kri.AmberThreshold ?? "",
@@ -220,8 +226,34 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
         <div>
           <label style={lbl}>Category</label>
           <select value={form.KRICategory} onChange={e => set("KRICategory", e.target.value)} style={inp}>
-            {["Financial","Operational","Compliance","IT","Strategic","Reputational"].map(c => <option key={c}>{c}</option>)}
+            {["Financial","Operational","Compliance","Conduct of Business","IT","Strategic","Reputational"].map(c => <option key={c}>{c}</option>)}
           </select>
+        </div>
+        <div>
+          <label style={lbl}>Business Unit / Department</label>
+          <input value={form.BusinessUnit} onChange={e => set("BusinessUnit", e.target.value)} placeholder="e.g. Claims, Cyber, Marketing" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Risk Category (Level 1)</label>
+          <input value={form.RiskCategoryL1} onChange={e => set("RiskCategoryL1", e.target.value)} placeholder="e.g. Regulatory & AML" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Sub-Category (Level 2)</label>
+          <input value={form.SubCategory} onChange={e => set("SubCategory", e.target.value)} placeholder="e.g. Regulatory, Fraud" style={inp} />
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Metric (calculation formula)</label>
+        <textarea value={form.Metric} onChange={e => set("Metric", e.target.value)} rows={2} placeholder="e.g. (Delayed closure complaints / Total closed complaints) * 100" style={{ ...inp, resize: "vertical" }} />
+      </div>
+      <div>
+        <label style={lbl}>Base Data</label>
+        <textarea value={form.BaseData} onChange={e => set("BaseData", e.target.value)} rows={2} placeholder="What raw data is needed to compute this KRI" style={{ ...inp, resize: "vertical" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <label style={lbl}>Data Source</label>
+          <input value={form.DataSource} onChange={e => set("DataSource", e.target.value)} placeholder="e.g. Compliance Department, Ziwo, Medallia" style={inp} />
         </div>
         <div>
           <label style={lbl}>Unit (%, Count, Days…)</label>
@@ -229,9 +261,9 @@ const GRCMasterForm = ({ kri, onSave, saving, error, onCancel }) => {
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-        <div><label style={lbl}>Green Threshold</label><input type="number" value={form.GreenThreshold} onChange={e => set("GreenThreshold", e.target.value)} style={inp} /></div>
-        <div><label style={lbl}>Amber Threshold</label><input type="number" value={form.AmberThreshold} onChange={e => set("AmberThreshold", e.target.value)} style={inp} /></div>
-        <div><label style={lbl}>Red Threshold</label><input type="number" value={form.RedThreshold} onChange={e => set("RedThreshold", e.target.value)} style={inp} /></div>
+        <div><label style={lbl}>Green Threshold</label><input value={form.GreenThreshold} onChange={e => set("GreenThreshold", e.target.value)} placeholder="e.g. 0 or <5%" style={inp} /></div>
+        <div><label style={lbl}>Amber Threshold</label><input value={form.AmberThreshold} onChange={e => set("AmberThreshold", e.target.value)} placeholder="e.g. - or In Between" style={inp} /></div>
+        <div><label style={lbl}>Red Threshold</label><input value={form.RedThreshold} onChange={e => set("RedThreshold", e.target.value)} placeholder="e.g. >=1 or >10%" style={inp} /></div>
       </div>
       <div>
         <label style={lbl}>Threshold Direction</label>
@@ -456,7 +488,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       const headers = { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" };
       const base    = `${GRC_SP_SITE}/_api/web/lists/getbytitle`;
       const [mR, rR, rrR, aR, afR, caR] = await Promise.all([
-        fetch(`${base}('GRC_KRI_Master')/items?$select=ID,Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive&$expand=KRIOwner&$top=500`, { headers }),
+        fetch(`${base}('GRC_KRI_Master')/items?$select=ID,Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive,SubCategory,RiskCategoryL1,Metric,BaseData,DataSource&$expand=KRIOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_KRI_Readings')/items?$select=ID,Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskRegister')/items?$select=ID,Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskAppetite')/items?$select=ID,Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
@@ -563,10 +595,16 @@ const GRCDashboard = ({ canEdit = false }) => {
       await spPatch("GRC_KRI_Master", form.ID, {
         Title:              form.Title,
         KRICategory:        form.KRICategory,
+        BusinessUnit:       form.BusinessUnit || "",
+        SubCategory:        form.SubCategory || "",
+        RiskCategoryL1:     form.RiskCategoryL1 || "",
+        Metric:             form.Metric || "",
+        BaseData:           form.BaseData || "",
+        DataSource:         form.DataSource || "",
         MeasurementUnit:    form.MeasurementUnit || "",
-        GreenThreshold:     form.GreenThreshold !== "" ? Number(form.GreenThreshold) : null,
-        AmberThreshold:     form.AmberThreshold !== "" ? Number(form.AmberThreshold) : null,
-        RedThreshold:       form.RedThreshold   !== "" ? Number(form.RedThreshold)   : null,
+        GreenThreshold:     form.GreenThreshold || "",
+        AmberThreshold:     form.AmberThreshold || "",
+        RedThreshold:       form.RedThreshold   || "",
         ThresholdDirection: form.ThresholdDirection,
         IsActive:           form.IsActive,
       });
@@ -1080,9 +1118,9 @@ const GRCDashboard = ({ canEdit = false }) => {
                 <XAxis dataKey="period" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                {kri?.GreenThreshold != null && <ReferenceLine y={kri.GreenThreshold} stroke="#16a34a" strokeDasharray="4 2" label={{ value: "Green", position: "right", fontSize: 10, fill: "#16a34a" }} />}
-                {kri?.AmberThreshold != null && <ReferenceLine y={kri.AmberThreshold} stroke="#eab308" strokeDasharray="4 2" label={{ value: "Amber", position: "right", fontSize: 10, fill: "#d97706" }} />}
-                {kri?.RedThreshold   != null && <ReferenceLine y={kri.RedThreshold}   stroke="#dc2626" strokeDasharray="4 2" label={{ value: "Red",   position: "right", fontSize: 10, fill: "#dc2626" }} />}
+                {(() => { const g = parseFloat(kri?.GreenThreshold); return Number.isFinite(g) ? <ReferenceLine y={g} stroke="#16a34a" strokeDasharray="4 2" label={{ value: "Green", position: "right", fontSize: 10, fill: "#16a34a" }} /> : null; })()}
+                {(() => { const a = parseFloat(kri?.AmberThreshold); return Number.isFinite(a) ? <ReferenceLine y={a} stroke="#eab308" strokeDasharray="4 2" label={{ value: "Amber", position: "right", fontSize: 10, fill: "#d97706" }} /> : null; })()}
+                {(() => { const r = parseFloat(kri?.RedThreshold);   return Number.isFinite(r) ? <ReferenceLine y={r} stroke="#dc2626" strokeDasharray="4 2" label={{ value: "Red",   position: "right", fontSize: 10, fill: "#dc2626" }} /> : null; })()}
                 <Line type="monotone" dataKey="value" stroke={T.primary} strokeWidth={2.5} dot={{ r: 4, fill: T.primary }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
