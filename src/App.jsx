@@ -1426,7 +1426,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const twIPI      = project ? calcTimeWeightedIPI(project) : 0;
   const ipiC       = ipiColor(ipi);
   const twIpiC     = ipiColor(twIPI);
-  const hasHistory = project ? (project.ipiHistory || []).length > 0 : false;
   const countedIPI = useCountUp(twIPI);
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
@@ -1486,14 +1485,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
             <div style={{ background: twIpiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
               <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{countedIPI}</div>
-              <div style={{ fontSize: 10, color: twIpiC.color, fontWeight: 700 }}>
-                {hasHistory ? "IPI (Weighted)" : "IPI Score"}
-              </div>
-              {hasHistory && twIPI !== ipi && (
-                <div style={{ fontSize: 10, color: ipiC.color, marginTop: 3, fontWeight: 600 }}>
-                  Current: {ipi}
-                </div>
-              )}
+              <div style={{ fontSize: 10, color: twIpiC.color, fontWeight: 700 }}>IPI Score</div>
             </div>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
               <div>
