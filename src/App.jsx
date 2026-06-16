@@ -499,7 +499,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 
   const navItems = [
     ...(!isPM ? [{ icon: "🏠", label: "Portfolio Overview", route: "home" }] : []),
-    ...(!isPM ? [{ icon: "📁", label: "Departments",         route: "departments" }] : []),
+    ...(!isPM ? [{ icon: "📁", label: "Departments IPI",     route: "departments" }] : []),
     ...(!isPM ? [{ icon: "📋", label: "All Projects",        route: "projects", badge: attnCount }] : []),
     { icon: "📨", label: "New Request",          route: "requests"},
     { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
@@ -974,9 +974,8 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
   const TABS = [
     { key: "Status",     icon: "📊" },
-    { key: "Health",     icon: "🩺" },
     { key: "Financials", icon: "💰" },
-    { key: "Milestones", icon: "🎯" },
+    { key: "Activities", icon: "🎯" },
     { key: "Risks",      icon: "⚠️" },
     { key: "Benefits",   icon: "📈" },
     { key: "Documents",  icon: "📁" },
@@ -1060,33 +1059,6 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
       </div>
     );
 
-    if (tab === "Health") return (
-      <div>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted }}>Set Green / Amber / Red for each dimension. Affects the IPI score.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          {healthDims.map(([k, l]) => {
-            const v = health[k];
-            return (
-              <div key={k}>
-                <div style={{ fontSize: 11, color: T.muted, marginBottom: 5, fontWeight: 600 }}>{l}</div>
-                <div style={{ display: "flex", gap: 5 }}>
-                  {["Green","Amber","Red"].map(o => (
-                    <button key={o} onClick={() => setH(k, o)}
-                      style={{ flex: 1, padding: "7px 3px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                        background: v === o ? ragClr[o].bg : T.bg,
-                        border: v === o ? `2px solid ${ragClr[o].b}` : `1px solid ${T.border}`,
-                        color: v === o ? ragClr[o].text : T.muted }}>
-                      {o}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-
     if (tab === "Financials") return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div>
@@ -1139,7 +1111,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
       </div>
     );
 
-    if (tab === "Milestones") return <MilestoneListEditor items={milestones} onChange={setMilestones} />;
+    if (tab === "Activities") return <MilestoneListEditor items={milestones} onChange={setMilestones} />;
     if (tab === "Risks")      return <RiskListEditor      items={risks}      onChange={setRisks} />;
     if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
 
@@ -4061,8 +4033,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   const STEPS = [
     { label: "Basic Info", icon: "📋" },
     { label: "Timeline & Budget", icon: "📅" },
-    { label: "Health", icon: "🩺" },
-    { label: "Milestones", icon: "🎯" },
+    { label: "Activities", icon: "🎯" },
     { label: "Risks & Issues", icon: "⚠️" },
     { label: "Documents", icon: "📄" },
     { label: "Updates", icon: "📝" },
@@ -4146,16 +4117,8 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         <FField label="Actual Cost (SAR)"><input type="number" min={0} step={10000} value={form.actualCost} onChange={e => set("actualCost", Number(e.target.value))} style={s} /></FField>
       </div>
     );
-    if (step === 2) return (
-      <div>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: T.muted }}>Set Green / Amber / Red for each dimension. Affects the Health tab and IPI score.</p>
-        <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 20 }}>
-          {[["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]].map(([k,l]) => <RAGBtn key={k} hKey={k} label={l} />)}
-        </div>
-      </div>
-    );
-    if (step === 3) return <MilestoneListEditor items={form.milestones} onChange={v => set("milestones", v)} />;
-    if (step === 4) return (
+    if (step === 2) return <MilestoneListEditor items={form.milestones} onChange={v => set("milestones", v)} />;
+    if (step === 3) return (
       <div>
         <RiskListEditor items={form.risks} onChange={v => set("risks", v)} />
         <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 20, marginTop: 4 }}>
@@ -4163,7 +4126,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         </div>
       </div>
     );
-    if (step === 5) return (
+    if (step === 4) return (
       <div>
         <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted }}>
           Update document status. Required documents affect the IPI score.
@@ -4191,7 +4154,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         </div>
       </div>
     );
-    if (step === 6) return (
+    if (step === 5) return (
       <div>
         <FField label="Add Update Note (optional)">
           <textarea value={form._newUpdate || ""} onChange={e => set("_newUpdate", e.target.value)} rows={4} placeholder="What's the latest status? Key decisions, blockers, progress..." style={{ ...s, resize: "vertical" }} />
