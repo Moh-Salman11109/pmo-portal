@@ -1270,8 +1270,26 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
 };
 
 // ─── MILESTONE GANTT ──────────────────────────────────────────────
-const MilestoneGantt = ({ milestones, project }) => {
+const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   const T = useT();
+
+  // ── Infer startDate when missing so activities render as bars, not diamonds.
+  // Rule: use the previous activity's end date if it's before this one's end;
+  // otherwise use the project start; otherwise fall back to 14 days before end.
+  const milestones = rawMilestones.map((m, i) => {
+    if (m.startDate || !m.date) return m;
+    const prevEnd  = i > 0 ? (rawMilestones[i - 1].date || rawMilestones[i - 1].startDate) : null;
+    const projStart = project?.startDate;
+    let inferred = null;
+    if (prevEnd && prevEnd < m.date)  inferred = prevEnd;
+    else if (projStart && projStart < m.date) inferred = projStart;
+    else {
+      const fb = new Date(m.date);
+      fb.setDate(fb.getDate() - 14);
+      inferred = fb.toISOString().split("T")[0];
+    }
+    return { ...m, startDate: inferred };
+  });
 
   const withDates = milestones.filter(m => m.startDate || m.date);
   if (withDates.length === 0) return null;
