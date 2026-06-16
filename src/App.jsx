@@ -857,7 +857,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: T.bg }}>
-                {["Code", "Project Name", "PM", "Type", "Phase", "Progress", "Status", "IPI", "Risk", "Budget Status", "Gate", "Last Update"].map(h => (
+                {["Code", "Project Name", "PM", "Type", "Progress", "Status", "IPI", "Risk", "Budget Status", "Gate", "Last Update"].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -880,7 +880,6 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{p.pm}</td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, whiteSpace: "nowrap" }}>{p.phase}</td>
                   <td style={{ padding: "12px 14px", minWidth: 100 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ flex: 1 }}><Progress value={p.progress} height={5} /></div>
@@ -920,7 +919,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                 <Badge status={p.status} />
               </div>
               <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>{p.name}</h3>
-              <p style={{ margin: "0 0 14px", fontSize: 12, color: T.muted }}>PM: {p.pm} · {p.phase}</p>
+              <p style={{ margin: "0 0 14px", fontSize: 12, color: T.muted }}>PM: {p.pm} · {p.gate}</p>
               <Progress value={p.progress} height={6} />
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 14 }}>
                 <span style={{ fontSize: 11, color: T.muted }}>Progress</span>
@@ -1027,8 +1026,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
         </div>
         <div>
           <SL>CLASSIFICATION</SL>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <div><FL>Phase</FL><select value={phase} onChange={e => setPhase(e.target.value)} style={ss}>{["Initiation","Planning","Execution","Monitoring","Closure"].map(o => <option key={o}>{o}</option>)}</select></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div><FL>Current Gate</FL><select value={gate} onChange={e => setGate(e.target.value)} style={ss}>{["Gate 1","Gate 2","Gate 3","Gate 4","Gate 5"].map(o => <option key={o}>{o}</option>)}</select></div>
             <div><FL>Priority</FL><select value={priority} onChange={e => setPriority(e.target.value)} style={ss}>{["Low","Medium","High","Critical"].map(o => <option key={o}>{o}</option>)}</select></div>
           </div>
@@ -1504,7 +1502,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             { label: "PM", value: project.pm },
             { label: "Sponsor", value: project.sponsor },
             { label: "Department", value: departments.find(d => d.id === project.deptId)?.name },
-            { label: "Phase", value: project.phase },
             { label: "Start Date", value: project.startDate },
             { label: "Planned End", value: project.plannedEnd },
           ].map(({ label, value }) => (
@@ -1681,7 +1678,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   return [
                     ["Strategic Objective", project.strategic],
                     ["Classification", project.classification],
-                    ["Current Phase", project.phase],
                     ["Gate Status", project.gate],
                     ["Risk Level", deriveRiskLevel(project)],
                     ["Budget Status", deriveBudgetStatus(project)],
@@ -3546,7 +3542,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
       <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
-            {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Phase", "Progress", "Status", "Risk", "Budget", "Gate", "Last Update"].map(h => (
+            {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Progress", "Status", "Risk", "Budget", "Gate", "Last Update"].map(h => (
               <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
@@ -3575,7 +3571,6 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.pm}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.sponsor}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.phase}</td>
                   <td style={{ padding: "12px 14px", minWidth: 90 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <div style={{ flex: 1 }}><Progress value={p.progress} height={4} /></div>
@@ -4081,12 +4076,9 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
           <FField label="PM Email"><input value={form.pmEmail || ""} onChange={e => set("pmEmail", e.target.value)} placeholder="pm@tree.com.sa" type="email" style={s} /></FField>
           <FField label="Sponsor"><input value={form.sponsor} onChange={e => set("sponsor", e.target.value)} placeholder="Full name" style={s} /></FField>
           <FField label="Sponsor Email"><input value={form.sponsorEmail || ""} onChange={e => set("sponsorEmail", e.target.value)} placeholder="sponsor@tree.com.sa" type="email" style={s} /></FField>
-          <FField label="Phase"><select value={form.phase} onChange={e => set("phase", e.target.value)} style={ss}>{["Initiation","Planning","Execution","Monitoring","Closure"].map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Current Gate"><select value={form.gate} onChange={e => set("gate", e.target.value)} style={ss}>{["Gate 1","Gate 2","Gate 3","Gate 4","Gate 5"].map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Status"><select value={form.status} onChange={e => set("status", e.target.value)} style={ss}>{["Not Started","On Track","At Risk","Delayed","Completed"].map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Priority"><select value={form.priority} onChange={e => set("priority", e.target.value)} style={ss}>{["Critical","High","Medium","Low"].map(o => <option key={o}>{o}</option>)}</select></FField>
-          <FField label="Risk Level"><select value={form.riskLevel} onChange={e => set("riskLevel", e.target.value)} style={ss}>{["Critical","High","Medium","Low"].map(o => <option key={o}>{o}</option>)}</select></FField>
-          <FField label="Budget Status"><select value={form.budgetStatus} onChange={e => set("budgetStatus", e.target.value)} style={ss}>{["On Budget","Over Budget","Under Budget"].map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Classification"><input value={form.classification} onChange={e => set("classification", e.target.value)} placeholder="e.g. Strategic Initiative" style={s} /></FField>
           <FField label="Strategic Objective"><input value={form.strategic} onChange={e => set("strategic", e.target.value)} placeholder="e.g. Digital Transformation" style={s} /></FField>
         </div>
