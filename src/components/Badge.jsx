@@ -1,5 +1,5 @@
 import { useT } from "../theme.js";
-import { statusColor, healthColor, riskColor } from "../utils/colors.js";
+import { statusColor, riskColor } from "../utils/colors.js";
 
 export const TypeBadge = ({ type }) => {
   const styles = {
@@ -23,13 +23,6 @@ export const Badge = ({ status, size = "sm" }) => {
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
       {status}
     </span>
-  );
-};
-
-export const HealthBadge = ({ status }) => {
-  const c = healthColor[status] || healthColor["Amber"];
-  return (
-    <span style={{ background: c.bg, color: c.text, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12 }}>{c.label}</span>
   );
 };
 

@@ -8,12 +8,12 @@ import { useCurrentUser } from "./hooks/useCurrentUser.js";
 import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_LOCKED } from "./roles.js";
 import { THEMES, themeStore, useT, useDark, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
-import { statusColor, healthColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
+import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
 import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
-import { TypeBadge, Badge, HealthBadge, RiskBadge } from "./components/Badge.jsx";
+import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
 import { KPICard } from "./components/KPICard.jsx";
 import GRCDashboard from "./views/GRCDashboard.jsx";
@@ -1398,8 +1398,8 @@ const MilestoneGantt = ({ milestones, project }) => {
 };
 
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
-const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Health", "Milestones", "Budget", "Risks & Issues", "Approvals", "Benefits", "Documents", "Updates"];
-const PROJECT_TABS_PM    = ["Overview", "Health", "Milestones", "Risks & Issues", "Benefits", "Documents"];
+const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Activities", "Budget", "Risks & Issues", "Benefits", "Documents", "Updates"];
+const PROJECT_TABS_PM    = ["Overview", "Activities", "Risks & Issues", "Benefits", "Documents"];
 const PROJECT_TABS_EXEC  = ["Exec Summary"];
 
 const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote, userRole = ROLE_ADMIN }) => {
@@ -1684,16 +1684,20 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
               <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Project Details</h3>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {[
-                  ["Strategic Objective", project.strategic],
-                  ["Classification", project.classification],
-                  ["Current Phase", project.phase],
-                  ["Gate Status", project.gate],
-                  ["Risk Level", project.riskLevel],
-                  ["Budget Status", project.budgetStatus],
-                  ["Schedule Variance", project.scheduleVariance],
-                  ["Days Remaining", project.daysRemaining === 0 ? "Completed" : project.daysRemaining],
-                ].map(([k, v]) => (
+                {(() => {
+                  const daysLeft = project.plannedEnd
+                    ? Math.max(0, Math.ceil((new Date(project.plannedEnd) - new Date(TODAY)) / 86_400_000))
+                    : null;
+                  return [
+                    ["Strategic Objective", project.strategic],
+                    ["Classification", project.classification],
+                    ["Current Phase", project.phase],
+                    ["Gate Status", project.gate],
+                    ["Risk Level", project.riskLevel],
+                    ["Budget Status", project.budgetStatus],
+                    ["Days Remaining", daysLeft == null ? "—" : daysLeft === 0 ? "Completed" : `${daysLeft} days`],
+                  ];
+                })().map(([k, v]) => (
                   <div key={k} style={{ padding: "10px 14px", background: T.bg, borderRadius: 8 }}>
                     <div style={{ fontSize: 11, color: T.muted, marginBottom: 2 }}>{k}</div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{v}</div>
@@ -1756,76 +1760,8 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
       )}
 
-      {/* HEALTH TAB */}
-      {activeTab === "Health" && (() => {
-        const healthItems = Object.entries(project.health || {});
-        return (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-            {healthItems.map(([area, status]) => (
-              <div key={area} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, textAlign: "center" }}>
-                <div style={{ fontSize: 12, color: T.muted, marginBottom: 8, textTransform: "capitalize" }}>{area}</div>
-                <HealthBadge status={status} />
-                <div style={{ marginTop: 12, width: 50, height: 50, borderRadius: "50%", background: healthColor[status]?.bg || T.bg, border: `3px solid ${healthColor[status]?.text || T.muted}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "12px auto 0", fontSize: 20 }}>
-                  {status === "Green" ? "✅" : status === "Amber" ? "⚠️" : "🔴"}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Performance Indicators (Auto-Calculated)</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-              {[
-                { label: "SPI — Schedule", value: ipiResult.components.spiFinal ?? 1, threshold: 0.9, format: v => v.toFixed(2) },
-                { label: "CPI — Cost",     value: ipiResult.components.cpi      ?? 1, threshold: 0.9, format: v => v.toFixed(2) },
-                { label: "MCI — Docs",     value: ipiResult.components.mci,           threshold: 0.8, format: v => `${Math.round(v * 100)}%` },
-              ].map(({ label, value, threshold, format }) => (
-                <div key={label} style={{ padding: "16px 20px", background: T.bg, borderRadius: 12 }}>
-                  <div style={{ fontSize: 12, color: T.muted, marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: value >= threshold ? T.primary : "#dc2626" }}>{format(value)}</div>
-                  <div style={{ fontSize: 11, color: value >= threshold ? "#16a34a" : "#dc2626", marginTop: 4 }}>
-                    {value >= threshold ? "✓ Healthy" : "⚠ Below threshold"}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 12, fontSize: 11, color: T.muted }}>
-              Budget Utilisation: <strong style={{ color: budgetUtil > 95 ? "#dc2626" : budgetUtil > 85 ? "#eab308" : T.primary }}>{budgetUtil}%</strong>
-              {budgetUtil > 95 && <span style={{ color: "#dc2626", marginLeft: 8 }}>⚠ Over budget</span>}
-            </div>
-          </div>
-          {(project.ipiHistory || []).length > 1 && (() => {
-            const histData = [...project.ipiHistory]
-              .filter(h => h.date && h.ipi != null)
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .map(h => ({ ...h, date: h.date.slice(5) }));
-            return (
-              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginTop: 16 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>IPI Trend</h3>
-                <div style={{ fontSize: 11, color: T.muted, marginBottom: 16 }}>{histData.length} updates recorded</div>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={histData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.muted }} />
-                    <YAxis domain={[0, 110]} tick={{ fontSize: 10, fill: T.muted }} width={30} />
-                    <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontSize: 12 }} />
-                    <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 2" />
-                    <ReferenceLine y={90}  stroke="#eab308" strokeDasharray="4 2" />
-                    <Line type="monotone" dataKey="ipi" stroke={T.accent} strokeWidth={2.5} dot={{ r: 4, fill: T.accent }} name="IPI" />
-                  </LineChart>
-                </ResponsiveContainer>
-                <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 10, color: T.muted }}>
-                  <span style={{ color: "#16a34a" }}>— On Track (100)</span>
-                  <span style={{ color: "#eab308" }}>— Watch (90)</span>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-        );
-      })()}
-
-      {/* MILESTONES TAB */}
-      {activeTab === "Milestones" && (
+      {/* ACTIVITIES TAB (formerly Milestones) */}
+      {activeTab === "Activities" && (
         <div>
         <MilestoneGantt milestones={project.milestones} project={project} />
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
@@ -2004,54 +1940,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 );
               })
             )}
-          </div>
-        </div>
-      )}
-
-      {/* APPROVALS TAB */}
-      {activeTab === "Approvals" && (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-            {[
-              { label: "Approved", count: project.approvals.filter(a => a.status === "Approved").length, color: "#16a34a" },
-              { label: "Pending", count: project.approvals.filter(a => a.status === "Pending").length, color: "#eab308" },
-              { label: "Returned", count: project.approvals.filter(a => a.status === "Returned").length, color: "#dc2626" },
-            ].map(({ label, count, color }) => (
-              <div key={label} style={{ padding: "12px 20px", background: T.bg, borderRadius: 10, textAlign: "center", flex: 1 }}>
-                <div style={{ fontSize: 24, fontWeight: 900, color }}>{count}</div>
-                <div style={{ fontSize: 12, color: T.muted }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {project.approvals.map(a => {
-              const c = { "Approved": { color: "#16a34a", bg: "#dcfce7" }, "Pending": { color: "#eab308", bg: "#fef9c3" }, "Returned": { color: "#dc2626", bg: "#fee2e2" }, "Rejected": { color: "#991b1b", bg: "#fee2e2" } };
-              const style = c[a.status] || c["Pending"];
-              const approvalFormUrl = a.status === "Pending"
-                ? (a.gate?.includes("3") ? FORM_URLS.gate3
-                  : a.gate?.includes("5") || a.gate?.toLowerCase().includes("closure") ? FORM_URLS.closure
-                  : FORM_URLS.gate1)
-                : null;
-              return (
-                <div key={a.id} style={{ padding: "16px 20px", background: T.bg, borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderLeft: `4px solid ${style.color}` }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{a.title}</div>
-                    <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>{a.gate} · Approval Owner: {a.owner}</div>
-                    {a.comments && <div style={{ fontSize: 12, color: T.muted, marginTop: 4, fontStyle: "italic" }}>"{a.comments}"</div>}
-                    {approvalFormUrl && (
-                      <a href={approvalFormUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-block", marginTop: 10, background: "#fef9c3", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "5px 14px", borderRadius: 8, textDecoration: "none", border: "1px solid #fde68a" }}>
-                        Submit Decision →
-                      </a>
-                    )}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <span style={{ background: style.bg, color: style.color, fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 20 }}>{a.status}</span>
-                    {a.date && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{a.date}</div>}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
       )}
@@ -4238,7 +4126,6 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         <FField label="Budget (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>
         <FField label="Forecast (SAR)"><input type="number" min={0} step={10000} value={form.forecast} onChange={e => set("forecast", Number(e.target.value))} style={s} /></FField>
         <FField label="Actual Cost (SAR)"><input type="number" min={0} step={10000} value={form.actualCost} onChange={e => set("actualCost", Number(e.target.value))} style={s} /></FField>
-        <FField label="Days Remaining"><input type="number" min={0} value={form.daysRemaining} onChange={e => set("daysRemaining", Number(e.target.value))} style={s} /></FField>
       </div>
     );
     if (step === 2) return (
