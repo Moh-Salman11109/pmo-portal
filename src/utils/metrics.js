@@ -249,6 +249,34 @@ export function calcPortfolioIPI(projects, asOfDate = TODAY) {
   );
 }
 
+/**
+ * Derive the project-level risk level from the active risks array.
+ * Highest open risk wins. Falls back to "Low" if no open risks.
+ * Use this instead of a manually-maintained project.riskLevel field.
+ */
+export function deriveRiskLevel(project) {
+  const open = (project.risks || []).filter(r => r.status !== "Closed" && r.status !== "Mitigated");
+  if (open.some(r => r.level === "Critical")) return "Critical";
+  if (open.some(r => r.level === "High"))     return "High";
+  if (open.some(r => r.level === "Medium"))   return "Medium";
+  return "Low";
+}
+
+/**
+ * Derive budget status from raw numbers.
+ * "Over Budget" when actualCost or forecast exceeds the approved budget.
+ * Otherwise "On Budget". "Under Budget" is intentionally not derived — rarely actionable.
+ */
+export function deriveBudgetStatus(project) {
+  const budget     = project.budget     || 0;
+  const actualCost = project.actualCost || 0;
+  const forecast   = project.forecast   || 0;
+  if (!budget) return "On Budget";
+  if (actualCost > budget) return "Over Budget";
+  if (forecast   > budget) return "Over Budget";
+  return "On Budget";
+}
+
 export function ipiColor(score) {
   if (score == null) return { color: "#6b7280", bg: "#f3f4f6", label: "No Data" };
   if (score > 100)  return { color: "#166534", bg: "#bbf7d0", label: "Over Achieved" };

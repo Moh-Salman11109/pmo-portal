@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -471,7 +471,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
   };
 
   const attnCount = useMemo(
-    () => projects.filter(p => !p.archived && (p.status === "Delayed" || p.riskLevel === "Critical")).length,
+    () => projects.filter(p => !p.archived && (p.status === "Delayed" || deriveRiskLevel(p) === "Critical")).length,
     [projects]
   );
 
@@ -776,7 +776,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
   const filtered = useMemo(() => deptProjects.filter(p => {
     const matchSearch  = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     const matchStatus  = filterStatus  === "All" || p.status     === filterStatus;
-    const matchRisk    = filterRisk    === "All" || p.riskLevel  === filterRisk;
+    const matchRisk    = filterRisk    === "All" || deriveRiskLevel(p) === filterRisk;
     const matchType    = filterType    === "All" || p.projectType === filterType;
     const matchRoadmap = !filterRoadmap || p.isRoadmap === true;
     return matchSearch && matchStatus && matchRisk && matchType && matchRoadmap;
@@ -891,9 +891,9 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   <td style={{ padding: "12px 14px" }}>
                     {(() => { const ipiVal = calcProjectIPI(p); const sc = ipiColor(ipiVal); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipiVal}</span>; })()}
                   </td>
-                  <td style={{ padding: "12px 14px" }}><RiskBadge level={p.riskLevel} /></td>
+                  <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
-                    <span style={{ color: p.budgetStatus === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{p.budgetStatus}</span>
+                    <span style={{ color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</span>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
@@ -927,8 +927,8 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                 <span style={{ fontSize: 11, fontWeight: 700 }}>{p.progress}%</span>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <RiskBadge level={p.riskLevel} />
-                <span style={{ fontSize: 11, color: p.budgetStatus === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600, padding: "2px 8px", background: p.budgetStatus === "Over Budget" ? "#fee2e2" : "#dcfce7", borderRadius: 10 }}>{p.budgetStatus}</span>
+                <RiskBadge level={deriveRiskLevel(p)} />
+                <span style={{ fontSize: 11, color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600, padding: "2px 8px", background: deriveBudgetStatus(p) === "Over Budget" ? "#fee2e2" : "#dcfce7", borderRadius: 10 }}>{deriveBudgetStatus(p)}</span>
               </div>
             </div>
           ))}
@@ -1626,7 +1626,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 <Progress value={budgetUtil} color={budgetUtil > 90 ? "#dc2626" : budgetUtil > 75 ? "#eab308" : T.accent} height={8} />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 10 }}>
                   <span style={{ fontSize: 11, color: T.muted }}>{budgetUtil}% utilized</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: remaining >= 0 ? "#15803d" : "#dc2626" }}>{project.budgetStatus}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: remaining >= 0 ? "#15803d" : "#dc2626" }}>{deriveBudgetStatus(project)}</span>
                 </div>
                 <div style={{ fontSize: 12, color: T.muted }}>CPI: <span style={{ fontWeight: 700, color: project.cpi >= 1 ? "#15803d" : "#dc2626" }}>{project.cpi.toFixed(2)}</span> &nbsp;·&nbsp; SPI: <span style={{ fontWeight: 700, color: project.spi >= 0.9 ? "#15803d" : "#dc2626" }}>{project.spi.toFixed(2)}</span></div>
               </div>
@@ -1683,8 +1683,8 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     ["Classification", project.classification],
                     ["Current Phase", project.phase],
                     ["Gate Status", project.gate],
-                    ["Risk Level", project.riskLevel],
-                    ["Budget Status", project.budgetStatus],
+                    ["Risk Level", deriveRiskLevel(project)],
+                    ["Budget Status", deriveBudgetStatus(project)],
                     ["Days Remaining", daysLeft == null ? "—" : daysLeft === 0 ? "Completed" : `${daysLeft} days`],
                   ];
                 })().map(([k, v]) => (
@@ -3583,8 +3583,8 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                     </div>
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
-                  <td style={{ padding: "12px 14px" }}><RiskBadge level={p.riskLevel} /></td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: p.budgetStatus === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{p.budgetStatus}</td>
+                  <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
+                  <td style={{ padding: "12px 14px", fontSize: 12, color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, color: T.muted }}>{p.lastUpdate || "—"}</div>
