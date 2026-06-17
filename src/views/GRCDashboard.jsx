@@ -85,6 +85,8 @@ const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
     RAGStatus:          reading?.RAGStatus || "Green",
     Trend:              reading?.Trend || "Stable",
     Comments:           reading?.Comments || "",
+    Justification:      reading?.Justification || "",
+    ActionPlan:         reading?.ActionPlan || "",
     EscalationRequired: reading?.EscalationRequired ?? false,
   });
   const autoRAG = computeAutoRAG(form.ActualValue, kri);
@@ -158,8 +160,16 @@ const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
         </div>
       </div>
       <div>
+        <label style={lbl}>Justification / Explanation</label>
+        <textarea value={form.Justification} onChange={e => set("Justification", e.target.value)} rows={3} placeholder="Why is the value at this level? Context, drivers, root cause…" style={{ ...inp, resize: "vertical" }} />
+      </div>
+      <div>
+        <label style={lbl}>Action Plan</label>
+        <textarea value={form.ActionPlan} onChange={e => set("ActionPlan", e.target.value)} rows={3} placeholder="What's being done to address this? Owner, timeline, key steps…" style={{ ...inp, resize: "vertical" }} />
+      </div>
+      <div>
         <label style={lbl}>Comments</label>
-        <textarea value={form.Comments} onChange={e => set("Comments", e.target.value)} rows={3} placeholder="Optional commentary…" style={{ ...inp, resize: "vertical" }} />
+        <textarea value={form.Comments} onChange={e => set("Comments", e.target.value)} rows={2} placeholder="Additional notes…" style={{ ...inp, resize: "vertical" }} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input type="checkbox" id="grc-escal" checked={form.EscalationRequired} onChange={e => set("EscalationRequired", e.target.checked)} style={{ cursor: "pointer" }} />
@@ -656,7 +666,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       const base    = `${GRC_SP_SITE}/_api/web/lists/getbytitle`;
       const [mR, rR, rrR, aR, afR, caR] = await Promise.all([
         fetch(`${base}('GRC_KRI_Master')/items?$select=ID,Title,KRIID,KRICategory,KRIOwner/Title,BusinessUnit,MeasurementUnit,GreenThreshold,AmberThreshold,RedThreshold,ThresholdDirection,IsActive,SubCategory,RiskCategoryL1,Metric,BaseData,DataSource,ReportingFrequency&$expand=KRIOwner&$top=500`, { headers }),
-        fetch(`${base}('GRC_KRI_Readings')/items?$select=ID,Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired&$orderby=ReadingDate desc&$top=500`, { headers }),
+        fetch(`${base}('GRC_KRI_Readings')/items?$select=ID,Title,KRIID,KRIName,ReadingDate,ActualValue,PreviousValue,Period,RAGStatus,Trend,Comments,EscalationRequired,Justification,ActionPlan&$orderby=ReadingDate desc&$top=2000`, { headers }),
         fetch(`${base}('GRC_RiskRegister')/items?$select=ID,Title,RiskID,RiskCategory,RiskOwner/Title,BusinessUnit,LikelihoodScore,ImpactScore,RiskStatus,RiskAppetiteBreached,NextReviewDate,MitigationSummary&$expand=RiskOwner&$top=500`, { headers }),
         fetch(`${base}('GRC_RiskAppetite')/items?$select=ID,Title,RiskCategory,AppetiteStatement,MaxTolerableScore,CurrentExposureScore,AppetiteStatus&$top=500`, { headers }),
         fetch(`${base}('GRC_AuditFindings')/items?$select=ID,Title,FindingSeverity,BusinessUnit,Status,DueDate&$top=500`, { headers }),
@@ -719,6 +729,8 @@ const GRCDashboard = ({ canEdit = false }) => {
         RAGStatus:           form.RAGStatus,
         Trend:               form.Trend,
         Comments:            form.Comments || "",
+        Justification:       form.Justification || "",
+        ActionPlan:          form.ActionPlan || "",
         EscalationRequired:  form.EscalationRequired,
       };
       if (form.ID == null) await spPost("GRC_KRI_Readings", payload);
@@ -1406,24 +1418,43 @@ const GRCDashboard = ({ canEdit = false }) => {
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
                   All Readings ({kriHistory.length})
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {[...kriHistory].sort((a, b) => (b.Period || "").localeCompare(a.Period || "")).map(r => {
                     const rc = RAG_COLOR[r.RAGStatus];
+                    const hasGov = r.Justification || r.ActionPlan;
                     return (
-                      <div key={r.ID} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.bg, borderRadius: 8, fontSize: 12 }}>
-                        <span style={{ minWidth: 70, fontWeight: 700, color: T.text }}>{r.Period}</span>
-                        <span style={{ minWidth: 60, fontWeight: 800, color: rc?.text || T.text }}>{r.ActualValue}{kri?.MeasurementUnit ? ` ${kri.MeasurementUnit}` : ""}</span>
-                        {rc && <span style={{ background: rc.bg, color: rc.text, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20 }}>{r.RAGStatus}</span>}
-                        {r.Trend && <span style={{ fontSize: 14, color: trendColor(r.Trend) }}>{trendIcon(r.Trend)}</span>}
-                        <span style={{ flex: 1, fontSize: 11, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.Comments || ""}</span>
-                        <button onClick={() => { setReadingModal(kri); setEditingReading(r); }}
-                          style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: T.text, fontWeight: 600 }}>
-                          Edit
-                        </button>
-                        <button onClick={() => deleteReading(r)} disabled={saving}
-                          style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: saving ? "not-allowed" : "pointer", color: "#991b1b", fontWeight: 700, opacity: saving ? 0.5 : 1 }}>
-                          🗑
-                        </button>
+                      <div key={r.ID} style={{ padding: "10px 14px", background: T.bg, borderRadius: 8, fontSize: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ minWidth: 70, fontWeight: 700, color: T.text }}>{r.Period}</span>
+                          <span style={{ minWidth: 60, fontWeight: 800, color: rc?.text || T.text }}>{r.ActualValue}{kri?.MeasurementUnit ? ` ${kri.MeasurementUnit}` : ""}</span>
+                          {rc && <span style={{ background: rc.bg, color: rc.text, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20 }}>{r.RAGStatus}</span>}
+                          {r.Trend && <span style={{ fontSize: 14, color: trendColor(r.Trend) }}>{trendIcon(r.Trend)}</span>}
+                          <span style={{ flex: 1, fontSize: 11, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.Comments || ""}</span>
+                          <button onClick={() => { setReadingModal(kri); setEditingReading(r); }}
+                            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: T.text, fontWeight: 600 }}>
+                            Edit
+                          </button>
+                          <button onClick={() => deleteReading(r)} disabled={saving}
+                            style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: saving ? "not-allowed" : "pointer", color: "#991b1b", fontWeight: 700, opacity: saving ? 0.5 : 1 }}>
+                            🗑
+                          </button>
+                        </div>
+                        {hasGov && (
+                          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${T.border}`, display: "grid", gridTemplateColumns: r.Justification && r.ActionPlan ? "1fr 1fr" : "1fr", gap: 12 }}>
+                            {r.Justification && (
+                              <div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>💡 Justification</div>
+                                <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.Justification}</div>
+                              </div>
+                            )}
+                            {r.ActionPlan && (
+                              <div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>🎯 Action Plan</div>
+                                <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.ActionPlan}</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
