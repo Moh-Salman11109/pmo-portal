@@ -958,9 +958,30 @@ const GRCDashboard = ({ canEdit = false }) => {
   const activeKRIs = useMemo(() => kriMaster.filter(k => k.IsActive !== false), [kriMaster]);
 
   const latestByKRI = useMemo(() => {
+    // Compare by Period (chronological), not ReadingDate.
+    // ReadingDate is often the same for bulk-imported historical readings,
+    // which made "latest" pick the wrong row.
+    const periodMs = (p) => {
+      if (!p) return -Infinity;
+      // Monthly YYYY-MM
+      if (/^\d{4}-\d{2}$/.test(p)) {
+        const [y, m] = p.split("-");
+        return new Date(Number(y), Number(m) - 1, 1).getTime();
+      }
+      // Quarterly YYYY-QN
+      let mm = p.match(/^(\d{4})-Q([1-4])$/i);
+      if (mm) return new Date(Number(mm[1]), (Number(mm[2]) - 1) * 3, 1).getTime();
+      // Semi-annual YYYY-HN
+      mm = p.match(/^(\d{4})-H([12])$/i);
+      if (mm) return new Date(Number(mm[1]), Number(mm[2]) === 1 ? 0 : 6, 1).getTime();
+      // Annual YYYY
+      if (/^\d{4}$/.test(p)) return new Date(Number(p), 0, 1).getTime();
+      return -Infinity;
+    };
     const map = {};
     kriReadings.forEach(r => {
-      if (!map[r.KRIID] || r.ReadingDate > map[r.KRIID].ReadingDate) map[r.KRIID] = r;
+      const cur = map[r.KRIID];
+      if (!cur || periodMs(r.Period) > periodMs(cur.Period)) map[r.KRIID] = r;
     });
     return map;
   }, [kriReadings]);
@@ -1043,10 +1064,19 @@ const GRCDashboard = ({ canEdit = false }) => {
 
   const parsePeriodToDate = (period) => {
     if (!period) return null;
+    // Monthly: YYYY-MM
     if (/^\d{4}-\d{2}$/.test(period)) {
       const [y, m] = period.split("-");
       return new Date(Number(y), Number(m) - 1, 1);
     }
+    // Quarterly: YYYY-QN  (Q1=Jan, Q2=Apr, Q3=Jul, Q4=Oct)
+    let m = period.match(/^(\d{4})-Q([1-4])$/i);
+    if (m) return new Date(Number(m[1]), (Number(m[2]) - 1) * 3, 1);
+    // Semi-annual: YYYY-HN
+    m = period.match(/^(\d{4})-H([12])$/i);
+    if (m) return new Date(Number(m[1]), Number(m[2]) === 1 ? 0 : 6, 1);
+    // Annual: YYYY
+    if (/^\d{4}$/.test(period)) return new Date(Number(period), 0, 1);
     const d = new Date(period);
     return isNaN(d.getTime()) ? null : d;
   };
@@ -1057,6 +1087,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       const [y, m] = period.split("-");
       return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-GB", { month: "short", year: "numeric" });
     }
+    // Q / H / Y stay as-is — they're already short and readable
     return period;
   };
 
