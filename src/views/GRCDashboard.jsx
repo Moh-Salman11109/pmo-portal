@@ -318,19 +318,34 @@ const Sparkline = ({ readings, direction, width = 72, height = 22, color = "#003
     const improving = higherIsBetter ? last > first : last < first;
     lineColor = improving ? "#16a34a" : "#dc2626";
   }
-  const lastX = (values.length - 1) * stepX;
-  const lastY = height - ((last - min) / range) * (height - 4) - 2;
+  // Smooth path via Catmull-Rom → cubic Bezier. Curve passes through every
+  // reading and bends gently between them — no sharp corners.
+  const pts = values.map((v, i) => [i * stepX, height - ((v - min) / range) * (height - 4) - 2]);
+  let path = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i === 0 ? 0 : i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+    const tension = 6; // higher = tighter (less curvy); 6 is a sweet spot
+    const c1x = p1[0] + (p2[0] - p0[0]) / tension;
+    const c1y = p1[1] + (p2[1] - p0[1]) / tension;
+    const c2x = p2[0] - (p3[0] - p1[0]) / tension;
+    const c2y = p2[1] - (p3[1] - p1[1]) / tension;
+    path += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  const lastPt = pts[pts.length - 1];
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
-      <polyline
+      <path
         fill="none"
         stroke={lineColor}
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        points={points.join(" ")}
+        d={path}
       />
-      <circle cx={lastX} cy={lastY} r="2" fill={lineColor} />
+      <circle cx={lastPt[0]} cy={lastPt[1]} r="2" fill={lineColor} />
     </svg>
   );
 };
