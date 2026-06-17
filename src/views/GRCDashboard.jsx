@@ -289,11 +289,13 @@ const GRCAppetiteForm = ({ item, onSave, saving, error, onCancel }) => {
 };
 
 // ── Sparkline: tiny inline trend chart for the KRI table ─────────
-const Sparkline = ({ readings, width = 72, height = 22, color = "#003932" }) => {
+// Direction-aware: green = improving, red = worsening, neutral = flat.
+// Uses the KRI's ThresholdDirection so colour reflects business meaning
+// (CSAT going up = good, incidents going up = bad).
+const Sparkline = ({ readings, direction, width = 72, height = 22, color = "#003932" }) => {
   if (!readings || readings.length < 2) {
     return <span style={{ fontSize: 10, color: "#9ca3af", fontStyle: "italic" }}>—</span>;
   }
-  // Take last 5 readings, ascending by Period
   const data = readings.slice(-5);
   const values = data.map(r => Number(r.ActualValue)).filter(Number.isFinite);
   if (values.length < 2) {
@@ -308,9 +310,14 @@ const Sparkline = ({ readings, width = 72, height = 22, color = "#003932" }) => 
     const y = height - ((v - min) / range) * (height - 4) - 2;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
-  const last = values[values.length - 1];
+  const last  = values[values.length - 1];
   const first = values[0];
-  const lineColor = last > first ? "#dc2626" : last < first ? "#16a34a" : color;
+  const higherIsBetter = direction === "Higher is better";
+  let lineColor = color;
+  if (last !== first) {
+    const improving = higherIsBetter ? last > first : last < first;
+    lineColor = improving ? "#16a34a" : "#dc2626";
+  }
   const lastX = (values.length - 1) * stepX;
   const lastY = height - ((last - min) / range) * (height - 4) - 2;
   return (
@@ -1518,7 +1525,7 @@ const GRCDashboard = ({ canEdit = false }) => {
                         ) : <span style={{ color: T.muted }}>—</span>}
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 18, fontWeight: 900, color: trendColor(r?.Trend) }}>{r?.Trend ? trendIcon(r.Trend) : "—"}</td>
-                      <td style={{ padding: "11px 12px" }}><Sparkline readings={kri.readings} color={T.primary} /></td>
+                      <td style={{ padding: "11px 12px" }}><Sparkline readings={kri.readings} direction={kri.ThresholdDirection} color={T.primary} /></td>
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{r?.Period || "—"}</td>
                       <td style={{ padding: "11px 12px" }}>
                         {r?.EscalationRequired
