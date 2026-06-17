@@ -288,6 +288,46 @@ const GRCAppetiteForm = ({ item, onSave, saving, error, onCancel }) => {
   );
 };
 
+// ── Sparkline: tiny inline trend chart for the KRI table ─────────
+const Sparkline = ({ readings, width = 72, height = 22, color = "#003932" }) => {
+  if (!readings || readings.length < 2) {
+    return <span style={{ fontSize: 10, color: "#9ca3af", fontStyle: "italic" }}>—</span>;
+  }
+  // Take last 5 readings, ascending by Period
+  const data = readings.slice(-5);
+  const values = data.map(r => Number(r.ActualValue)).filter(Number.isFinite);
+  if (values.length < 2) {
+    return <span style={{ fontSize: 10, color: "#9ca3af", fontStyle: "italic" }}>—</span>;
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = values.length > 1 ? width / (values.length - 1) : width;
+  const points = values.map((v, i) => {
+    const x = i * stepX;
+    const y = height - ((v - min) / range) * (height - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const last = values[values.length - 1];
+  const first = values[0];
+  const lineColor = last > first ? "#dc2626" : last < first ? "#16a34a" : color;
+  const lastX = (values.length - 1) * stepX;
+  const lastY = height - ((last - min) / range) * (height - 4) - 2;
+  return (
+    <svg width={width} height={height} style={{ display: "block" }}>
+      <polyline
+        fill="none"
+        stroke={lineColor}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points.join(" ")}
+      />
+      <circle cx={lastX} cy={lastY} r="2" fill={lineColor} />
+    </svg>
+  );
+};
+
 // ── Multi-select dropdown ─────────────────────────────────────────
 const MultiSelect = ({ label, options, selected, onChange }) => {
   const T = useT();
@@ -925,10 +965,47 @@ const GRCDashboard = ({ canEdit = false }) => {
     return map;
   }, [kriReadings]);
 
+  // Pre-bucket readings per KRI sorted by Period — used for sparklines + history queries
+  const readingsByKRI = useMemo(() => {
+    const map = {};
+    kriReadings.forEach(r => {
+      if (!r.KRIID) return;
+      if (!map[r.KRIID]) map[r.KRIID] = [];
+      map[r.KRIID].push(r);
+    });
+    Object.keys(map).forEach(id => {
+      map[id].sort((a, b) => (a.Period || "").localeCompare(b.Period || ""));
+    });
+    return map;
+  }, [kriReadings]);
+
   const kriWithLatest = useMemo(() =>
-    activeKRIs.map(k => ({ ...k, latest: latestByKRI[k.KRIID] || null })),
-    [activeKRIs, latestByKRI]
+    activeKRIs.map(k => ({
+      ...k,
+      latest: latestByKRI[k.KRIID] || null,
+      readings: readingsByKRI[k.KRIID] || [],
+    })),
+    [activeKRIs, latestByKRI, readingsByKRI]
   );
+
+  // Per-department summary — for the cards row above the table
+  const deptSummary = useMemo(() => {
+    const groups = {};
+    kriWithLatest.forEach(k => {
+      const d = k.BusinessUnit || "Other";
+      if (!groups[d]) groups[d] = { name: d, kris: [], red: 0, amber: 0, green: 0, noReading: 0, latestPeriod: "" };
+      groups[d].kris.push(k);
+      const rag = k.latest?.RAGStatus;
+      if (rag === "Red")        groups[d].red++;
+      else if (rag === "Amber") groups[d].amber++;
+      else if (rag === "Green") groups[d].green++;
+      else                      groups[d].noReading++;
+      if (k.latest?.Period && k.latest.Period > groups[d].latestPeriod) groups[d].latestPeriod = k.latest.Period;
+    });
+    return Object.values(groups)
+      .map(g => ({ ...g, total: g.kris.length, greenPct: g.kris.length ? Math.round((g.green / g.kris.length) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+  }, [kriWithLatest]);
 
   // Filter option lists — derived from the full active set so users can always pick any value
   const deptOptions = useMemo(() => [...new Set(activeKRIs.map(k => k.BusinessUnit).filter(Boolean))].sort(), [activeKRIs]);
@@ -1264,6 +1341,67 @@ const GRCDashboard = ({ canEdit = false }) => {
         ))}
       </div>
 
+      {/* ── Department Summary Cards ── */}
+      {deptSummary.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Departments overview · click a card to filter
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : bp === "tablet" ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
+            {deptSummary.map(d => {
+              const isActive = filterDept.length === 1 && filterDept[0] === d.name;
+              const healthColor = d.greenPct >= 80 ? "#16a34a" : d.greenPct >= 50 ? "#eab308" : "#dc2626";
+              return (
+                <div key={d.name}
+                  onClick={() => setFilterDept(isActive ? [] : [d.name])}
+                  style={{
+                    background: T.surface,
+                    border: `1.5px solid ${isActive ? T.primary : T.border}`,
+                    borderRadius: 14,
+                    padding: "16px 18px",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    boxShadow: isActive ? `0 4px 16px ${T.primary}28` : "none",
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = T.accent; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = T.border; }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{d.name}</div>
+                      <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{d.total} KRIs · Latest {d.latestPeriod || "—"}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: healthColor, lineHeight: 1 }}>{d.greenPct}%</div>
+                      <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>Within Limits</div>
+                    </div>
+                  </div>
+                  {/* RAG breakdown bar */}
+                  <div style={{ display: "flex", height: 6, borderRadius: 4, overflow: "hidden", background: T.bg, marginBottom: 10 }}>
+                    {d.red > 0      && <div style={{ flex: d.red,       background: "#dc2626" }} title={`${d.red} Red`} />}
+                    {d.amber > 0    && <div style={{ flex: d.amber,     background: "#eab308" }} title={`${d.amber} Amber`} />}
+                    {d.green > 0    && <div style={{ flex: d.green,     background: "#16a34a" }} title={`${d.green} Green`} />}
+                    {d.noReading > 0 && <div style={{ flex: d.noReading, background: T.border, opacity: 0.6 }} title={`${d.noReading} No Reading`} />}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                    {[
+                      { label: "Green",   v: d.green,     color: "#16a34a", bg: "#dcfce7" },
+                      { label: "Amber",   v: d.amber,     color: "#854d0e", bg: "#fef3c7" },
+                      { label: "Red",     v: d.red,       color: "#991b1b", bg: "#fee2e2" },
+                      { label: "No data", v: d.noReading, color: T.muted,   bg: T.bg },
+                    ].map(s => (
+                      <div key={s.label} style={{ textAlign: "center", padding: "6px 4px", background: s.bg, borderRadius: 6 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.v}</div>
+                        <div style={{ fontSize: 9, color: T.muted, marginTop: 3 }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── KRI Status Board ── */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
@@ -1308,7 +1446,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
               <thead>
                 <tr style={{ background: T.bg }}>
-                  {["KRI Name","Department","Category","Sub-Category","Current Value","RAG","Trend","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
+                  {["KRI Name","Department","Category","Sub-Category","Current Value","RAG","Trend","History","Period","Escalate",...(canEdit?[""]:[]),...(globalEdit?[""]:[])].map((h, i) => (
                     <th key={h + i} style={{ padding: "9px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -1349,6 +1487,7 @@ const GRCDashboard = ({ canEdit = false }) => {
                         ) : <span style={{ color: T.muted }}>—</span>}
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 18, fontWeight: 900, color: trendColor(r?.Trend) }}>{r?.Trend ? trendIcon(r.Trend) : "—"}</td>
+                      <td style={{ padding: "11px 12px" }}><Sparkline readings={kri.readings} color={T.primary} /></td>
                       <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted }}>{r?.Period || "—"}</td>
                       <td style={{ padding: "11px 12px" }}>
                         {r?.EscalationRequired
