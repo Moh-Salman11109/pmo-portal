@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -985,8 +985,13 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     setSaving(true);
     setSaveError("");
     try {
+      // If the WBS has any milestones, use its weighted progress instead of the
+      // manual slider value. Keeps project.progress in sync with what the user
+      // entered in the Activities tab.
+      const wbsP = calcProjectProgressFromWBS({ milestones });
+      const finalProgress = wbsP != null ? wbsP : progress;
       await onSubmit(project.id, {
-        status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
+        status, phase, gate, priority, progress: finalProgress, plannedProgress, startDate, plannedEnd,
         roadmapDeadline,
         health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
         milestones, risks, benefits, documents, note,
@@ -1455,6 +1460,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
 
   const budgetUtil = project.budget > 0 ? Math.round((project.actualCost / project.budget) * 100) : 0;
   const remaining = project.budget - project.actualCost;
+  // Project progress: derived from WBS (milestones × activities × weights) when
+  // any milestones exist; falls back to the saved project.progress field.
+  const wbsProgress = calcProjectProgressFromWBS(project);
+  const effectiveProgress = wbsProgress != null ? wbsProgress : (project.progress ?? 0);
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const infoCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
@@ -1498,8 +1507,8 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 </button>
               )}
             </div>
-            <div style={{ fontSize: 32, fontWeight: 900, color: T.accent }}>{project.progress}%</div>
-            <div style={{ fontSize: 12, opacity: 0.6 }}>Overall Progress</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: T.accent }}>{effectiveProgress}%</div>
+            <div style={{ fontSize: 12, opacity: 0.6 }}>Overall Progress{wbsProgress != null ? " · auto from WBS" : ""}</div>
             {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
           </div>
         </div>
@@ -1634,7 +1643,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
                 {[
                   { label: "Status", node: <Badge status={project.status} /> },
-                  { label: "Progress", node: <span style={{ fontSize: 22, fontWeight: 900, color: T.text }}>{project.progress}%</span> },
+                  { label: "Progress", node: <span style={{ fontSize: 22, fontWeight: 900, color: T.text }}>{effectiveProgress}%</span> },
                   { label: "IPI", node: <span style={{ fontSize: 20, fontWeight: 900, color: ipiC.color }}>{ipi} <span style={{ fontSize: 11, fontWeight: 600 }}>{ipiC.label}</span></span> },
                   { label: "Planned End", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.plannedEnd || "—"}</span> },
                   { label: "Current Gate", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.gate}</span> },
@@ -1736,10 +1745,12 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Progress Tracker</h3>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: T.muted }}>Overall Progress</span>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{project.progress}%</span>
+                  <span style={{ fontSize: 12, color: T.muted }}>
+                    Overall Progress{wbsProgress != null && <span style={{ color: T.accent, fontWeight: 700 }}> · auto from WBS</span>}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{effectiveProgress}%</span>
                 </div>
-                <Progress value={project.progress} color={T.accent} height={10} />
+                <Progress value={effectiveProgress} color={T.accent} height={10} />
               </div>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -3748,11 +3759,90 @@ const milestoneProgress = (milestone, allItems) => {
   return Math.round(sumW / totalW);
 };
 
-const MilestoneListEditor = ({ items, onChange }) => {
+// MilestoneRow is defined at module scope (NOT inside the editor). Defining it
+// inside the parent would give every render a new function reference, which
+// makes React unmount/remount the inputs on every keystroke — kills focus.
+const STATUS_CHIP = {
+  Completed:     { bg: "#dcfce7", text: "#15803d" },
+  "In Progress": { bg: "#fef9c3", text: "#854d0e" },
+  Upcoming:      { bg: "#f3f4f6", text: "#6b7280" },
+  Delayed:       { bg: "#fee2e2", text: "#991b1b" },
+};
+
+const MilestoneRow = ({ item, isActivity, items, upd, remove }) => {
   const T = useT();
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
-  const sc = { Completed: { bg: "#dcfce7", text: "#15803d" }, "In Progress": { bg: "#fef9c3", text: "#854d0e" }, Upcoming: { bg: "#f3f4f6", text: "#6b7280" }, Delayed: { bg: "#fee2e2", text: "#991b1b" } };
+  const c = STATUS_CHIP[item.status] || STATUS_CHIP.Upcoming;
+  const kids = items.filter(i => i.parentId === item.id);
+  const autoProgress = !isActivity && kids.length > 0 ? milestoneProgress(item, items) : null;
+  const progress = autoProgress != null ? autoProgress : (item.progress ?? 0);
+  return (
+    <div style={{
+      background: isActivity ? T.surface : T.bg,
+      borderRadius: 10,
+      padding: 12,
+      border: `1px solid ${T.border}`,
+      marginBottom: 8,
+      borderLeft: isActivity ? `3px solid ${T.accent}` : `4px solid ${T.primary}`,
+    }}>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: "0.06em" }}>
+          {isActivity ? "🔸 ACTIVITY" : "📍 MILESTONE"}
+        </span>
+        <input value={item.name} onChange={e => upd(item.id, "name", e.target.value)}
+          placeholder={isActivity ? "Activity name *" : "Milestone name *"}
+          style={{ ...s, fontWeight: 600 }} />
+        <span style={{ background: c.bg, color: c.text, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{item.status}</span>
+        <button onClick={() => remove(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px" }}>×</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>{isActivity ? "Start Date" : "Start (optional)"}</div>
+          <input type="date" value={item.startDate || ""} onChange={e => upd(item.id, "startDate", e.target.value)} style={s} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>{isActivity ? "End Date" : "Target Date"}</div>
+          <input type="date" value={item.date || ""} onChange={e => upd(item.id, "date", e.target.value)} style={s} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Status</div>
+          <select value={item.status} onChange={e => upd(item.id, "status", e.target.value)} style={ss}>
+            {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Owner</div>
+          <input value={item.owner} onChange={e => upd(item.id, "owner", e.target.value)} placeholder="Owner" style={s} />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12, alignItems: "center" }}>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 10, color: T.muted }}>
+              Progress {autoProgress != null && <span style={{ color: T.accent, fontWeight: 700 }}>· auto from {kids.length} {kids.length === 1 ? "activity" : "activities"}</span>}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{progress}%</span>
+          </div>
+          {autoProgress != null
+            ? <div style={{ width: "100%", height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${progress}%`, height: "100%", background: T.accent }} /></div>
+            : <input type="range" min={0} max={100} step={1} value={item.progress ?? 0}
+                onChange={e => upd(item.id, "progress", Number(e.target.value))}
+                style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }} />
+          }
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Weight</div>
+          <input type="number" min={1} max={10} value={item.weight ?? 1}
+            onChange={e => upd(item.id, "weight", Math.max(1, Number(e.target.value)))} style={s} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MilestoneListEditor = ({ items, onChange }) => {
+  const T = useT();
 
   const milestones = items.filter(m => !m.parentId);
   const childrenOf  = (id) => items.filter(m => m.parentId === id);
@@ -3771,75 +3861,6 @@ const MilestoneListEditor = ({ items, onChange }) => {
   };
   const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
 
-  const Row = ({ item, isActivity = false }) => {
-    const c = sc[item.status] || sc.Upcoming;
-    const kids = childrenOf(item.id);
-    const autoProgress = !isActivity && kids.length > 0 ? milestoneProgress(item, items) : null;
-    const progress = autoProgress != null ? autoProgress : (item.progress ?? 0);
-    return (
-      <div style={{
-        background: isActivity ? T.surface : T.bg,
-        borderRadius: 10,
-        padding: 12,
-        border: `1px solid ${T.border}`,
-        marginBottom: 8,
-        borderLeft: isActivity ? `3px solid ${T.accent}` : `4px solid ${T.primary}`,
-      }}>
-        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: "0.06em" }}>
-            {isActivity ? "🔸 ACTIVITY" : "📍 MILESTONE"}
-          </span>
-          <input value={item.name} onChange={e => upd(item.id, "name", e.target.value)}
-            placeholder={isActivity ? "Activity name *" : "Milestone name *"}
-            style={{ ...s, fontWeight: 600 }} />
-          <span style={{ background: c.bg, color: c.text, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{item.status}</span>
-          <button onClick={() => remove(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px" }}>×</button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>{isActivity ? "Start Date" : "Start (optional)"}</div>
-            <input type="date" value={item.startDate || ""} onChange={e => upd(item.id, "startDate", e.target.value)} style={s} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>{isActivity ? "End Date" : "Target Date"}</div>
-            <input type="date" value={item.date || ""} onChange={e => upd(item.id, "date", e.target.value)} style={s} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Status</div>
-            <select value={item.status} onChange={e => upd(item.id, "status", e.target.value)} style={ss}>
-              {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Owner</div>
-            <input value={item.owner} onChange={e => upd(item.id, "owner", e.target.value)} placeholder="Owner" style={s} />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12, alignItems: "center" }}>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 10, color: T.muted }}>
-                Progress {autoProgress != null && <span style={{ color: T.accent, fontWeight: 700 }}>· auto from {kids.length} {kids.length === 1 ? "activity" : "activities"}</span>}
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{progress}%</span>
-            </div>
-            {autoProgress != null
-              ? <div style={{ width: "100%", height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${progress}%`, height: "100%", background: T.accent }} /></div>
-              : <input type="range" min={0} max={100} step={5} value={item.progress ?? 0}
-                  onChange={e => upd(item.id, "progress", Number(e.target.value))}
-                  style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }} />
-            }
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Weight</div>
-            <input type="number" min={1} max={10} value={item.weight ?? 1}
-              onChange={e => upd(item.id, "weight", Math.max(1, Number(e.target.value)))} style={s} />
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -3852,16 +3873,14 @@ const MilestoneListEditor = ({ items, onChange }) => {
       {milestones.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet — start by adding a milestone, then add activities under it</div>}
       {milestones.map(m => (
         <div key={m.id} style={{ marginBottom: 12 }}>
-          <Row item={m} />
-          {(childrenOf(m.id).length > 0 || true) && (
-            <div style={{ marginLeft: 24, paddingLeft: 12, borderLeft: `2px dashed ${T.border}` }}>
-              {childrenOf(m.id).map(a => <Row key={a.id} item={a} isActivity />)}
-              <button onClick={() => addActivity(m.id)}
-                style={{ background: "transparent", border: `1px dashed ${T.accent}`, color: T.accent, borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
-                + Add Activity under "{m.name || "this milestone"}"
-              </button>
-            </div>
-          )}
+          <MilestoneRow item={m} items={items} upd={upd} remove={remove} />
+          <div style={{ marginLeft: 24, paddingLeft: 12, borderLeft: `2px dashed ${T.border}` }}>
+            {childrenOf(m.id).map(a => <MilestoneRow key={a.id} item={a} isActivity items={items} upd={upd} remove={remove} />)}
+            <button onClick={() => addActivity(m.id)}
+              style={{ background: "transparent", border: `1px dashed ${T.accent}`, color: T.accent, borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
+              + Add Activity under "{m.name || "this milestone"}"
+            </button>
+          </div>
         </div>
       ))}
     </div>
@@ -4171,7 +4190,10 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     if (!validate()) { setStep(0); return; }
     setSaving(true); setSaveError(null);
     try {
-      await onSaveForm(form, mode, existing?.spId, existing?.id);
+      // Auto-sync project.progress with WBS when milestones exist
+      const wbsP = calcProjectProgressFromWBS({ milestones: form.milestones || [] });
+      const payload = wbsP != null ? { ...form, progress: wbsP } : form;
+      await onSaveForm(payload, mode, existing?.spId, existing?.id);
       setRoute(mode === "edit" ? { view: "project", projectId: existing?.id } : { view: "projects" });
     } catch (err) {
       setSaveError(err.message);

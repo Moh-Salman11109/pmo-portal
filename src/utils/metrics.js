@@ -250,6 +250,36 @@ export function calcPortfolioIPI(projects, asOfDate = TODAY) {
 }
 
 /**
+ * Auto-compute overall project progress from the WBS (Activities tab).
+ * For each top-level milestone, progress is the weighted average of its
+ * activities (children). The project's overall progress is then the weighted
+ * average of those milestones. When a milestone has no children, its own
+ * progress field counts directly.
+ *
+ * Returns null when there are no top-level milestones, so callers can fall
+ * back to the manual project.progress field.
+ */
+export function calcProjectProgressFromWBS(project) {
+  const items = project.milestones || [];
+  const tops  = items.filter(m => !m.parentId);
+  if (tops.length === 0) return null;
+  const totalW = tops.reduce((s, m) => s + (m.weight || 1), 0);
+  if (totalW === 0) return null;
+  const sum = tops.reduce((s, m) => {
+    const kids = items.filter(i => i.parentId === m.id);
+    let p;
+    if (kids.length === 0) {
+      p = m.progress || 0;
+    } else {
+      const w = kids.reduce((a, c) => a + (c.weight || 1), 0);
+      p = w ? kids.reduce((a, c) => a + (c.weight || 1) * (c.progress || 0), 0) / w : 0;
+    }
+    return s + (m.weight || 1) * p;
+  }, 0);
+  return Math.round(sum / totalW);
+}
+
+/**
  * Derive the project-level risk level from the active risks array.
  * Highest open risk wins. Falls back to "Low" if no open risks.
  * Use this instead of a manually-maintained project.riskLevel field.
