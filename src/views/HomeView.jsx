@@ -7,7 +7,7 @@ import { SectionHeader } from "../shared.jsx";
 import { ROLE_PM } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
-import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor } from "../utils/metrics.js";
+import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, deriveRiskLevel } from "../utils/metrics.js";
 import { fmtSAR } from "../utils/format.js";
 import { KPICard } from "../components/KPICard.jsx";
 import { Progress } from "../components/Progress.jsx";
@@ -110,10 +110,11 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
         reasons.push(`Delayed${p.daysDelayed > 0 ? ` — ${p.daysDelayed}d behind` : ""}`);
         severity = "high";
       }
-      if (p.riskLevel === "Critical") {
+      const rl = deriveRiskLevel(p);
+      if (rl === "Critical") {
         reasons.push("Critical risk");
         severity = "high";
-      } else if (p.riskLevel === "High") {
+      } else if (rl === "High") {
         // High risk always surfaces as a reason, even when project is already Delayed
         reasons.push("High risk");
         if (severity !== "high") severity = "medium";

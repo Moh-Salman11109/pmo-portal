@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -881,14 +881,16 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>{p.pm}</td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", minWidth: 100 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ flex: 1 }}><Progress value={p.progress} height={5} /></div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: T.text, minWidth: 30 }}>{p.progress}%</span>
-                    </div>
+                    {(() => { const ep = effectiveProgress(p); return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1 }}><Progress value={ep} height={5} /></div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: T.text, minWidth: 30 }}>{ep}%</span>
+                      </div>
+                    ); })()}
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}>
-                    {(() => { const ipiVal = calcProjectIPI(p); const sc = ipiColor(ipiVal); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipiVal}</span>; })()}
+                    {(() => { const ipiVal = calcProjectIPI(p); const sc = ipiColor(ipiVal); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipiVal ?? "—"}</span>; })()}
                   </td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
@@ -920,11 +922,13 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
               </div>
               <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>{p.name}</h3>
               <p style={{ margin: "0 0 14px", fontSize: 12, color: T.muted }}>PM: {p.pm} · {p.gate}</p>
-              <Progress value={p.progress} height={6} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 14 }}>
-                <span style={{ fontSize: 11, color: T.muted }}>Progress</span>
-                <span style={{ fontSize: 11, fontWeight: 700 }}>{p.progress}%</span>
-              </div>
+              {(() => { const ep = effectiveProgress(p); return <>
+                <Progress value={ep} height={6} />
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 14 }}>
+                  <span style={{ fontSize: 11, color: T.muted }}>Progress</span>
+                  <span style={{ fontSize: 11, fontWeight: 700 }}>{ep}%</span>
+                </div>
+              </>; })()}
               <div style={{ display: "flex", gap: 8 }}>
                 <RiskBadge level={deriveRiskLevel(p)} />
                 <span style={{ fontSize: 11, color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600, padding: "2px 8px", background: deriveBudgetStatus(p) === "Over Budget" ? "#fee2e2" : "#dcfce7", borderRadius: 10 }}>{deriveBudgetStatus(p)}</span>
@@ -1516,7 +1520,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
             <div style={{ background: twIpiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{countedIPI}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{twIPI == null ? "—" : countedIPI}</div>
               <div style={{ fontSize: 10, color: twIpiC.color, fontWeight: 700 }}>IPI Score</div>
             </div>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
@@ -1529,11 +1533,11 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 {" "}→ <strong style={{ color: T.accent }}>{ipiResult.components.spiFinal ?? "N/A"}</strong> × 50%
               </div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {ipiResult.components.cpi ?? "N/A"} × 25%</div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {Math.round(ipiResult.components.mci * 100)}% docs × 25%</div>
+              <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {ipiResult.components.mci == null ? "N/A (no docs)" : `${Math.round(ipiResult.components.mci * 100)}% docs`} × 25%</div>
               {project.roadmapDeadline && (
                 <div style={{ color: ipiResult.components.penalty < 1 ? "#f87171" : "#86efac", marginTop: 2 }}>
                   {ipiResult.components.penalty < 1
-                    ? `⚠ ${Math.round((1 - ipiResult.components.penalty) * 90)}d past roadmap (${project.roadmapDeadline})`
+                    ? `⚠ ${Math.round((1 - ipiResult.components.penalty) * 100)}d past roadmap (${project.roadmapDeadline})`
                     : `✓ Within roadmap (${project.roadmapDeadline})`}
                 </div>
               )}
@@ -1644,7 +1648,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 {[
                   { label: "Status", node: <Badge status={project.status} /> },
                   { label: "Progress", node: <span style={{ fontSize: 22, fontWeight: 900, color: T.text }}>{effectiveProgress}%</span> },
-                  { label: "IPI", node: <span style={{ fontSize: 20, fontWeight: 900, color: ipiC.color }}>{ipi} <span style={{ fontSize: 11, fontWeight: 600 }}>{ipiC.label}</span></span> },
+                  { label: "IPI", node: <span style={{ fontSize: 20, fontWeight: 900, color: ipiC.color }}>{ipi ?? "—"} <span style={{ fontSize: 11, fontWeight: 600 }}>{ipiC.label}</span></span> },
                   { label: "Planned End", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.plannedEnd || "—"}</span> },
                   { label: "Current Gate", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.gate}</span> },
                   { label: "PM", node: <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{project.pm}</span> },
@@ -3268,10 +3272,12 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.pm}</td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px", minWidth: 100 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ flex: 1 }}><Progress value={p.progress} height={4} /></div>
-                      <span style={{ fontSize: 11, fontWeight: 700 }}>{p.progress}%</span>
-                    </div>
+                    {(() => { const ep = effectiveProgress(p); return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1 }}><Progress value={ep} height={4} /></div>
+                        <span style={{ fontSize: 11, fontWeight: 700 }}>{ep}%</span>
+                      </div>
+                    ); })()}
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
@@ -3368,11 +3374,13 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
     const deptIPI = calcDeptIPI(d.id, activeProjects);
     const ipiC = ipiColor(deptIPI);
 
-    // avg SPI / CPI / MCI from computed IPI components
+    // avg SPI / CPI / MCI from computed IPI components — null-aware
     const ipiResults = dp.map(p => calcProjectIPIFull(p));
-    const avgSPI = dp.length ? dp.reduce((s, _, i) => s + (ipiResults[i].components.spiFinal ?? ipiResults[i].components.spi ?? 1), 0) / dp.length : null;
-    const avgCPI = dp.length ? dp.reduce((s, _, i) => s + (ipiResults[i].components.cpi ?? 1), 0) / dp.length : null;
-    const avgMCI = dp.length ? dp.reduce((s, _, i) => s + ipiResults[i].components.mci, 0) / dp.length : 0;
+    const measuredFor = (key) => ipiResults.map(r => r.components[key]).filter(v => v != null);
+    const avgOf = (vals) => vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    const avgSPI = avgOf(ipiResults.map(r => r.components.spiFinal ?? r.components.spi).filter(v => v != null));
+    const avgCPI = avgOf(measuredFor("cpi"));
+    const avgMCI = avgOf(measuredFor("mci"));
 
     // docs compliance across all dept docs
     const allDocs = dp.flatMap(p => p.documents ?? []);
@@ -3511,9 +3519,9 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             {/* IPI breakdown */}
             <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               {[
-                { label: "SPI ×50%", value: d.avgSPI != null ? d.avgSPI.toFixed(2) : "—", pts: d.avgSPI != null ? Math.min(d.avgSPI, 1.05) * 50 : 0, color: d.avgSPI == null ? "#6b7280" : d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "CPI ×25%", value: d.avgCPI != null ? d.avgCPI.toFixed(2) : "—", pts: d.avgCPI != null ? Math.min(d.avgCPI, 1.05) * 25 : 0, color: d.avgCPI == null ? "#6b7280" : d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "MCI ×25%", value: `${Math.round((d.avgMCI || 0) * 100)}%`, pts: (d.avgMCI || 0) * 25, color: (d.avgMCI || 0) >= 0.8 ? "#16a34a" : "#dc2626" },
+                { label: "SPI ×50%", value: d.avgSPI != null ? d.avgSPI.toFixed(2) : "—", pts: d.avgSPI != null ? Math.min(d.avgSPI, 1.20) * 50 : 0, color: d.avgSPI == null ? "#6b7280" : d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
+                { label: "CPI ×25%", value: d.avgCPI != null ? d.avgCPI.toFixed(2) : "—", pts: d.avgCPI != null ? Math.min(d.avgCPI, 1.20) * 25 : 0, color: d.avgCPI == null ? "#6b7280" : d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
+                { label: "MCI ×25%", value: d.avgMCI != null ? `${Math.round(d.avgMCI * 100)}%` : "—", pts: d.avgMCI != null ? d.avgMCI * 25 : 0, color: d.avgMCI == null ? "#6b7280" : d.avgMCI >= 0.8 ? "#16a34a" : "#dc2626" },
               ].map(({ label, value, pts, color }) => (
                 <div key={label} style={{ textAlign: "center", padding: "8px 4px", background: T.bg, borderRadius: 8 }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color }}>{value}</div>
@@ -3705,10 +3713,12 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.pm}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.sponsor}</td>
                   <td style={{ padding: "12px 14px", minWidth: 90 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ flex: 1 }}><Progress value={p.progress} height={4} /></div>
-                      <span style={{ fontSize: 11, fontWeight: 700 }}>{p.progress}%</span>
-                    </div>
+                    {(() => { const ep = effectiveProgress(p); return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ flex: 1 }}><Progress value={ep} height={4} /></div>
+                        <span style={{ fontSize: 11, fontWeight: 700 }}>{ep}%</span>
+                      </div>
+                    ); })()}
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>

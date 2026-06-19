@@ -9,8 +9,13 @@ export function getDeptStats(deptId, projects) {
   const active    = onTrack + atRisk;
   const delayed   = dp.filter(p => p.status === "Delayed").length;
   const completed = dp.filter(p => p.status === "Completed").length;
-  const highRisk  = dp.filter(p => p.riskLevel === "High" || p.riskLevel === "Critical").length;
-  const health    = total ? Math.round(dp.reduce((s, p) => s + p.progress, 0) / total) : 0;
+  // Risk level: derived from open risks (not stale manual field)
+  const highRisk  = dp.filter(p => {
+    const lvl = deriveRiskLevel(p);
+    return lvl === "High" || lvl === "Critical";
+  }).length;
+  // Dept health: average of effective (WBS-aware) progress across projects
+  const health    = total ? Math.round(dp.reduce((s, p) => s + effectiveProgress(p), 0) / total) : 0;
   const totalBudget = dp.reduce((s, p) => s + p.budget, 0);
   const actualCost  = dp.reduce((s, p) => s + p.actualCost, 0);
   const budgetUtil  = totalBudget ? Math.round((actualCost / totalBudget) * 100) : 0;
@@ -123,13 +128,14 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   }
 
   // ── MCI: artifact / doc delivery ─────────────────────────────────────────
+  // null = no documents at all → NOT measured (treated as neutral in rollup).
+  // 1    = docs exist but none marked required → full compliance assumed.
+  // 0..1 = approved + half-credit for in-review, divided by total required.
+  // Credit tiers: Approved/Final/Received/Current = 1.0 · Submitted/Under Review = 0.5 · else 0
   const allDocs  = project.documents ?? [];
   const reqDocs  = allDocs.filter(d => d.required);
-  // 0    = no documents at all → penalized, PM hasn't submitted anything
-  // 1    = docs exist but none marked required → full compliance assumed
-  // Credit tiers: Approved/Final/Received/Current = 1.0 · Submitted/Under Review = 0.5 · everything else = 0
   const mci = allDocs.length === 0
-    ? 0
+    ? null
     : reqDocs.length === 0
       ? 1
       : Math.min(1, reqDocs.reduce((s, d) => {
@@ -154,17 +160,22 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   }
 
   // ── Final SPI and IPI ─────────────────────────────────────────────────────
+  // Null-aware rollup: each null component is treated as neutral (1.0) so a
+  // project with no schedule data isn't artificially penalised. If ALL three
+  // are null, IPI itself is null — caller should display "Pending Plan".
   const spiFinal = spi === null ? null : spi * penalty;
-
+  const allNull  = spiFinal === null && cpi === null && mci === null;
   const spiVal = spiFinal ?? 1.0;
-  const cpiVal = cpi       ?? 1.0;
-  const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mci;
-  const ipi = Math.max(0, Math.round(ipiDecimal * 100));
+  const cpiVal = cpi      ?? 1.0;
+  const mciVal = mci      ?? 1.0;
+  const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mciVal;
+  const ipi = allNull ? null : Math.max(0, Math.round(ipiDecimal * 100));
 
-  const status = ipiDecimal >  1.00 ? "Over Achieved"
-               : ipiDecimal >= 1.00 ? "On Track"
-               : ipiDecimal >= 0.90 ? "Watch"
-               :                      "At Risk";
+  const status = allNull               ? "Pending Plan"
+               : ipiDecimal >  1.00    ? "Over Achieved"
+               : ipiDecimal >= 1.00    ? "On Track"
+               : ipiDecimal >= 0.90    ? "Watch"
+               :                         "At Risk";
 
   return {
     ipi,
@@ -174,14 +185,15 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
       penalty:  +penalty.toFixed(3),
       spiFinal: spiFinal === null ? null : +spiFinal.toFixed(3),
       cpi:      cpi     === null ? null : +cpi.toFixed(3),
-      mci:      +mci.toFixed(3),
+      mci:      mci     === null ? null : +mci.toFixed(3),
     },
     ev: +ev.toFixed(3),
     pv: +pv.toFixed(3),
   };
 }
 
-/** Returns the 0–100 IPI score only (backward compat). */
+/** Returns the 0–120 IPI score only (backward compat). May be null when the
+ *  project has no schedule/cost/doc data at all ("Pending Plan"). */
 export function calcProjectIPI(project) {
   return calcProjectIPIFull(project).ipi;
 }
@@ -235,28 +247,34 @@ export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
 }
 
 /**
- * Department IPI — budget×priority weighted average of project time-weighted IPIs.
- * Returns null when no projects (display as "—").
+ * Department IPI — budget×priority weighted average of project IPIs.
+ * Projects whose IPI is null ("Pending Plan") are EXCLUDED from the rollup,
+ * so an unstaffed dept with placeholder projects doesn't pull the average down.
+ * Returns null when no measurable projects in the dept.
  */
 export function calcDeptIPI(deptId, projects) {
   const dp = projects.filter(p => p.deptId === deptId && !p.archived);
-  if (!dp.length) return null;
-  const totalW = dp.reduce((s, p) => s + projectWeight(p), 0);
+  const measured = dp.map(p => ({ p, ipi: calcTimeWeightedIPI(p) })).filter(x => x.ipi != null);
+  if (!measured.length) return null;
+  const totalW = measured.reduce((s, x) => s + projectWeight(x.p), 0);
+  if (totalW === 0) return null;
   return Math.round(
-    dp.reduce((s, p) => s + calcTimeWeightedIPI(p) * projectWeight(p), 0) / totalW
+    measured.reduce((s, x) => s + x.ipi * projectWeight(x.p), 0) / totalW
   );
 }
 
 /**
  * Portfolio IPI — budget×priority weighted across all non-archived projects.
- * Returns null when no active projects.
+ * Same null-aware behaviour as dept rollup.
  */
 export function calcPortfolioIPI(projects, asOfDate = TODAY) {
   const active = projects.filter(p => !p.archived);
-  if (!active.length) return null;
-  const totalW = active.reduce((s, p) => s + projectWeight(p), 0);
+  const measured = active.map(p => ({ p, ipi: calcTimeWeightedIPI(p, asOfDate) })).filter(x => x.ipi != null);
+  if (!measured.length) return null;
+  const totalW = measured.reduce((s, x) => s + projectWeight(x.p), 0);
+  if (totalW === 0) return null;
   return Math.round(
-    active.reduce((s, p) => s + calcTimeWeightedIPI(p, asOfDate) * projectWeight(p), 0) / totalW
+    measured.reduce((s, x) => s + x.ipi * projectWeight(x.p), 0) / totalW
   );
 }
 
@@ -288,6 +306,16 @@ export function calcProjectProgressFromWBS(project) {
     return s + (m.weight || 1) * p;
   }, 0);
   return Math.round(sum / totalW);
+}
+
+/**
+ * The single "true" progress value for a project, regardless of where it came from.
+ * Prefers the WBS rollup when activities exist; falls back to project.progress.
+ * Use this everywhere a progress % needs to be displayed.
+ */
+export function effectiveProgress(project) {
+  const wbs = calcProjectProgressFromWBS(project);
+  return wbs != null ? wbs : (project.progress ?? 0);
 }
 
 /**
