@@ -1150,8 +1150,19 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.name}</div>
-                <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · Required" : ""}</div>
+                <div style={{ fontSize: 11, color: T.muted }}>
+                  {doc.type}
+                  {doc.required && <> · Required · <span style={{ color: T.accent, fontWeight: 700 }}>Due at Gate {doc.requiredAtGate || 1}</span></>}
+                </div>
               </div>
+              {doc.required && !isPMTier && (
+                <select value={doc.requiredAtGate || 1}
+                  title="Gate at which this document becomes mandatory for MCI"
+                  onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, requiredAtGate: parseInt(e.target.value, 10) } : d))}
+                  style={{ ...ss, width: 100, fontSize: 12 }}>
+                  {[1,2,3,4,5].map(g => <option key={g} value={g}>Gate {g}</option>)}
+                </select>
+              )}
               <select value={doc.status || "Pending"}
                 disabled={docLocked}
                 onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d))}
