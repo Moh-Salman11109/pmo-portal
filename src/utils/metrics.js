@@ -22,6 +22,23 @@ export function getDeptStats(deptId, projects) {
   return { total, onTrack, atRisk, active, delayed, completed, highRisk, health, totalBudget, actualCost, budgetUtil };
 }
 
+// ─── Gate Helpers ────────────────────────────────────────────────────────────
+/**
+ * Parse a Gate label like "Gate 4" or "G3" into its number 1-5.
+ * Falls back to 1 (most restrictive — every doc is due) when the input
+ * is missing or unrecognised, so projects without an explicit gate behave
+ * exactly as they did before this change.
+ */
+export function parseGateNumber(gate) {
+  if (gate == null) return 1;
+  const m = String(gate).match(/(\d+)/);
+  if (!m) return 1;
+  const n = parseInt(m[1], 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  if (n > 5) return 5;
+  return n;
+}
+
 // ─── IPI Global Defaults ─────────────────────────────────────────────────────
 // These thresholds are governance-grade — change only with PMO + auditor sign-off.
 const IPI_DEFAULTS = {
@@ -127,22 +144,32 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     cpi = null;
   }
 
-  // ── MCI: artifact / doc delivery ─────────────────────────────────────────
-  // null = no documents at all → NOT measured (treated as neutral in rollup).
-  // 1    = docs exist but none marked required → full compliance assumed.
-  // 0..1 = approved + half-credit for in-review, divided by total required.
+  // ── MCI: artifact / doc delivery (GATE-AWARE) ────────────────────────────
+  // Only required docs whose `requiredAtGate` ≤ project's current gate count
+  // toward MCI. A Closure document marked `requiredAtGate: 5` is excluded
+  // until the project actually reaches Gate 5 — fixing the "perpetually At Risk
+  // because Closure is missing" anti-pattern.
+  //
+  // Returns:
+  //   null = no docs at all OR all required docs are future-gate (neutral)
+  //   1    = docs exist but none marked required → full compliance assumed
+  //   0..1 = (approved + 0.5×inReview) ÷ docs currently due
   // Credit tiers: Approved/Final/Received/Current = 1.0 · Submitted/Under Review = 0.5 · else 0
-  const allDocs  = project.documents ?? [];
-  const reqDocs  = allDocs.filter(d => d.required);
+  const currentGate = parseGateNumber(project.gate);
+  const allDocs = project.documents ?? [];
+  const reqDocs = allDocs.filter(d => d.required);
+  const dueDocs = reqDocs.filter(d => (d.requiredAtGate || 1) <= currentGate);
   const mci = allDocs.length === 0
     ? null
     : reqDocs.length === 0
       ? 1
-      : Math.min(1, reqDocs.reduce((s, d) => {
-          if (["Approved", "Final", "Received", "Current"].includes(d.status)) return s + 1.0;
-          if (["Submitted", "Under Review"].includes(d.status)) return s + 0.5;
-          return s;
-        }, 0) / reqDocs.length);
+      : dueDocs.length === 0
+        ? null
+        : Math.min(1, dueDocs.reduce((s, d) => {
+            if (["Approved", "Final", "Received", "Current"].includes(d.status)) return s + 1.0;
+            if (["Submitted", "Under Review"].includes(d.status)) return s + 0.5;
+            return s;
+          }, 0) / dueDocs.length);
 
   // ── Roadmap-deadline penalty (hits SPI only) ──────────────────────────────
   const roadmapDeadline = project.roadmapDeadline;

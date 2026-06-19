@@ -26,11 +26,15 @@ import { SectionHeader } from "./shared.jsx";
 
 // ─── HELPERS ──────────────────────────────────────────────────────
 
-// Mandatory docs every project gets at creation — single source of truth
+// Mandatory docs every project gets at creation — single source of truth.
+// requiredAtGate ties each artifact to the gate by which it MUST be delivered.
+// Until the project reaches that gate, the doc is "not yet due" and is
+// excluded from MCI — preventing perpetually-At-Risk projects waiting for
+// future-gate artifacts like Closure.
 const MANDATORY_DOCS = [
-  { id: "D1", name: "Project Charter",  type: "Charter",       required: true, status: "Pending", version: "", lastUpdated: "" },
-  { id: "D2", name: "Business Case",    type: "Business Case", required: true, status: "Pending", version: "", lastUpdated: "" },
-  { id: "D3", name: "Closure Document", type: "Closure",       required: true, status: "Pending", version: "", lastUpdated: "" },
+  { id: "D1", name: "Project Charter",  type: "Charter",       required: true, requiredAtGate: 2, status: "Pending", version: "", lastUpdated: "" },
+  { id: "D2", name: "Business Case",    type: "Business Case", required: true, requiredAtGate: 2, status: "Pending", version: "", lastUpdated: "" },
+  { id: "D3", name: "Closure Document", type: "Closure",       required: true, requiredAtGate: 5, status: "Pending", version: "", lastUpdated: "" },
 ];
 
 
