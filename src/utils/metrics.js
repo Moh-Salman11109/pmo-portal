@@ -39,6 +39,55 @@ export function parseGateNumber(gate) {
   return n;
 }
 
+// ─── MCI computation (gate-aware) ────────────────────────────────────────────
+/**
+ * Compute the Maturity & Compliance Index for a set of documents, evaluated
+ * as if the project were at `atGate`. Single source of truth — called by
+ * calcProjectIPIFull (current gate) and calcAnticipatedMCI (future gate).
+ *
+ * Returns:
+ *   null = no docs at all OR all required docs are future-gate (neutral)
+ *   1    = docs exist but none marked required → full compliance assumed
+ *   0..1 = (approved + 0.5×inReview) ÷ docs due at atGate
+ *
+ * Credit tiers: Approved/Final/Received/Current = 1.0 · Submitted/Under Review = 0.5 · else 0
+ */
+export function computeMCI(documents, atGate) {
+  const allDocs = documents ?? [];
+  if (allDocs.length === 0) return null;
+  const reqDocs = allDocs.filter(d => d.required);
+  if (reqDocs.length === 0) return 1;
+  const dueDocs = reqDocs.filter(d => (d.requiredAtGate || 1) <= atGate);
+  if (dueDocs.length === 0) return null;
+  const credit = dueDocs.reduce((s, d) => {
+    if (["Approved", "Final", "Received", "Current"].includes(d.status)) return s + 1.0;
+    if (["Submitted", "Under Review"].includes(d.status)) return s + 0.5;
+    return s;
+  }, 0);
+  return Math.min(1, credit / dueDocs.length);
+}
+
+/**
+ * "What will MCI be when this project enters its next gate?" Lets PMO see
+ * upcoming MCI drops BEFORE they happen so they can chase docs proactively.
+ *
+ * Returns { atGate, mci, deltaDocs } where deltaDocs is the count of
+ * additional required docs that become due at atGate vs today. Returns null
+ * when there's no meaningful "next" (project at Gate 5, or no future docs).
+ */
+export function calcAnticipatedMCI(project) {
+  const currentGate = parseGateNumber(project.gate);
+  if (currentGate >= 5) return null;
+  const nextGate = currentGate + 1;
+  const reqDocs  = (project.documents ?? []).filter(d => d.required);
+  const newlyDue = reqDocs.filter(d => {
+    const g = d.requiredAtGate || 1;
+    return g > currentGate && g <= nextGate;
+  });
+  if (newlyDue.length === 0) return null;   // MCI won't change at next gate
+  return { atGate: nextGate, mci: computeMCI(project.documents, nextGate), deltaDocs: newlyDue.length };
+}
+
 // ─── IPI Global Defaults ─────────────────────────────────────────────────────
 // These thresholds are governance-grade — change only with PMO + auditor sign-off.
 const IPI_DEFAULTS = {
@@ -145,31 +194,9 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   }
 
   // ── MCI: artifact / doc delivery (GATE-AWARE) ────────────────────────────
-  // Only required docs whose `requiredAtGate` ≤ project's current gate count
-  // toward MCI. A Closure document marked `requiredAtGate: 5` is excluded
-  // until the project actually reaches Gate 5 — fixing the "perpetually At Risk
-  // because Closure is missing" anti-pattern.
-  //
-  // Returns:
-  //   null = no docs at all OR all required docs are future-gate (neutral)
-  //   1    = docs exist but none marked required → full compliance assumed
-  //   0..1 = (approved + 0.5×inReview) ÷ docs currently due
-  // Credit tiers: Approved/Final/Received/Current = 1.0 · Submitted/Under Review = 0.5 · else 0
-  const currentGate = parseGateNumber(project.gate);
-  const allDocs = project.documents ?? [];
-  const reqDocs = allDocs.filter(d => d.required);
-  const dueDocs = reqDocs.filter(d => (d.requiredAtGate || 1) <= currentGate);
-  const mci = allDocs.length === 0
-    ? null
-    : reqDocs.length === 0
-      ? 1
-      : dueDocs.length === 0
-        ? null
-        : Math.min(1, dueDocs.reduce((s, d) => {
-            if (["Approved", "Final", "Received", "Current"].includes(d.status)) return s + 1.0;
-            if (["Submitted", "Under Review"].includes(d.status)) return s + 0.5;
-            return s;
-          }, 0) / dueDocs.length);
+  // See computeMCI for the full contract. Computed at the project's current
+  // gate; calcAnticipatedMCI projects the same logic at a future gate.
+  const mci = computeMCI(project.documents, parseGateNumber(project.gate));
 
   // ── Roadmap-deadline penalty (hits SPI only) ──────────────────────────────
   const roadmapDeadline = project.roadmapDeadline;

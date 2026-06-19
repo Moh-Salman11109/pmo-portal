@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -1560,6 +1560,18 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               </div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {ipiResult.components.cpi ?? "N/A"} × 25%</div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {ipiResult.components.mci == null ? "N/A (no docs)" : `${Math.round(ipiResult.components.mci * 100)}% docs`} × 25%</div>
+              {(() => {
+                const ant = calcAnticipatedMCI(project);
+                if (!ant) return null;
+                const currentMci = ipiResult.components.mci;
+                const willDrop = currentMci != null && ant.mci != null && ant.mci < currentMci;
+                return (
+                  <div style={{ color: willDrop ? "#fbbf24" : "#86efac", fontSize: 10.5, marginTop: 1 }} title="Forecast MCI when this project enters its next gate, using today's document statuses.">
+                    {willDrop ? "⚠" : "✓"} Anticipated at Gate {ant.atGate}: {ant.mci == null ? "—" : `${Math.round(ant.mci * 100)}%`}
+                    {" "}<span style={{ opacity: 0.7 }}>({ant.deltaDocs} new doc{ant.deltaDocs > 1 ? "s" : ""} become due)</span>
+                  </div>
+                );
+              })()}
               {project.roadmapDeadline && (
                 <div style={{ color: ipiResult.components.penalty < 1 ? "#f87171" : "#86efac", marginTop: 2 }}>
                   {ipiResult.components.penalty < 1

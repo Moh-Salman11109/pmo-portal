@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcProjectIPIFull, parseGateNumber } from "./metrics.js";
+import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI } from "./metrics.js";
 
 // Convenience: build a minimal project that calcProjectIPIFull will accept.
 // asOfDate frozen so the time-based PV piece is deterministic across runs.
@@ -116,6 +116,58 @@ describe("MCI — gate-aware document compliance", () => {
     });
     // (1 + 0.5 + 0.5 + 0) / 4 = 0.5
     expect(ipi(p).components.mci).toBe(0.5);
+  });
+});
+
+describe("calcAnticipatedMCI — early-warning for future-gate docs", () => {
+  it("returns null when project is at Gate 5 (no next gate)", () => {
+    const p = mk({
+      gate: "Gate 5",
+      documents: [{ name: "X", required: true, requiredAtGate: 5, status: "Pending" }],
+    });
+    expect(calcAnticipatedMCI(p)).toBe(null);
+  });
+
+  it("returns null when no doc becomes due at the next gate", () => {
+    // Gate-2 project, no docs ever due at Gate 3 → no change forecast.
+    const p = mk({
+      gate: "Gate 2",
+      documents: [
+        { name: "Charter", required: true, requiredAtGate: 2, status: "Approved" },
+        { name: "Closure", required: true, requiredAtGate: 5, status: "Pending"  },
+      ],
+    });
+    expect(calcAnticipatedMCI(p)).toBe(null);
+  });
+
+  it("forecasts MCI drop when next gate brings in a missing doc", () => {
+    // Gate-2 project sitting pretty (MCI=1.0). Gate 3 adds 1 new required doc
+    // that's still Draft → anticipated MCI drops to 1/2 = 0.5.
+    const p = mk({
+      gate: "Gate 2",
+      documents: [
+        { name: "Charter",  required: true, requiredAtGate: 2, status: "Approved" },
+        { name: "Plan",     required: true, requiredAtGate: 3, status: "Draft"    },
+      ],
+    });
+    const anticipated = calcAnticipatedMCI(p);
+    expect(anticipated.atGate).toBe(3);
+    expect(anticipated.mci).toBe(0.5);
+    expect(anticipated.deltaDocs).toBe(1);
+  });
+
+  it("forecasts MCI stays high when the next-gate doc is already Approved", () => {
+    // Same shape but the new Gate-3 doc is already Approved → MCI stays 1.0.
+    const p = mk({
+      gate: "Gate 2",
+      documents: [
+        { name: "Charter", required: true, requiredAtGate: 2, status: "Approved" },
+        { name: "Plan",    required: true, requiredAtGate: 3, status: "Approved" },
+      ],
+    });
+    const anticipated = calcAnticipatedMCI(p);
+    expect(anticipated.mci).toBe(1.0);
+    expect(anticipated.deltaDocs).toBe(1);
   });
 });
 
