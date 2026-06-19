@@ -615,7 +615,7 @@ export const SP_GATE_SUBMISSIONS_FIELD_MAP = {
 };
 
 const G1_SELECT = [
-  "ID","Title","Status","ProjectCode","IsFinanceCapitalizationAssessmen",
+  "ID","Title","Status","ProjectCode","IsFinanceCapitalizationAssessmen","ApprovalLog",
   "ProjectManager/Title","ProjectManager/EMail",
   "ProjectSponsor/Title","ProjectSponsor/EMail",
   "Stakeholders/Title","Stakeholders/EMail",
@@ -675,6 +675,7 @@ export function mapSPItemToGateSubmission(item) {
     daysAtGate,
     returnReason:         "",
     approvalHistory:      [],
+    approvalLog:          item.ApprovalLog                 || "",
   };
 }
 
@@ -837,7 +838,7 @@ export const SP_CLOSURE_FIELD_MAP = {
 };
 
 const CLOSURE_SELECT = [
-  "ID","Title","ProjectCode","Department","Status","Comments",
+  "ID","Title","ProjectCode","Department","Status","Comments","ApprovalLog",
   "ProjectManager/Title","ProjectManager/EMail",
   "Stakeholders/Title","Stakeholders/EMail",
   "Author/Title","Author/EMail",
@@ -873,5 +874,6 @@ export function mapSPItemToClosureSubmission(item) {
     daysInClosure,
     pendingWith,
     pendingWithEmail,
+    approvalLog:    item.ApprovalLog               || "",
   };
 }

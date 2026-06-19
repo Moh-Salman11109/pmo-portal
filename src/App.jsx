@@ -1243,12 +1243,26 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
 const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   const T = useT();
 
+  // ── Group into WBS order: each milestone followed by its activities (children).
+  // Top-level items (parentId null/missing) are milestones; rest are activities.
+  const tops = rawMilestones.filter(m => !m.parentId);
+  const childrenOf = (id) => rawMilestones.filter(m => m.parentId === id);
+  const ordered = [];
+  tops.forEach(m => {
+    ordered.push({ ...m, _isMilestone: true });
+    childrenOf(m.id).forEach(c => ordered.push({ ...c, _isMilestone: false }));
+  });
+  // Append any orphan activities (parentId set but parent missing) at the end
+  rawMilestones.forEach(m => {
+    if (m.parentId && !tops.some(t => t.id === m.parentId) && !ordered.some(o => o.id === m.id)) {
+      ordered.push({ ...m, _isMilestone: false });
+    }
+  });
+
   // ── Infer startDate when missing so activities render as bars, not diamonds.
-  // Rule: use the previous activity's end date if it's before this one's end;
-  // otherwise use the project start; otherwise fall back to 14 days before end.
-  const milestones = rawMilestones.map((m, i) => {
+  const milestones = ordered.map((m, i) => {
     if (m.startDate || !m.date) return m;
-    const prevEnd  = i > 0 ? (rawMilestones[i - 1].date || rawMilestones[i - 1].startDate) : null;
+    const prevEnd  = i > 0 ? (ordered[i - 1].date || ordered[i - 1].startDate) : null;
     const projStart = project?.startDate;
     let inferred = null;
     if (prevEnd && prevEnd < m.date)  inferred = prevEnd;
@@ -1306,7 +1320,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
           </div>
         </div>
 
-        {/* Milestone rows */}
+        {/* Milestone + Activity rows (WBS hierarchy) */}
         {milestones.map((m, i) => {
           const sc  = SC[m.status] || SC.Upcoming;
           const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
@@ -1317,12 +1331,31 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
           const left  = sp != null ? Math.min(sp, ep ?? sp) : (ep ?? 0);
           const right = ep != null ? Math.max(ep, sp ?? ep) : (sp ?? 0);
           const width = Math.max(right - left, 1.2);
-          const pct   = m.progress ?? (m.status === "Completed" ? 100 : 0);
+          // Milestone rows: derive progress from children (matches the editor)
+          const kids = m._isMilestone ? rawMilestones.filter(c => c.parentId === m.id) : [];
+          const pct = m._isMilestone && kids.length > 0
+            ? (() => { const w = kids.reduce((s, c) => s + (c.weight || 1), 0); return w ? Math.round(kids.reduce((s, c) => s + (c.weight || 1) * (c.progress || 0), 0) / w) : 0; })()
+            : (m.progress ?? (m.status === "Completed" ? 100 : 0));
+          const isMs = m._isMilestone;
+          const labelPad = isMs ? 12 : 28; // indent activities
 
           return (
-            <div key={m.id || i} style={{ display: "flex", alignItems: "center", height: 34, borderTop: `1px solid ${T.border}` }}>
-              <div style={{ width: 165, flexShrink: 0, paddingRight: 12, fontSize: 11, fontWeight: 600, color: sp == null && ep == null ? T.muted : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }} title={m.name}>
-                {m.name}
+            <div key={m.id || i} style={{
+              display: "flex",
+              alignItems: "center",
+              height: isMs ? 38 : 32,
+              borderTop: `1px solid ${T.border}`,
+              background: isMs ? `${T.primary}06` : "transparent",
+            }}>
+              <div style={{
+                width: 165, flexShrink: 0, paddingRight: 12, paddingLeft: labelPad,
+                fontSize: isMs ? 12 : 10.5,
+                fontWeight: isMs ? 800 : 500,
+                color: sp == null && ep == null ? T.muted : T.text,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                textAlign: "right",
+              }} title={m.name}>
+                {isMs ? "📍 " : "↳ "}{m.name || (isMs ? "(unnamed milestone)" : "(activity)")}
               </div>
               <div style={{ flex: 1, position: "relative", height: "100%" }}>
                 {ticks.map((t, ti) => (
@@ -1332,22 +1365,24 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
                   <div style={{ position: "absolute", left: `${todayPct}%`, top: 0, bottom: 0, width: 2, background: T.accent, opacity: 0.85, zIndex: 3 }} />
                 )}
                 {sp == null && ep == null
-                  ? <div style={{ position: "absolute", top: 12, left: 8, fontSize: 10, color: T.muted, fontStyle: "italic" }}>No dates</div>
-                  : hasDuration
+                  ? <div style={{ position: "absolute", top: 10, left: 8, fontSize: 10, color: T.muted, fontStyle: "italic" }}>No dates</div>
+                  : (isMs && !hasDuration)
+                    // True milestone with single date → diamond marker
                     ? (
-                      <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: 6, height: 22, background: c.track, border: `1.5px solid ${c.border}`, borderRadius: 5, overflow: "hidden", zIndex: 1 }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: c.fill, opacity: 0.9, borderRadius: 4 }} />
+                      <div style={{ position: "absolute", left: `calc(${left}% - 10px)`, top: 8, width: 20, height: 20, background: c.fill, border: `2px solid ${c.border}`, borderRadius: 3, transform: "rotate(45deg)", zIndex: 2 }} />
+                    )
+                    // Activity OR milestone-with-duration → bar with progress
+                    : (
+                      <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: isMs ? 8 : 6, height: isMs ? 22 : 18, background: c.track, border: `1.5px solid ${c.border}`, borderRadius: isMs ? 5 : 4, overflow: "hidden", zIndex: 1 }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: c.fill, opacity: 0.9 }} />
                         {pct > 15 && (
                           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: c.lbl }}>{pct}%</div>
                         )}
                       </div>
                     )
-                    : (
-                      <div style={{ position: "absolute", left: `calc(${left}% - 10px)`, top: 7, width: 20, height: 20, background: c.fill, border: `2px solid ${c.border}`, borderRadius: 3, transform: "rotate(45deg)", zIndex: 2 }} />
-                    )
                 }
                 {m.date && ep != null && (
-                  <div style={{ position: "absolute", left: `calc(${ep}% + 6px)`, top: 10, fontSize: 9, color: T.muted, whiteSpace: "nowrap", zIndex: 4 }}>
+                  <div style={{ position: "absolute", left: `calc(${ep}% + 6px)`, top: isMs ? 11 : 9, fontSize: 9, color: T.muted, whiteSpace: "nowrap", zIndex: 4 }}>
                     {new Date(m.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                   </div>
                 )}
@@ -2405,6 +2440,85 @@ const Lbl = ({ label, err, children, T }) => (
   </div>
 );
 
+// Parse a multi-line ApprovalLog from Power Automate.
+// Each line: "{emoji} {Name} (Stakeholder) — {Approve|Reject} — {dd/MM/yyyy HH:mm} — {comment}"
+// Returns array of { emoji, name, role, decision, when, comment } objects.
+const parseApprovalLog = (raw) => {
+  if (!raw || typeof raw !== "string") return [];
+  return raw.split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      // Split on em-dash or hyphen-with-spaces (Power Automate may use either)
+      const parts = line.split(/\s+[—–-]\s+/);
+      if (parts.length < 3) return { raw: line };
+      // First token: emoji + "Name (Role)" — pull the role out if present
+      const head = parts[0];
+      const emojiMatch = head.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|[✅❌⚠️])\s*/u);
+      const emoji = emojiMatch ? emojiMatch[0].trim() : "";
+      const rest  = emojiMatch ? head.slice(emojiMatch[0].length).trim() : head.trim();
+      const roleMatch = rest.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      const name = roleMatch ? roleMatch[1].trim() : rest;
+      const role = roleMatch ? roleMatch[2].trim() : "";
+      return {
+        emoji,
+        name,
+        role,
+        decision: parts[1].trim(),
+        when:     parts[2].trim(),
+        comment:  parts.slice(3).join(" — ").trim(),
+      };
+    });
+};
+
+const ApprovalLogPanel = ({ log }) => {
+  const T = useT();
+  const [open, setOpen] = useState(false);
+  const entries = useMemo(() => parseApprovalLog(log), [log]);
+  if (entries.length === 0) return null;
+  const lastDecision = entries[entries.length - 1].decision || "";
+  const lastIsReject = /reject/i.test(lastDecision);
+  return (
+    <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "transparent", border: "none", padding: "9px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>
+        <span style={{ fontWeight: 700 }}>
+          📜 Approval Log
+          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, color: T.muted }}>{entries.length} response{entries.length === 1 ? "" : "s"}</span>
+        </span>
+        <span style={{ fontSize: 11, color: T.muted }}>{open ? "▲ hide" : "▼ show"}</span>
+      </button>
+      {open && (
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {entries.map((e, i) => {
+            if (e.raw) return <div key={i} style={{ fontSize: 11, color: T.muted, fontStyle: "italic" }}>{e.raw}</div>;
+            const reject = /reject/i.test(e.decision);
+            const chip = reject
+              ? { bg: "#fee2e2", text: "#991b1b", icon: "❌" }
+              : { bg: "#dcfce7", text: "#15803d", icon: "✅" };
+            return (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderTop: i > 0 ? `1px dashed ${T.border}` : "none" }}>
+                <span style={{ fontSize: 14, lineHeight: "20px", flexShrink: 0 }}>{e.emoji || chip.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{e.name}</span>
+                    {e.role && <span style={{ fontSize: 10, color: T.muted, background: T.surface, padding: "1px 7px", borderRadius: 4 }}>{e.role}</span>}
+                    <span style={{ background: chip.bg, color: chip.text, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 10 }}>{e.decision}</span>
+                    <span style={{ fontSize: 10, color: T.muted, marginLeft: "auto" }}>{e.when}</span>
+                  </div>
+                  {e.comment && e.comment.toLowerCase() !== "no comment" && (
+                    <div style={{ fontSize: 11, color: T.muted, marginTop: 3, fontStyle: "italic" }}>"{e.comment}"</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute, currentUserName, currentUserEmail, userRole }) => {
   const T = useT();
   const bp = useBp();
@@ -2520,6 +2634,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
           </div>
           <RequestStatusBadge status={gs.status} />
         </div>
+        <ApprovalLogPanel log={gs.approvalLog} />
       </div>
     );
   };
@@ -2625,6 +2740,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
                     {cl.status || "In Review"}
                   </div>
                 </div>
+                <ApprovalLogPanel log={cl.approvalLog} />
               </div>
             ))}
           </div>
@@ -2786,14 +2902,17 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingGates.map(gs => (
-              <ActionCard key={gs.id}
-                icon="🔖"
-                title={`${gs.gateLabel} — ${gs.projectTitle}`}
-                subtitle={`Submitted by ${gs.submittedBy} · ${gs.daysAtGate} day${gs.daysAtGate !== 1 ? "s" : ""} at gate`}
-                rightContent={<RequestStatusBadge status={gs.status} />}
-                urgency={gs.daysAtGate > 5 ? "medium" : null}
-                onClick={() => setRoute({ view: "project", projectId: gs.projectId, from: "actions" })}
-              />
+              <div key={gs.id}>
+                <ActionCard
+                  icon="🔖"
+                  title={`${gs.gateLabel} — ${gs.projectTitle}`}
+                  subtitle={`Submitted by ${gs.submittedBy} · ${gs.daysAtGate} day${gs.daysAtGate !== 1 ? "s" : ""} at gate`}
+                  rightContent={<RequestStatusBadge status={gs.status} />}
+                  urgency={gs.daysAtGate > 5 ? "medium" : null}
+                  onClick={() => setRoute({ view: "project", projectId: gs.projectId, from: "actions" })}
+                />
+                <ApprovalLogPanel log={gs.approvalLog} />
+              </div>
             ))}
           </div>
         </div>
@@ -2808,13 +2927,16 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingClosures.map(cl => (
-              <ActionCard key={cl.id}
-                icon="🔐"
-                title={`${cl.projectTitle}${cl.projectCode ? ` (${cl.projectCode})` : ""}`}
-                subtitle={`PM: ${cl.projectManager} · ${cl.daysInClosure} day${cl.daysInClosure !== 1 ? "s" : ""} in closure · Pending with ${cl.pendingWith}`}
-                rightContent={<span style={{ fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 10px", fontWeight: 700 }}>{cl.status || "Stakeholder Review"}</span>}
-                urgency={cl.daysInClosure > 7 ? "medium" : null}
-              />
+              <div key={cl.id}>
+                <ActionCard
+                  icon="🔐"
+                  title={`${cl.projectTitle}${cl.projectCode ? ` (${cl.projectCode})` : ""}`}
+                  subtitle={`PM: ${cl.projectManager} · ${cl.daysInClosure} day${cl.daysInClosure !== 1 ? "s" : ""} in closure · Pending with ${cl.pendingWith}`}
+                  rightContent={<span style={{ fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 10px", fontWeight: 700 }}>{cl.status || "Stakeholder Review"}</span>}
+                  urgency={cl.daysInClosure > 7 ? "medium" : null}
+                />
+                <ApprovalLogPanel log={cl.approvalLog} />
+              </div>
             ))}
           </div>
         </div>
@@ -3615,74 +3737,103 @@ const fInputStyle = (T, err) => ({
   background: T.inputBg, color: T.text, outline: "none", boxSizing: "border-box",
 });
 
+// Compute a milestone's effective progress from its children (weighted average).
+// Falls back to the milestone's own progress field when it has no children.
+const milestoneProgress = (milestone, allItems) => {
+  const children = allItems.filter(i => i.parentId === milestone.id);
+  if (children.length === 0) return milestone.progress ?? 0;
+  const totalW = children.reduce((s, c) => s + (c.weight || 1), 0);
+  if (totalW === 0) return 0;
+  const sumW = children.reduce((s, c) => s + (c.weight || 1) * (c.progress || 0), 0);
+  return Math.round(sumW / totalW);
+};
+
 const MilestoneListEditor = ({ items, onChange }) => {
   const T = useT();
-  const blank = { name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1 };
-  const [draft, setDraft] = useState(blank);
-  const [adding, setAdding] = useState(false);
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
-  const add = () => {
-    if (!draft.name.trim()) return;
-    onChange([...items, { ...draft, id: `M${Date.now()}`, progress: Number(draft.progress || 0), weight: Number(draft.weight || 1) }]);
-    setDraft(blank);
-    setAdding(false);
-  };
-  const remove = id => onChange(items.filter(m => m.id !== id));
-  const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
-  const totalW = items.reduce((s, m) => s + (m.weight || 1), 0);
+  const sc = { Completed: { bg: "#dcfce7", text: "#15803d" }, "In Progress": { bg: "#fef9c3", text: "#854d0e" }, Upcoming: { bg: "#f3f4f6", text: "#6b7280" }, Delayed: { bg: "#fee2e2", text: "#991b1b" } };
 
-  const MsCard = ({ m, isNew = false, data, setData }) => {
-    const vals = isNew ? data : m;
-    const set  = isNew ? (k, v) => setData(p => ({ ...p, [k]: v })) : (k, v) => upd(m.id, k, v);
-    const thisW = Number(vals.weight || 1);
-    const baseW = isNew ? totalW : totalW;
-    const wPct  = baseW > 0 ? Math.round((thisW / (baseW + (isNew ? thisW : 0))) * 100) : 0;
-    const sc = { Completed: { bg: "#dcfce7", text: "#15803d" }, "In Progress": { bg: "#fef9c3", text: "#854d0e" }, Upcoming: { bg: "#f3f4f6", text: "#6b7280" }, Delayed: { bg: "#fee2e2", text: "#991b1b" } };
-    const c = sc[vals.status] || sc.Upcoming;
+  const milestones = items.filter(m => !m.parentId);
+  const childrenOf  = (id) => items.filter(m => m.parentId === id);
+
+  const addMilestone = () => {
+    const id = `M${Date.now()}`;
+    onChange([...items, { id, name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1, parentId: null }]);
+  };
+  const addActivity = (parentId) => {
+    const id = `A${Date.now()}`;
+    onChange([...items, { id, name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1, parentId }]);
+  };
+  const remove = (id) => {
+    // Also drop any children when removing a milestone
+    onChange(items.filter(m => m.id !== id && m.parentId !== id));
+  };
+  const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
+
+  const Row = ({ item, isActivity = false }) => {
+    const c = sc[item.status] || sc.Upcoming;
+    const kids = childrenOf(item.id);
+    const autoProgress = !isActivity && kids.length > 0 ? milestoneProgress(item, items) : null;
+    const progress = autoProgress != null ? autoProgress : (item.progress ?? 0);
     return (
-      <div style={{ background: T.bg, borderRadius: 12, padding: 14, border: `1px solid ${T.border}`, marginBottom: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, marginBottom: 10, alignItems: "center" }}>
-          <input value={vals.name} onChange={e => set("name", e.target.value)} placeholder="Milestone name *"
-            autoFocus={isNew} style={{ ...s, fontWeight: 600 }} />
-          <span style={{ background: c.bg, color: c.text, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{vals.status}</span>
-          {!isNew && <button onClick={() => remove(m.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px" }}>×</button>}
+      <div style={{
+        background: isActivity ? T.surface : T.bg,
+        borderRadius: 10,
+        padding: 12,
+        border: `1px solid ${T.border}`,
+        marginBottom: 8,
+        borderLeft: isActivity ? `3px solid ${T.accent}` : `4px solid ${T.primary}`,
+      }}>
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: "0.06em" }}>
+            {isActivity ? "🔸 ACTIVITY" : "📍 MILESTONE"}
+          </span>
+          <input value={item.name} onChange={e => upd(item.id, "name", e.target.value)}
+            placeholder={isActivity ? "Activity name *" : "Milestone name *"}
+            style={{ ...s, fontWeight: 600 }} />
+          <span style={{ background: c.bg, color: c.text, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{item.status}</span>
+          <button onClick={() => remove(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px" }}>×</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Start Date</div>
-            <input type="date" value={vals.startDate || ""} onChange={e => set("startDate", e.target.value)} style={s} />
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>{isActivity ? "Start Date" : "Start (optional)"}</div>
+            <input type="date" value={item.startDate || ""} onChange={e => upd(item.id, "startDate", e.target.value)} style={s} />
           </div>
           <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>End Date</div>
-            <input type="date" value={vals.date || ""} onChange={e => set("date", e.target.value)} style={s} />
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>{isActivity ? "End Date" : "Target Date"}</div>
+            <input type="date" value={item.date || ""} onChange={e => upd(item.id, "date", e.target.value)} style={s} />
           </div>
           <div>
             <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Status</div>
-            <select value={vals.status} onChange={e => set("status", e.target.value)} style={ss}>
+            <select value={item.status} onChange={e => upd(item.id, "status", e.target.value)} style={ss}>
               {["Upcoming","In Progress","Completed","Delayed"].map(x => <option key={x}>{x}</option>)}
             </select>
           </div>
           <div>
             <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Owner</div>
-            <input value={vals.owner} onChange={e => set("owner", e.target.value)} placeholder="Owner" style={s} />
+            <input value={item.owner} onChange={e => upd(item.id, "owner", e.target.value)} placeholder="Owner" style={s} />
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12, alignItems: "center" }}>
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 10, color: T.muted }}>Progress</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{vals.progress ?? 0}%</span>
+              <span style={{ fontSize: 10, color: T.muted }}>
+                Progress {autoProgress != null && <span style={{ color: T.accent, fontWeight: 700 }}>· auto from {kids.length} {kids.length === 1 ? "activity" : "activities"}</span>}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{progress}%</span>
             </div>
-            <input type="range" min={0} max={100} step={5}
-              value={vals.progress ?? 0}
-              onChange={e => set("progress", Number(e.target.value))}
-              style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }} />
+            {autoProgress != null
+              ? <div style={{ width: "100%", height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${progress}%`, height: "100%", background: T.accent }} /></div>
+              : <input type="range" min={0} max={100} step={5} value={item.progress ?? 0}
+                  onChange={e => upd(item.id, "progress", Number(e.target.value))}
+                  style={{ width: "100%", accentColor: T.accent, cursor: "pointer" }} />
+            }
           </div>
           <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Weight ({wPct}% of plan)</div>
-            <input type="number" min={1} max={10} value={vals.weight ?? 1}
-              onChange={e => set("weight", Math.max(1, Number(e.target.value)))} style={s} />
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Weight</div>
+            <input type="number" min={1} max={10} value={item.weight ?? 1}
+              onChange={e => upd(item.id, "weight", Math.max(1, Number(e.target.value)))} style={s} />
           </div>
         </div>
       </div>
@@ -3693,22 +3844,26 @@ const MilestoneListEditor = ({ items, onChange }) => {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Milestones</span>
-          {items.length > 0 && <span style={{ fontSize: 11, color: T.muted, fontWeight: 400, marginLeft: 8 }}>Total weight: {totalW} · SPI computed automatically</span>}
+          <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Activities</span>
+          {milestones.length > 0 && <span style={{ fontSize: 11, color: T.muted, fontWeight: 400, marginLeft: 8 }}>{milestones.length} milestones · {items.length - milestones.length} activities</span>}
         </div>
-        {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add</button>}
+        <button onClick={addMilestone} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Milestone</button>
       </div>
-      {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet — add milestones to enable automatic SPI calculation</div>}
-      {items.map(m => <MsCard key={m.id} m={m} />)}
-      {adding && (
-        <div>
-          <MsCard isNew m={null} data={draft} setData={setDraft} />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add Milestone</button>
-            <button onClick={() => { setAdding(false); setDraft(blank); }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
-          </div>
+      {milestones.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet — start by adding a milestone, then add activities under it</div>}
+      {milestones.map(m => (
+        <div key={m.id} style={{ marginBottom: 12 }}>
+          <Row item={m} />
+          {(childrenOf(m.id).length > 0 || true) && (
+            <div style={{ marginLeft: 24, paddingLeft: 12, borderLeft: `2px dashed ${T.border}` }}>
+              {childrenOf(m.id).map(a => <Row key={a.id} item={a} isActivity />)}
+              <button onClick={() => addActivity(m.id)}
+                style={{ background: "transparent", border: `1px dashed ${T.accent}`, color: T.accent, borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
+                + Add Activity under "{m.name || "this milestone"}"
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      ))}
     </div>
   );
 };
