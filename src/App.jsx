@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcTimeWeightedIPI, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -1454,13 +1454,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const [noteDraft,  setNoteDraft]  = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
 
-  // ── IPI — must run before early return so hook call count is stable ─
-  const ipiResult  = project ? calcProjectIPIFull(project)  : { ipi: 0 };
+  // ── IPI — must run before early return so hook call count is stable.
+  // Project page shows ONE IPI: the current snapshot, so it matches the
+  // SPI/CPI/MCI breakdown displayed beside it. Time-weighted averaging is
+  // applied only in dept/portfolio rollups (calcDeptIPI / calcPortfolioIPI).
+  const ipiResult  = project ? calcProjectIPIFull(project) : { ipi: 0 };
   const ipi        = ipiResult.ipi;
-  const twIPI      = project ? calcTimeWeightedIPI(project) : 0;
   const ipiC       = ipiColor(ipi);
-  const twIpiC     = ipiColor(twIPI);
-  const countedIPI = useCountUp(twIPI);
+  const countedIPI = useCountUp(ipi);
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
 
@@ -1521,9 +1522,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         {/* IPI banner row */}
         <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-            <div style={{ background: twIpiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: twIpiC.color, lineHeight: 1 }}>{twIPI == null ? "—" : countedIPI}</div>
-              <div style={{ fontSize: 10, color: twIpiC.color, fontWeight: 700 }}>IPI Score</div>
+            <div style={{ background: ipiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi == null ? "—" : countedIPI}</div>
+              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 700 }}>IPI Score</div>
             </div>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
               <div>
@@ -1545,7 +1546,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               )}
             </div>
           </div>
-          <div style={{ background: twIpiC.bg, color: twIpiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{twIpiC.label}</div>
+          <div style={{ background: ipiC.bg, color: ipiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{ipiC.label}</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: infoCols, gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
           {[
