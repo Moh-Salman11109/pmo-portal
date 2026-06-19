@@ -1268,9 +1268,11 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
     }
   });
 
-  // ── Infer startDate when missing so activities render as bars, not diamonds.
+  // ── Infer startDate for ACTIVITIES only, so they render as bars not diamonds.
+  // Top-level milestones with a single date stay as diamonds — that's the user's
+  // explicit intent when leaving the optional Start field blank.
   const milestones = ordered.map((m, i) => {
-    if (m.startDate || !m.date) return m;
+    if (m._isMilestone || m.startDate || !m.date) return m;
     const prevEnd  = i > 0 ? (ordered[i - 1].date || ordered[i - 1].startDate) : null;
     const projStart = project?.startDate;
     let inferred = null;
