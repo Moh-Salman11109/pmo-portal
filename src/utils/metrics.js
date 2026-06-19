@@ -18,83 +18,94 @@ export function getDeptStats(deptId, projects) {
 }
 
 // ─── IPI Global Defaults ─────────────────────────────────────────────────────
+// These thresholds are governance-grade — change only with PMO + auditor sign-off.
 const IPI_DEFAULTS = {
-  decayWindowDays: 90,
-  cap:             1.05,
-  weights: { spi: 0.50, cpi: 0.25, mci: 0.25 },
+  // Roadmap-deadline penalty: -1% per day past the roadmap deadline (linear decay).
+  // 100 days past = penalty drives SPI to zero. The user (Product Owner) explicitly
+  // asked for "1% per day or more" — 1% is the documented minimum.
+  decayWindowDays: 100,
+  // Maximum over-achievement allowed. 1.20 means a perfectly-early project can
+  // score up to IPI=115. Stops a single sandbagged plan from inflating the
+  // portfolio average to absurd levels.
+  cap:             1.20,
+  weights:         { spi: 0.50, cpi: 0.25, mci: 0.25 },
 };
 
 /**
- * Full IPI calculation per spec.
- * Returns { ipi (0–100), status, components, ev, pv }
+ * Full IPI calculation — governance-grade, regulator-auditable.
+ * Returns { ipi (0–120), status, components, ev, pv }.
  *
- * SPI  = EVM from milestones (weight × progress) if milestones exist,
- *        else progress / plannedProgress
- * CPI  = BCWP / actualCost  (auto from budget fields)
- *        fallback → project.cpi manual field
- * MCI  = approved required docs / total required docs
- * penalty = roadmap-deadline decay applied to SPI only
+ *   SPI  = EVM from leaf activities (weight × actual%) ÷ (weight × planned%)
+ *          • Leaves = items without children in the WBS (so a milestone with
+ *            activities under it counts via its children, not its own progress).
+ *          • Planned% at asOfDate is LINEARLY INTERPOLATED between the leaf's
+ *            startDate and endDate — partial credit while the work is in flight.
+ *          • A leaf completed BEFORE its planned end pushes SPI above 1.0
+ *            (over-achievement); a leaf running late pushes it below 1.0.
+ *   CPI  = BCWP / actualCost = (progress × budget) / actualCost
+ *   MCI  = approved required docs / total required docs
+ *   penalty = roadmap-deadline linear decay (1% per day past), applied to SPI only.
+ *
+ * Both SPI and CPI are capped at 1.20 so a single outlier can't blow up the index.
  */
 export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const { cap, weights, decayWindowDays } = IPI_DEFAULTS;
+  const nowMs = new Date(asOfDate).getTime();
 
-  // ── SPI: EVM from milestones if available, else from progress fields ──────
-  const milestones = project.milestones || [];
-  let ev, pv, spi;
+  // ── Identify WBS leaves: items that no other item lists as its parent.
+  // Legacy projects with flat milestones (no parentId on anything) → every
+  // milestone is a leaf, so the old behaviour is preserved.
+  const items = project.milestones || [];
+  const parentIds = new Set(items.filter(m => m.parentId).map(m => m.parentId));
+  const leaves = items.filter(m => !parentIds.has(m.id));
 
-  const msWithDates = milestones.filter(m => m.date);
-  if (milestones.length > 0 && msWithDates.length > 0) {
-    // Earned Value = Σ(weight × progress%) / Σ weights
-    // Planned Value = Σ(weight of milestones with endDate ≤ today) / Σ weights
-    const totalWeight = milestones.reduce((s, m) => s + (m.weight || 1), 0);
-    const earnedWeight = milestones.reduce((s, m) => {
-      const pct = m.progress != null ? m.progress
-                : m.status === "Completed" ? 100
-                : m.status === "In Progress" ? 50
-                : 0;
-      return s + (m.weight || 1) * (pct / 100);
-    }, 0);
-    const plannedWeight = milestones
-      .filter(m => m.date && m.date <= asOfDate)
-      .reduce((s, m) => s + (m.weight || 1), 0);
+  // Per-leaf actual progress (defensive clamp to [0..100]).
+  const actualPct = (m) => {
+    const raw = m.progress != null ? m.progress
+              : m.status === "Completed"   ? 100
+              : m.status === "In Progress" ? 50
+              :                                0;
+    return Math.max(0, Math.min(100, raw)) / 100;
+  };
 
-    ev = earnedWeight / totalWeight;
-    pv = plannedWeight / totalWeight;
-
-    // EV ceiling: milestone statuses (e.g. "In Progress" → 50%) can inflate EV above
-    // what the PM actually reports as overall progress. Cap EV at reported progress so
-    // a milestone-heavy project can't auto-claim more completion than the PM stated.
-    ev = Math.min(ev, (project.progress ?? 0) / 100);
-
-    // PV floor: if only 1-2 milestones have past due dates the denominator is tiny and
-    // SPI spikes. Enforce the timeline-based PV as a minimum — the clock doesn't stop
-    // ticking just because most milestones have future dates.
-    if (project.startDate && project.plannedEnd) {
-      const msStart  = new Date(project.startDate).getTime();
-      const msEnd    = new Date(project.plannedEnd).getTime();
-      const msNow    = new Date(asOfDate).getTime();
-      const duration = msEnd - msStart;
-      if (duration > 0) {
-        const datePV = Math.max(0, Math.min(1, (msNow - msStart) / duration));
-        pv = Math.max(pv, datePV);
-      }
+  // Per-leaf PLANNED progress at asOfDate.
+  //   • With both startDate + date: linear interpolation between them
+  //   • With only date: step function (0 before, 1 after)
+  //   • With neither: 0 (not yet in the plan)
+  const plannedPct = (m) => {
+    const startMs = m.startDate ? new Date(m.startDate).getTime() : null;
+    const endMs   = m.date      ? new Date(m.date).getTime()      : null;
+    if (startMs && endMs && endMs > startMs) {
+      if (nowMs <= startMs) return 0;
+      if (nowMs >= endMs)   return 1;
+      return (nowMs - startMs) / (endMs - startMs);
     }
+    if (endMs) return nowMs >= endMs ? 1 : 0;
+    return 0;
+  };
 
-    // pv=0 means no milestone was due yet AND project hasn't started — neutral
+  // ── SPI: EVM from leaves; fallback to project-level dates if no leaves
+  let ev, pv, spi;
+  const totalW = leaves.reduce((s, m) => s + (m.weight || 1), 0);
+
+  if (leaves.length > 0 && totalW > 0) {
+    ev = leaves.reduce((s, m) => s + (m.weight || 1) * actualPct(m),  0) / totalW;
+    pv = leaves.reduce((s, m) => s + (m.weight || 1) * plannedPct(m), 0) / totalW;
+    spi = pv === 0 ? null : Math.min(cap, ev / pv);
+  } else if (project.startDate && project.plannedEnd) {
+    // No WBS — fall back to project-level dates + reported progress
+    ev = (project.progress ?? 0) / 100;
+    const startMs = new Date(project.startDate).getTime();
+    const endMs   = new Date(project.plannedEnd).getTime();
+    if (endMs > startMs) {
+      pv = nowMs <= startMs ? 0 : nowMs >= endMs ? 1 : (nowMs - startMs) / (endMs - startMs);
+    } else {
+      pv = 0;
+    }
     spi = pv === 0 ? null : Math.min(cap, ev / pv);
   } else {
-    // Fallback: derive PV from project dates if available (accurate), else from plannedProgress
-    ev = (project.progress ?? 0) / 100;
-    if (project.startDate && project.plannedEnd) {
-      const msStart = new Date(project.startDate).getTime();
-      const msEnd   = new Date(project.plannedEnd).getTime();
-      const msNow   = new Date(asOfDate).getTime();
-      const duration = msEnd - msStart;
-      pv = duration > 0 ? Math.max(0, Math.min(1, (msNow - msStart) / duration)) : 0;
-    } else {
-      pv = (project.plannedProgress ?? 0) / 100;
-    }
-    spi = pv === 0 ? null : Math.min(cap, ev / pv);
+    // No dates at all — neutral (treated as on track for IPI rollup purposes)
+    ev = 0; pv = 0; spi = null;
   }
 
   // ── CPI: auto from budget/actualCost, fallback to manual project.cpi ──────
