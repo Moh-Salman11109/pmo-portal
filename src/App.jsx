@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -424,18 +424,26 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
 // ─── DOCUMENT COMPLIANCE CARD ─────────────────────────────────────
 const DocComplianceBar = ({ project }) => {
   const T = useT();
+  const currentGate = parseGateNumber(project.gate);
   const allDocs = project.documents ?? [];
   const reqDocs = allDocs.filter(d => d.required);
-  const ready   = reqDocs.filter(d => ["Approved","Final","Received","Current","Submitted"].includes(d.status));
-  const pct     = reqDocs.length ? Math.round((ready.length / reqDocs.length) * 100) : 0;
-  const color   = pct === 100 ? "#16a34a" : pct >= 60 ? "#eab308" : "#dc2626";
+  // Gate-aware: only count docs that are already due for the active gate.
+  // Future-gate docs (e.g. Closure before Gate 5) don't drag the bar down.
+  const dueDocs  = reqDocs.filter(d => (d.requiredAtGate || 1) <= currentGate);
+  const pending  = reqDocs.length - dueDocs.length;
+  const ready    = dueDocs.filter(d => ["Approved","Final","Received","Current","Submitted"].includes(d.status));
+  const pct      = dueDocs.length ? Math.round((ready.length / dueDocs.length) * 100) : null;
+  const color    = pct == null ? T.muted : pct === 100 ? "#16a34a" : pct >= 60 ? "#eab308" : "#dc2626";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <div style={{ flex: 1, background: T.border, borderRadius: 6, height: 8, overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 6, transition: "width 0.4s" }} />
+        <div style={{ width: `${pct ?? 0}%`, height: "100%", background: color, borderRadius: 6, transition: "width 0.4s" }} />
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 36 }}>{pct}%</span>
-      <span style={{ fontSize: 11, color: T.muted }}>{ready.length}/{reqDocs.length} required</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 36 }}>{pct == null ? "—" : `${pct}%`}</span>
+      <span style={{ fontSize: 11, color: T.muted }}>
+        {ready.length}/{dueDocs.length} due
+        {pending > 0 && <span style={{ opacity: 0.7 }}> · {pending} upcoming</span>}
+      </span>
     </div>
   );
 };
@@ -2053,11 +2061,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr style={{ background: T.bg }}>
-                {["Document", "Type", "Version", "Status", "Last Updated"].map(h => (
+                {["Document", "Type", "Due At", "Status", "Last Updated"].map(h => (
                   <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr></thead>
-              <tbody>{project.documents.filter(d => d.required).map(d => {
+              <tbody>{(() => {
+                const currentGate = parseGateNumber(project.gate);
+                const sorted = [...project.documents.filter(d => d.required)]
+                  .sort((a, b) => (a.requiredAtGate || 1) - (b.requiredAtGate || 1));
                 const docStatus = {
                   "Approved":    { bg: "#dcfce7", text: "#15803d" },
                   "Final":       { bg: "#dcfce7", text: "#15803d" },
@@ -2068,27 +2079,39 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   "Under Review":{ bg: "#fef9c3", text: "#854d0e" },
                   "Pending":     { bg: "#fee2e2", text: "#991b1b" },
                 };
-                const ds = docStatus[d.status] || { bg: T.bg, text: T.muted };
-                const isReady = ["Approved","Final","Received","Current","Submitted"].includes(d.status);
-                return (
-                  <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
-                    <td style={{ padding: "12px 14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 16 }}>{isReady ? "✅" : "⚠️"}</span>
-                        {d.url
-                          ? <a href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "none" }}>{d.name} ↗</a>
-                          : <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</span>}
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
-                    <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.text }}>{d.version || "—"}</td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <span style={{ background: ds.bg, color: ds.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>{d.status || "Not Submitted"}</span>
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.lastUpdated || "—"}</td>
-                  </tr>
-                );
-              })}</tbody>
+                return sorted.map(d => {
+                  const ds = docStatus[d.status] || { bg: T.bg, text: T.muted };
+                  const isReady = ["Approved","Final","Received","Current","Submitted"].includes(d.status);
+                  const dueGate = d.requiredAtGate || 1;
+                  const isFutureDue = dueGate > currentGate;
+                  // Lifecycle icon: ⚪ not due yet · ⚠️ due and missing · ✅ delivered
+                  const lifecycleIcon = isFutureDue ? "⚪" : isReady ? "✅" : "⚠️";
+                  // Due-At chip: muted grey for future-gate; brand mint for currently due
+                  const dueChip = isFutureDue
+                    ? { bg: T.bg, text: T.muted, label: `Gate ${dueGate} · Not due yet` }
+                    : { bg: "#dcfce7", text: "#15803d", label: `Gate ${dueGate}` };
+                  return (
+                    <tr key={d.id} style={{ borderTop: `1px solid ${T.border}`, opacity: isFutureDue ? 0.62 : 1 }}>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>{lifecycleIcon}</span>
+                          {d.url
+                            ? <a href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "none" }}>{d.name} ↗</a>
+                            : <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</span>}
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.type}</td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <span style={{ background: dueChip.bg, color: dueChip.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12, whiteSpace: "nowrap" }}>{dueChip.label}</span>
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <span style={{ background: ds.bg, color: ds.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>{d.status || "Not Submitted"}</span>
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{d.lastUpdated || "—"}</td>
+                    </tr>
+                  );
+                });
+              })()}</tbody>
             </table>
           </div>
 
