@@ -1267,49 +1267,59 @@ const GRCDashboard = ({ canEdit = false }) => {
       </tr>`;
     }).join("");
 
-    // ─── Dynamic narrative — three card-shaped blocks for executive scanning ───
-    const criticalRisks = sortedRisks.filter(r => (Number(r.LikelihoodScore) * Number(r.ImpactScore)) >= 15).length;
-    const exposurePct = kriWithLatest.length > 0
-      ? Math.round(((redCount + amberCount) / kriWithLatest.length) * 100)
-      : 0;
+    // ─── Strategic command-centre data — three self-contained dashboard cards ───
     const asOfDate = now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const criticalRisks = sortedRisks.filter(r => (Number(r.LikelihoodScore) * Number(r.ImpactScore)) >= 15).length;
 
-    // Card 1 — Key Risk Indicators
-    const card1Headline = `${kriWithLatest.length}`;
-    const card1Subline  = `Active KRIs across ${deptOptions.length} business unit${deptOptions.length === 1 ? "" : "s"}`;
-    const card1Narrative = (() => {
-      if (kriWithLatest.length === 0) return "No active KRIs in the register.";
-      const parts = [];
-      if (redCount > 0)   parts.push(`<span class="danger">${redCount} breaching</span>`);
-      if (amberCount > 0) parts.push(`<strong>${amberCount} at risk</strong>`);
-      if (greenCount > 0) parts.push(`${greenCount} within tolerance`);
-      return parts.join(" · ") + `. Combined exposure stands at <strong>${exposurePct}%</strong> of the indicator portfolio.`;
-    })();
+    // KRI card — total + RAG breakdown + exposure
+    const totalKRIs = kriWithLatest.length;
+    const exposurePct = totalKRIs > 0 ? Math.round(((redCount + amberCount) / totalKRIs) * 100) : 0;
+    const kriSegR = totalKRIs > 0 ? (redCount   / totalKRIs) * 100 : 0;
+    const kriSegA = totalKRIs > 0 ? (amberCount / totalKRIs) * 100 : 0;
+    const kriSegG = totalKRIs > 0 ? (greenCount / totalKRIs) * 100 : 0;
+    const card1Headline = `${totalKRIs}`;
+    const card1Subline  = `Active KRIs · ${deptOptions.length} business unit${deptOptions.length === 1 ? "" : "s"}`;
+    const card1Insight  = redCount > 0
+      ? `<span class="danger">${redCount} breaching</span> · exposure <strong>${exposurePct}%</strong> of indicator portfolio`
+      : amberCount > 0
+        ? `Watch: <strong>${amberCount} approaching limit</strong> · exposure <strong>${exposurePct}%</strong>`
+        : (totalKRIs > 0 ? `All ${totalKRIs} within tolerance` : `No active KRIs`);
 
-    // Card 2 — Open Risks
-    const card2Headline = `${sortedRisks.length}`;
-    const card2Subline  = `Open risks in the register${criticalRisks > 0 ? ` · ${criticalRisks} Critical` : ""}`;
-    const card2Narrative = (() => {
-      if (sortedRisks.length === 0) return "No open risks are recorded.";
-      const lines = [];
-      if (criticalRisks > 0) lines.push(`<span class="danger">${criticalRisks} ${criticalRisks === 1 ? "risk carries" : "risks carry"} a Critical score (≥15)</span>`);
-      lines.push(appBreaches > 0
-        ? `<span class="danger">${appBreaches} appetite breach${appBreaches === 1 ? "" : "es"}</span> active`
-        : "No appetite breaches active");
-      return lines.join(". ") + ".";
-    })();
+    // Open Risks card — severity breakdown (Critical/High/Medium/Low by L×I score)
+    const riskBySeverity = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    sortedRisks.forEach(r => {
+      const s = Number(r.LikelihoodScore) * Number(r.ImpactScore);
+      if (s >= 15)      riskBySeverity.Critical++;
+      else if (s >= 9)  riskBySeverity.High++;
+      else if (s >= 4)  riskBySeverity.Medium++;
+      else              riskBySeverity.Low++;
+    });
+    const totalOpenRisks = sortedRisks.length;
+    const rkSegC = totalOpenRisks > 0 ? (riskBySeverity.Critical / totalOpenRisks) * 100 : 0;
+    const rkSegH = totalOpenRisks > 0 ? (riskBySeverity.High     / totalOpenRisks) * 100 : 0;
+    const rkSegM = totalOpenRisks > 0 ? (riskBySeverity.Medium   / totalOpenRisks) * 100 : 0;
+    const rkSegL = totalOpenRisks > 0 ? (riskBySeverity.Low      / totalOpenRisks) * 100 : 0;
+    const card2Headline = `${totalOpenRisks}`;
+    const card2Subline  = `Open risks · ${criticalRisks} Critical`;
+    const card2Insight  = criticalRisks > 0
+      ? `<span class="danger">${criticalRisks} Critical-score risk${criticalRisks === 1 ? "" : "s"} (≥15)</span>${appBreaches > 0 ? ` · <span class="danger">${appBreaches} appetite breach${appBreaches === 1 ? "" : "es"}</span>` : ""}`
+      : appBreaches > 0
+        ? `<span class="danger">${appBreaches} appetite breach${appBreaches === 1 ? "" : "es"} active</span>`
+        : (totalOpenRisks > 0 ? `No Critical risks · appetite within bounds` : `Register clean`);
 
-    // Card 3 — Audit & Corrective Actions
+    // Audit card — severity breakdown + corrective progress
+    const totalAF = auditFindings.length;
+    const afSegC = totalAF > 0 ? (bySev.Critical / totalAF) * 100 : 0;
+    const afSegH = totalAF > 0 ? (bySev.High     / totalAF) * 100 : 0;
+    const afSegM = totalAF > 0 ? (bySev.Medium   / totalAF) * 100 : 0;
+    const afSegL = totalAF > 0 ? (bySev.Low      / totalAF) * 100 : 0;
     const card3Headline = `${openAF}`;
-    const card3Subline  = `Open audit finding${openAF === 1 ? "" : "s"} of ${auditFindings.length} total`;
-    const card3Narrative = (() => {
-      if (auditFindings.length === 0 && correctiveActions.length === 0) return "No outstanding audit findings or corrective actions.";
-      const lines = [];
-      const sevSum = bySev.Critical + bySev.High;
-      if (sevSum > 0) lines.push(`<span class="danger">${sevSum} ${sevSum === 1 ? "finding" : "findings"} of Critical or High severity</span>`);
-      if (correctiveActions.length > 0) lines.push(`Corrective actions averaging <strong>${avgCompletion}% complete</strong> across ${correctiveActions.length} item${correctiveActions.length === 1 ? "" : "s"}`);
-      return (lines.join(". ") || "All findings closed") + ".";
-    })();
+    const card3Subline  = `Open finding${openAF === 1 ? "" : "s"} · ${totalAF} total`;
+    const card3Insight  = (bySev.Critical + bySev.High) > 0
+      ? `<span class="danger">${bySev.Critical + bySev.High} Critical/High severity</span>${correctiveActions.length > 0 ? ` · CAPs <strong>${avgCompletion}%</strong> complete` : ""}`
+      : correctiveActions.length > 0
+        ? `CAPs at <strong>${avgCompletion}% complete</strong> across ${correctiveActions.length} item${correctiveActions.length === 1 ? "" : "s"}`
+        : (totalAF > 0 ? `All findings Medium/Low severity` : `No findings recorded`);
 
     const html = `<!DOCTYPE html><html lang="en"><head>
       <meta charset="UTF-8">
@@ -1392,49 +1402,85 @@ const GRCDashboard = ({ canEdit = false }) => {
         .es-card {
           background: #fff;
           border: 1.5px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 20px 22px;
+          border-radius: 14px;
+          padding: 22px 24px 20px;
           position: relative; overflow: hidden;
+          box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+          display: flex; flex-direction: column; gap: 14px;
         }
         .es-card::before {
-          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
           background: var(--accent);
         }
         .es-card.indicators { --accent: #003932; }
         .es-card.risks      { --accent: #d97706; }
         .es-card.audit      { --accent: #7c3aed; }
         .es-card .es-topic {
-          display: flex; align-items: center; gap: 8px;
-          margin-bottom: 12px;
+          display: flex; align-items: center; gap: 9px;
         }
         .es-card .es-icon {
-          width: 28px; height: 28px; border-radius: 8px;
+          width: 30px; height: 30px; border-radius: 9px;
           display: inline-flex; align-items: center; justify-content: center;
-          font-size: 14px;
-          background: rgba(0,184,148,0.08);
+          font-size: 15px;
+          background: rgba(0,57,50,0.08);
         }
-        .es-card.risks .es-icon { background: rgba(217,119,6,0.10); }
-        .es-card.audit .es-icon { background: rgba(124,58,237,0.10); }
+        .es-card.risks .es-icon { background: rgba(217,119,6,0.12); }
+        .es-card.audit .es-icon { background: rgba(124,58,237,0.12); }
         .es-card .es-topic-name {
-          font-size: 10px; font-weight: 800; color: #6b7280;
-          letter-spacing: 0.10em; text-transform: uppercase;
+          font-size: 10px; font-weight: 800; color: #475569;
+          letter-spacing: 0.12em; text-transform: uppercase;
+        }
+        .es-card .es-headline-row {
+          display: flex; align-items: baseline; gap: 14px;
+          padding-bottom: 4px;
         }
         .es-card .es-headline {
           font-family: 'JetBrains Mono', monospace;
-          font-size: 26px; font-weight: 700; color: var(--accent);
-          line-height: 1.05; margin-bottom: 4px;
-          letter-spacing: -0.5px;
+          font-size: 44px; font-weight: 700; color: var(--accent);
+          line-height: 1; letter-spacing: -1.5px;
         }
         .es-card .es-subline {
-          font-size: 11px; color: #6b7280; font-weight: 500;
-          margin-bottom: 14px;
+          font-size: 11.5px; color: #475569; font-weight: 600;
+          line-height: 1.4;
         }
-        .es-card .es-narrative {
+        /* Stacked proportion bar */
+        .es-bar {
+          display: flex; height: 7px; border-radius: 4px;
+          background: #f1f5f9; overflow: hidden;
+        }
+        .es-bar-seg { height: 100%; transition: width 0.3s; }
+        .es-bar-seg.red    { background: #dc2626; }
+        .es-bar-seg.orange { background: #ea580c; }
+        .es-bar-seg.amber  { background: #d97706; }
+        .es-bar-seg.green  { background: #16a34a; }
+        .es-bar-seg.purple { background: #7c3aed; }
+        /* Mini breakdown chips */
+        .es-chips {
+          display: flex; gap: 14px; flex-wrap: wrap;
+        }
+        .es-chip { display: flex; align-items: center; gap: 6px; }
+        .es-chip .dot {
+          width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .es-chip .dot.red    { background: #dc2626; }
+        .es-chip .dot.orange { background: #ea580c; }
+        .es-chip .dot.amber  { background: #d97706; }
+        .es-chip .dot.green  { background: #16a34a; }
+        .es-chip .num {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 13px; font-weight: 700; color: #0d1f1c;
+        }
+        .es-chip .lbl {
+          font-size: 10px; color: #6b7280; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .es-card .es-insight {
           font-size: 11.5px; line-height: 1.6; color: #1f2937;
           padding-top: 12px; border-top: 1px dashed #e2e8f0;
+          margin-top: auto;
         }
-        .es-card .es-narrative strong { color: var(--accent); font-weight: 700; }
-        .es-card .es-narrative .danger { color: #991b1b; font-weight: 700; }
+        .es-card .es-insight strong { color: var(--accent); font-weight: 700; }
+        .es-card .es-insight .danger { color: #991b1b; font-weight: 700; }
 
         /* ────── KPI GRID ────── */
         .kpi-grid {
@@ -1597,51 +1643,89 @@ const GRCDashboard = ({ canEdit = false }) => {
         </div>
       </div>
 
-      <!-- ════════════ EXECUTIVE SUMMARY ════════════ -->
+      <!-- ════════════ EXECUTIVE COMMAND CENTRE ════════════ -->
       <div class="exec-summary">
         <div class="head">
           <div class="label">Executive Summary</div>
           <div class="as-of">As of ${asOfDate}</div>
         </div>
         <div class="es-grid">
+
+          <!-- Card 1 — KEY RISK INDICATORS -->
           <div class="es-card indicators">
             <div class="es-topic">
               <span class="es-icon">📊</span>
               <span class="es-topic-name">Key Risk Indicators</span>
             </div>
-            <div class="es-headline">${card1Headline}</div>
-            <div class="es-subline">${card1Subline}</div>
-            <div class="es-narrative">${card1Narrative}</div>
+            <div class="es-headline-row">
+              <div class="es-headline">${card1Headline}</div>
+              <div class="es-subline">${card1Subline}</div>
+            </div>
+            <div class="es-bar">
+              <div class="es-bar-seg red"   style="width:${kriSegR}%"></div>
+              <div class="es-bar-seg amber" style="width:${kriSegA}%"></div>
+              <div class="es-bar-seg green" style="width:${kriSegG}%"></div>
+            </div>
+            <div class="es-chips">
+              <div class="es-chip"><span class="dot red"></span><span class="num">${redCount}</span><span class="lbl">Breaching</span></div>
+              <div class="es-chip"><span class="dot amber"></span><span class="num">${amberCount}</span><span class="lbl">At Risk</span></div>
+              <div class="es-chip"><span class="dot green"></span><span class="num">${greenCount}</span><span class="lbl">Within Limits</span></div>
+              ${escalCount > 0 ? `<div class="es-chip"><span class="dot" style="background:#7c3aed"></span><span class="num">${escalCount}</span><span class="lbl">Escalations</span></div>` : ""}
+            </div>
+            <div class="es-insight">${card1Insight}</div>
           </div>
+
+          <!-- Card 2 — OPEN RISKS -->
           <div class="es-card risks">
             <div class="es-topic">
               <span class="es-icon">⚠</span>
               <span class="es-topic-name">Open Risks</span>
             </div>
-            <div class="es-headline">${card2Headline}</div>
-            <div class="es-subline">${card2Subline}</div>
-            <div class="es-narrative">${card2Narrative}</div>
+            <div class="es-headline-row">
+              <div class="es-headline">${card2Headline}</div>
+              <div class="es-subline">${card2Subline}</div>
+            </div>
+            <div class="es-bar">
+              <div class="es-bar-seg red"    style="width:${rkSegC}%"></div>
+              <div class="es-bar-seg orange" style="width:${rkSegH}%"></div>
+              <div class="es-bar-seg amber"  style="width:${rkSegM}%"></div>
+              <div class="es-bar-seg green"  style="width:${rkSegL}%"></div>
+            </div>
+            <div class="es-chips">
+              <div class="es-chip"><span class="dot red"></span><span class="num">${riskBySeverity.Critical}</span><span class="lbl">Critical</span></div>
+              <div class="es-chip"><span class="dot orange"></span><span class="num">${riskBySeverity.High}</span><span class="lbl">High</span></div>
+              <div class="es-chip"><span class="dot amber"></span><span class="num">${riskBySeverity.Medium}</span><span class="lbl">Medium</span></div>
+              <div class="es-chip"><span class="dot green"></span><span class="num">${riskBySeverity.Low}</span><span class="lbl">Low</span></div>
+            </div>
+            <div class="es-insight">${card2Insight}</div>
           </div>
+
+          <!-- Card 3 — AUDIT & ACTIONS -->
           <div class="es-card audit">
             <div class="es-topic">
               <span class="es-icon">🔍</span>
               <span class="es-topic-name">Audit &amp; Actions</span>
             </div>
-            <div class="es-headline">${card3Headline}</div>
-            <div class="es-subline">${card3Subline}</div>
-            <div class="es-narrative">${card3Narrative}</div>
+            <div class="es-headline-row">
+              <div class="es-headline">${card3Headline}</div>
+              <div class="es-subline">${card3Subline}</div>
+            </div>
+            <div class="es-bar">
+              <div class="es-bar-seg red"    style="width:${afSegC}%"></div>
+              <div class="es-bar-seg orange" style="width:${afSegH}%"></div>
+              <div class="es-bar-seg amber"  style="width:${afSegM}%"></div>
+              <div class="es-bar-seg green"  style="width:${afSegL}%"></div>
+            </div>
+            <div class="es-chips">
+              <div class="es-chip"><span class="dot red"></span><span class="num">${bySev.Critical}</span><span class="lbl">Critical</span></div>
+              <div class="es-chip"><span class="dot orange"></span><span class="num">${bySev.High}</span><span class="lbl">High</span></div>
+              <div class="es-chip"><span class="dot amber"></span><span class="num">${bySev.Medium}</span><span class="lbl">Medium</span></div>
+              <div class="es-chip"><span class="dot green"></span><span class="num">${bySev.Low}</span><span class="lbl">Low</span></div>
+            </div>
+            <div class="es-insight">${card3Insight}</div>
           </div>
-        </div>
-      </div>
 
-      <!-- ════════════ KPI STRIP ════════════ -->
-      <div class="kpi-grid">
-        <div class="kpi brand"><div class="val">${kriWithLatest.length}</div><div class="lbl">Total KRIs</div><div class="desc">Active in register</div></div>
-        <div class="kpi red"><div class="val">${redCount}</div><div class="lbl">Breaching</div><div class="desc">Above threshold</div></div>
-        <div class="kpi amber"><div class="val">${amberCount}</div><div class="lbl">At Risk</div><div class="desc">Approaching limit</div></div>
-        <div class="kpi green"><div class="val">${greenCount}</div><div class="lbl">Within Limits</div><div class="desc">Compliant</div></div>
-        <div class="kpi purple"><div class="val">${escalCount}</div><div class="lbl">Escalations</div><div class="desc">Requiring action</div></div>
-        <div class="kpi red"><div class="val">${appBreaches}</div><div class="lbl">Appetite Breaches</div><div class="desc">Tolerance exceeded</div></div>
+        </div>
       </div>
 
       <!-- ════════════ KRI STATUS BOARD ════════════ -->
