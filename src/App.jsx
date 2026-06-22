@@ -2279,6 +2279,15 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 : (statusStyles[m.status] || statusStyles["Upcoming"]);
               // Top-level item = milestone (diamond) · child = activity (smaller circle).
               const isMilestone = !m.parentId;
+              // Connector line going DOWN from this row's icon → dashed when the
+              // next row is an activity (tree branch), solid when transitioning
+              // to the next milestone (group break). Creates a clear visual
+              // hierarchy without any extra columns.
+              const nextItem = project.milestones[i + 1];
+              const nextIsActivity = nextItem && nextItem.parentId;
+              const connectorStyle = nextIsActivity
+                ? `2px dashed ${s.lineColor}`
+                : `2px solid ${s.lineColor}`;
               return (
                 <div key={m.id} style={{ display: "flex", gap: 16, position: "relative" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
@@ -2289,10 +2298,23 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     ) : (
                       <div style={{ width: 22, height: 22, borderRadius: "50%", background: s.bg, border: `2px solid ${s.lineColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: s.text, fontWeight: 700, zIndex: 1, marginTop: 6 }}>{s.icon}</div>
                     )}
-                    {i < project.milestones.length - 1 && <div style={{ width: 2, flex: 1, background: s.lineColor, opacity: 0.3, minHeight: 20 }} />}
+                    {i < project.milestones.length - 1 && (
+                      <div style={{ width: 0, flex: 1, borderLeft: connectorStyle, opacity: 0.45, minHeight: 20 }} />
+                    )}
                   </div>
-                  <div style={{ flex: 1, paddingBottom: 20, paddingLeft: isMilestone ? 0 : 24 }}>
-                    <div style={{ background: T.bg, borderRadius: 12, padding: "14px 18px", borderLeft: isMilestone ? `3px solid ${s.lineColor}` : "none" }}>
+                  <div style={{ flex: 1, paddingBottom: 20, paddingLeft: isMilestone ? 0 : 24, position: "relative" }}>
+                    {/* Tree-tee: a soft horizontal dashed connector reaching from
+                        the vertical line into the activity card's left edge.
+                        Only on activities — milestones stand on their own. */}
+                    {!isMilestone && (
+                      <div style={{ position: "absolute", left: -16, top: 22, width: 16, height: 0, borderTop: `2px dashed ${s.lineColor}`, opacity: 0.45 }} />
+                    )}
+                    <div style={{
+                      background: T.bg, borderRadius: 12, padding: "14px 18px",
+                      borderLeft: isMilestone
+                        ? `3px solid ${s.lineColor}`
+                        : `2px dashed ${s.lineColor}`,
+                    }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 4 }}>
                         <span style={{ fontSize: isMilestone ? 14 : 13, fontWeight: isMilestone ? 700 : 600, color: T.text }}>
                           {isMilestone ? "" : "↳ "}{m.name}
