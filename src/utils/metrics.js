@@ -373,6 +373,44 @@ export function effectiveProgress(project) {
 }
 
 /**
+ * Derive the project's status from its current performance signals.
+ * Returns { status, reason } so callers can both render the chip and
+ * show the user WHY the derivation landed where it did.
+ *
+ *   Completed   = WBS-rolled progress hits 100 AND project has reached Gate 5
+ *   Delayed     = past plannedEnd and not yet at 100% — explicit slip
+ *   Not Started = no activities defined yet OR no IPI signal (Pending Plan)
+ *   On Track    = IPI ≥ 90
+ *   At Risk     = IPI < 90 but project has signals to be measured against
+ *
+ * This is the auto-derivation used in the Update panel. The admin Edit Project
+ * form preserves a manual override field so PMO can capture contextual signals
+ * (e.g. sponsor freeze, regulator pause) that the math cannot see.
+ */
+export function deriveProjectStatus(project) {
+  const progress = effectiveProgress(project);
+  const ipi      = calcProjectIPI(project);
+  const gateNum  = parseGateNumber(project.gate);
+
+  if (progress >= 100 && gateNum >= 5) {
+    return { status: "Completed", reason: "Progress at 100% and project reached Gate 5" };
+  }
+  if (project.plannedEnd && project.plannedEnd < TODAY && progress < 100) {
+    return { status: "Delayed", reason: `Past planned end (${project.plannedEnd}) and not at 100%` };
+  }
+  if (progress === 0 && (!project.milestones || project.milestones.length === 0)) {
+    return { status: "Not Started", reason: "No activities defined yet" };
+  }
+  if (ipi == null) {
+    return { status: "Not Started", reason: "Pending Plan — no schedule, cost or doc data yet" };
+  }
+  if (ipi >= 90) {
+    return { status: "On Track", reason: `IPI ${ipi} ≥ 90 threshold` };
+  }
+  return { status: "At Risk", reason: `IPI ${ipi} below 90 threshold` };
+}
+
+/**
  * Derive the project-level risk level from the active risks array.
  * Highest open risk wins. Falls back to "Low" if no open risks.
  * Use this instead of a manually-maintained project.riskLevel field.

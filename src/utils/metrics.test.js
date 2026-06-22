@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI } from "./metrics.js";
+import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./metrics.js";
 
 // Convenience: build a minimal project that calcProjectIPIFull will accept.
 // asOfDate frozen so the time-based PV piece is deterministic across runs.
@@ -168,6 +168,77 @@ describe("calcAnticipatedMCI — early-warning for future-gate docs", () => {
     const anticipated = calcAnticipatedMCI(p);
     expect(anticipated.mci).toBe(1.0);
     expect(anticipated.deltaDocs).toBe(1);
+  });
+});
+
+describe("deriveProjectStatus — auto status from performance signals", () => {
+  it("returns Completed when progress=100 and project is at Gate 5", () => {
+    const p = mk({
+      gate: "Gate 5",
+      progress: 100,
+      milestones: [{ id: "M1", name: "Wrap up", weight: 1, progress: 100, status: "Completed" }],
+    });
+    expect(deriveProjectStatus(p).status).toBe("Completed");
+  });
+
+  it("does NOT return Completed when progress=100 but still at Gate 4", () => {
+    // Closure hasn't happened yet — too early to mark Completed.
+    const p = mk({
+      gate: "Gate 4",
+      progress: 100,
+      milestones: [{ id: "M1", name: "Wrap up", weight: 1, progress: 100, status: "Completed" }],
+    });
+    expect(deriveProjectStatus(p).status).not.toBe("Completed");
+  });
+
+  it("returns Delayed when past plannedEnd and not at 100%", () => {
+    const p = mk({
+      gate: "Gate 4",
+      progress: 60,
+      plannedEnd: "2026-01-01",  // way in the past relative to ASOF (2026-06-19)
+      milestones: [{ id: "M1", name: "X", weight: 1, progress: 60, status: "In Progress" }],
+    });
+    expect(deriveProjectStatus(p).status).toBe("Delayed");
+  });
+
+  it("returns Not Started when no activities and progress is 0", () => {
+    const p = mk({ gate: "Gate 1", progress: 0, milestones: [] });
+    expect(deriveProjectStatus(p).status).toBe("Not Started");
+  });
+
+  it("returns On Track when IPI ≥ 90", () => {
+    const p = mk({
+      gate: "Gate 4",
+      progress: 50,
+      budget: 1_000_000,
+      actualCost: 500_000,
+      plannedEnd: "2027-01-01",
+      milestones: [{ id: "M1", name: "X", weight: 1, progress: 95, status: "In Progress", startDate: "2026-04-01", date: "2026-12-31" }],
+      documents: [{ name: "Charter", required: true, requiredAtGate: 2, status: "Approved" }],
+    });
+    const result = deriveProjectStatus(p);
+    expect(result.status).toBe("On Track");
+    expect(result.reason).toMatch(/IPI.*≥ 90/);
+  });
+
+  it("returns At Risk when IPI < 90 and the project is mid-flight", () => {
+    const p = mk({
+      gate: "Gate 4",
+      progress: 20,
+      budget: 1_000_000,
+      actualCost: 800_000,
+      plannedEnd: "2027-01-01",
+      milestones: [{ id: "M1", name: "X", weight: 1, progress: 20, status: "In Progress", startDate: "2026-04-01", date: "2026-06-19" }],
+      documents: [{ name: "Charter", required: true, requiredAtGate: 2, status: "Draft" }],
+    });
+    expect(deriveProjectStatus(p).status).toBe("At Risk");
+  });
+
+  it("includes a human-readable reason on every result", () => {
+    // Caller renders this string under the status chip in the Update panel.
+    const p = mk({ gate: "Gate 1", progress: 0, milestones: [] });
+    expect(deriveProjectStatus(p).reason).toBeTruthy();
+    expect(typeof deriveProjectStatus(p).reason).toBe("string");
   });
 });
 

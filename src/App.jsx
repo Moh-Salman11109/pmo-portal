@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -957,7 +957,6 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const T = useT();
   const [tab, setTab]                 = useState("Status");
-  const [status, setStatus]           = useState(project.status);
   const [phase, setPhase]             = useState(project.phase || "Execution");
   const [gate, setGate]               = useState(project.gate || "");
   const [priority, setPriority]       = useState(project.priority || "Medium");
@@ -984,7 +983,6 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const setH = (k, v) => setHealthState(prev => ({ ...prev, [k]: v }));
   const ragClr     = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
   const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
-  const statusOpts = ["On Track","At Risk","Delayed","Completed","Not Started"];
   const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
 
   // Actual Progress is derived — WBS rollup if any milestones exist, otherwise
@@ -993,6 +991,14 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     const wbs = calcProjectProgressFromWBS({ milestones });
     return wbs != null ? wbs : (project.progress ?? 0);
   }, [milestones, project.progress]);
+
+  // Status is also derived — from IPI + dates + activities. PMO retains a manual
+  // override on the admin Edit Project form for context the math can't see
+  // (e.g. sponsor freeze, regulator pause). From the Update panel, it's read-only.
+  const derivedStatus = useMemo(() => {
+    const synthetic = { ...project, milestones, plannedEnd, gate, documents, budget, actualCost, progress: autoProgress };
+    return deriveProjectStatus(synthetic);
+  }, [project, milestones, plannedEnd, gate, documents, budget, actualCost, autoProgress]);
   const TABS = [
     { key: "Status",     icon: "📊" },
     { key: "Financials", icon: "💰" },
@@ -1007,10 +1013,10 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     setSaving(true);
     setSaveError("");
     try {
-      // Actual progress is always the derived autoProgress — see definition above.
-      // The Activities tab is the single source of truth.
+      // Both progress AND status are derived in this panel — Activities tab and
+      // the performance signals (IPI, dates) are the single sources of truth.
       await onSubmit(project.id, {
-        status, phase, gate, priority, progress: autoProgress, plannedProgress, startDate, plannedEnd,
+        status: derivedStatus.status, phase, gate, priority, progress: autoProgress, plannedProgress, startDate, plannedEnd,
         roadmapDeadline,
         health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
         milestones, risks, benefits, documents, note,
@@ -1034,18 +1040,22 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div>
           <SL>PROJECT STATUS</SL>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {statusOpts.map(o => {
-              const sc = statusColor[o];
-              return (
-                <button key={o} onClick={() => setStatus(o)}
-                  style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                    background: status === o ? sc.bg : T.bg, color: status === o ? sc.text : T.muted,
-                    border: status === o ? `2px solid ${sc.dot}` : `1px solid ${T.border}` }}>
-                  {o}
-                </button>
-              );
-            })}
+          {(() => {
+            const sc = statusColor[derivedStatus.status] || { bg: T.bg, text: T.muted, dot: T.border };
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: sc.bg, color: sc.text, padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 800, border: `2px solid ${sc.dot}` }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: sc.dot }} />
+                  {derivedStatus.status}
+                </div>
+                <span style={{ fontSize: 10, color: T.muted, fontStyle: "italic", letterSpacing: "0.04em" }}>
+                  🤖 Auto · {derivedStatus.reason}
+                </span>
+              </div>
+            );
+          })()}
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 8, opacity: 0.7 }}>
+            Override available to PMO in the Edit Project form when there's external context (e.g. sponsor freeze) the math can't see.
           </div>
         </div>
         <div>
@@ -1417,7 +1427,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
                 fontWeight: isMs ? 800 : 500,
                 color: sp == null && ep == null ? T.muted : T.text,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                textAlign: "right",
+                textAlign: "left",
               }} title={m.name}>
                 {isMs ? "📍 " : "↳ "}{m.name || (isMs ? "(unnamed milestone)" : "(activity)")}
               </div>
