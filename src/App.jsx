@@ -1865,33 +1865,35 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
             <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 8, flexWrap: "wrap" }}>
-              <Badge status={project.status} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            {/* Status chip — own line so it doesn't compete with the action stack */}
+            <Badge status={project.status} />
+            {/* Action stack — uniform width, primary action first, equal heights */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 140 }}>
               {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
                 <button onClick={() => setShowUpdate(true)}
-                  style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                  style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
                   ✏️ Update
                 </button>
               )}
               {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) && project.pmoStatus === "Submitted" && (
                 <button onClick={() => setRoute({ view: "actions" })}
-                  style={{ background: "#f59e0b", color: "#fff", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                  style={{ background: "#f59e0b", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
                   ✅ Validate Update
                 </button>
               )}
               {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
                 <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id, from: "project" })}
-                  style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
                   Edit Fields
                 </button>
               )}
               <button onClick={printProjectReport}
-                style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
                 📄 Print Report
               </button>
             </div>
-            {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
+            {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 2, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a" }}>Updated {d}d ago</div>; })()}
           </div>
         </div>
         {/* Performance banner — Progress + IPI side by side, equal billing */}
