@@ -1169,17 +1169,45 @@ const GRCDashboard = ({ canEdit = false }) => {
       return `<span style="color:${c};font-weight:700">${s || "—"}</span>`;
     };
 
-    const kriRows = kriWithLatest.map(k => {
+    // Escape any HTML chars that might appear in narrative text fields, since
+    // we splice them straight into the report markup.
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+    );
+
+    // Sort: Red first (most urgent), then Amber, then Green, then no-reading.
+    const ragOrder = { Red: 0, Amber: 1, Green: 2 };
+    const kriSorted = [...kriWithLatest].sort((a, b) => {
+      const ra = ragOrder[a.latest?.RAGStatus] ?? 3;
+      const rb = ragOrder[b.latest?.RAGStatus] ?? 3;
+      return ra - rb;
+    });
+
+    const kriRows = kriSorted.map(k => {
       const r = k.latest;
-      return `<tr>
-        <td>${k.Title || "—"}<br><span style="color:#6b7280;font-size:10px">${k.KRIOwner?.Title || k.KRICategory || ""}</span></td>
-        <td>${k.KRICategory || "—"}</td>
-        <td style="text-align:center;font-weight:700">${r?.ActualValue ?? "—"} ${k.MeasurementUnit || ""}</td>
+      const trend = r?.Trend === "Improving" ? `<span style="color:#15803d">↑ Improving</span>`
+                  : r?.Trend === "Worsening" ? `<span style="color:#991b1b">↓ Worsening</span>`
+                  : r?.Trend === "Stable"    ? `<span style="color:#6b7280">→ Stable</span>`
+                  : '<span style="color:#9ca3af">—</span>';
+      const hasNarrative = !!(r?.Justification || r?.ActionPlan);
+      const mainRow = `<tr class="kri-main">
+        <td>
+          <div class="kri-title">${esc(k.Title) || "—"}</div>
+          <div class="kri-meta">${esc(k.BusinessUnit || k.KRIOwner?.Title || k.KRICategory || "")}</div>
+        </td>
+        <td>${esc(k.KRICategory) || "—"}</td>
+        <td style="text-align:center"><span class="num">${esc(r?.ActualValue ?? "—")}</span> <span class="unit">${esc(k.MeasurementUnit || "")}</span></td>
         <td style="text-align:center">${ragBadge(r?.RAGStatus)}</td>
-        <td style="text-align:center">${r?.Trend === "Improving" ? "↑ Improving" : r?.Trend === "Worsening" ? "↓ Worsening" : r?.Trend === "Stable" ? "→ Stable" : "—"}</td>
-        <td style="text-align:center">${r?.EscalationRequired ? "⚠ Yes" : "No"}</td>
-        <td style="color:#6b7280;font-size:10px">${r?.Comments || ""}</td>
+        <td style="text-align:center;font-size:10px">${trend}</td>
+        <td style="text-align:center">${r?.EscalationRequired ? '<span style="color:#dc2626;font-weight:800">⚠ Yes</span>' : '<span style="color:#9ca3af">No</span>'}</td>
       </tr>`;
+      const narrativeRow = hasNarrative ? `<tr class="kri-narrative"><td colspan="6">
+        <div class="narrative-grid">
+          ${r.Justification ? `<div class="narrative-cell"><div class="narrative-label">💡 Justification</div><div class="narrative-body">${esc(r.Justification)}</div></div>` : ""}
+          ${r.ActionPlan ? `<div class="narrative-cell action"><div class="narrative-label">🎯 Action Plan</div><div class="narrative-body">${esc(r.ActionPlan)}</div></div>` : ""}
+        </div>
+      </td></tr>` : "";
+      return mainRow + narrativeRow;
     }).join("");
 
     const sortedRisks = [...riskReg]
@@ -1239,91 +1267,327 @@ const GRCDashboard = ({ canEdit = false }) => {
       </tr>`;
     }).join("");
 
+    // Dynamic executive narrative — one paragraph that summarises the moment.
+    const exposurePct = kriWithLatest.length > 0
+      ? Math.round(((redCount + amberCount) / kriWithLatest.length) * 100)
+      : 0;
+    const criticalRisks = sortedRisks.filter(r => (Number(r.LikelihoodScore) * Number(r.ImpactScore)) >= 15).length;
+    const narrativeSummary = [
+      `As of ${now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}, the portfolio holds <strong>${kriWithLatest.length} active Key Risk Indicators</strong> across <strong>${deptOptions.length} business units</strong>.`,
+      redCount > 0   ? `<strong style="color:#991b1b">${redCount} KRIs are currently breaching threshold</strong>` : null,
+      amberCount > 0 ? `${amberCount} ${amberCount === 1 ? "is" : "are"} flagged at risk` : null,
+      greenCount > 0 ? `${greenCount} remain within tolerance` : null,
+    ].filter(Boolean).join(", ") + ".";
+    const narrativeRisks = sortedRisks.length === 0
+      ? "No open risks are recorded in the Risk Register."
+      : `The Risk Register holds <strong>${sortedRisks.length} open risk${sortedRisks.length === 1 ? "" : "s"}</strong>${criticalRisks > 0 ? `, of which <strong style="color:#991b1b">${criticalRisks} ${criticalRisks === 1 ? "carries" : "carry"} a Critical score (≥15)</strong>` : ""}. ${appBreaches > 0 ? `<strong style="color:#991b1b">${appBreaches} appetite breach${appBreaches === 1 ? "" : "es"}</strong> ${appBreaches === 1 ? "is" : "are"} active.` : "No appetite breaches are active."}`;
+    const narrativeAudit = auditFindings.length === 0
+      ? "No outstanding audit findings."
+      : `Internal Audit has logged <strong>${auditFindings.length} finding${auditFindings.length === 1 ? "" : "s"}</strong>${openAF > 0 ? ` (${openAF} open)` : ""}${bySev.Critical + bySev.High > 0 ? `, including <strong style="color:#991b1b">${bySev.Critical + bySev.High} of Critical or High severity</strong>` : ""}. ${correctiveActions.length > 0 ? `Corrective actions are <strong>${avgCompletion}% complete</strong> on average across ${correctiveActions.length} tracked items.` : ""}`;
+
     const html = `<!DOCTYPE html><html lang="en"><head>
       <meta charset="UTF-8">
       <title>GRC Risk Intelligence Report — ${dateStr}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
-        .cover { background: linear-gradient(135deg, #001f1a 0%, #003932 60%, #005c4a 100%); color: #fff; padding: 48px 56px; min-height: 180px; }
-        .cover h1 { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
-        .cover .sub { opacity: 0.65; font-size: 13px; margin-bottom: 24px; }
-        .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin: 32px 40px 0; }
-        .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
-        .kpi .val { font-size: 26px; font-weight: 900; line-height: 1; }
-        .kpi .lbl { font-size: 10px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
-        section { margin: 32px 40px 0; }
-        section h2 { font-size: 14px; font-weight: 800; color: #003932; border-bottom: 2px solid #003932; padding-bottom: 6px; margin-bottom: 14px; }
+        body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #0d1f1c; background: #fff; line-height: 1.55; }
+
+        /* ────── COVER ────── */
+        .cover {
+          background: linear-gradient(135deg, #001f1a 0%, #003932 50%, #007a62 100%);
+          color: #fff;
+          padding: 56px 56px 44px;
+          position: relative;
+          overflow: hidden;
+        }
+        .cover::after {
+          content: '';
+          position: absolute;
+          bottom: -80px; right: -80px;
+          width: 280px; height: 280px;
+          background: rgba(0,184,148,0.10);
+          border-radius: 50%;
+        }
+        .cover .classification {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: rgba(220,38,38,0.18); color: #fecaca;
+          border: 1px solid rgba(220,38,38,0.35);
+          padding: 4px 12px; border-radius: 16px;
+          font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+          margin-bottom: 18px;
+        }
+        .cover .crest {
+          display: inline-flex; align-items: center; gap: 14px;
+          margin-bottom: 14px;
+        }
+        .cover .crest .icon {
+          font-size: 36px; line-height: 1;
+          background: rgba(0,184,148,0.18);
+          padding: 12px 14px; border-radius: 12px;
+        }
+        .cover h1 {
+          font-size: 32px; font-weight: 900; letter-spacing: -0.8px; line-height: 1.05; margin-bottom: 8px;
+        }
+        .cover h1 em { color: #6ee7b7; font-style: normal; }
+        .cover .sub {
+          opacity: 0.78; font-size: 13px; font-weight: 400; max-width: 80%;
+          margin-bottom: 28px;
+        }
+        .cover .meta { display: flex; gap: 40px; font-size: 11px; }
+        .cover .meta .item .l { color: rgba(110,231,183,0.7); font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3px; }
+        .cover .meta .item .v { font-weight: 600; }
+
+        /* ────── EXEC SUMMARY ────── */
+        .exec-summary {
+          background: #f8fafc;
+          padding: 24px 56px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .exec-summary .label {
+          font-size: 10px; font-weight: 800; color: #003932; letter-spacing: 0.1em;
+          text-transform: uppercase; margin-bottom: 10px;
+        }
+        .exec-summary p { font-size: 12.5px; line-height: 1.75; color: #1f2937; margin-bottom: 8px; }
+        .exec-summary p:last-child { margin-bottom: 0; }
+
+        /* ────── KPI GRID ────── */
+        .kpi-grid {
+          display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px;
+          margin: 28px 56px 0;
+        }
+        .kpi {
+          background: #fff; border: 1.5px solid #e2e8f0;
+          border-radius: 12px; padding: 16px 18px;
+          position: relative; overflow: hidden;
+        }
+        .kpi::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+          background: var(--accent, #003932);
+        }
+        .kpi.red    { --accent: #dc2626; }
+        .kpi.amber  { --accent: #d97706; }
+        .kpi.green  { --accent: #16a34a; }
+        .kpi.purple { --accent: #7c3aed; }
+        .kpi.brand  { --accent: #003932; }
+        .kpi .val {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 28px; font-weight: 700; line-height: 1;
+          color: var(--accent, #003932);
+        }
+        .kpi .lbl {
+          font-size: 9.5px; color: #6b7280; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.04em;
+          margin-top: 6px;
+        }
+        .kpi .desc {
+          font-size: 10px; color: #94a3b8; margin-top: 2px;
+          font-weight: 500;
+        }
+
+        /* ────── SECTIONS ────── */
+        section { margin: 36px 56px 0; }
+        section .section-head {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 14px;
+          border-bottom: 2px solid #003932; padding-bottom: 8px;
+        }
+        section h2 {
+          font-size: 15px; font-weight: 900; color: #003932; letter-spacing: -0.2px;
+        }
+        section h2 .icon { color: #00b894; margin-right: 6px; }
+        section .section-meta {
+          font-size: 11px; color: #6b7280; font-weight: 500;
+        }
+
+        /* ────── TABLES ────── */
         table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th { background: #f1f5f9; padding: 7px 10px; text-align: left; font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        th {
+          background: #f1f5f9; padding: 9px 12px; text-align: left;
+          font-size: 9.5px; font-weight: 700; color: #475569;
+          text-transform: uppercase; letter-spacing: 0.04em;
+          border-bottom: 2px solid #cbd5e1;
+        }
+        td {
+          padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
+        }
+        tr.kri-main td { background: #fff; }
+        tr.kri-main:nth-child(4n+1) td { background: #fafbfc; }
         tr:last-child td { border-bottom: none; }
-        .footer { margin: 40px 40px 0; padding: 16px 0; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; color: #9ca3af; font-size: 10px; }
+        .kri-title { font-weight: 700; color: #0d1f1c; font-size: 11.5px; line-height: 1.4; }
+        .kri-meta  { font-size: 10px; color: #6b7280; margin-top: 2px; }
+        .num       { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #0d1f1c; }
+        .unit      { color: #94a3b8; font-size: 10px; }
+
+        /* ────── KRI NARRATIVE ROW (replaces Comments) ────── */
+        tr.kri-narrative td {
+          padding: 0 12px 14px;
+          background: #fafbfc !important;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .narrative-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          padding: 0 0 6px;
+        }
+        .narrative-cell {
+          background: #fff7ed;
+          border-left: 3px solid #f59e0b;
+          border-radius: 0 8px 8px 0;
+          padding: 10px 14px;
+        }
+        .narrative-cell.action {
+          background: #ecfdf5;
+          border-left-color: #00b894;
+        }
+        .narrative-label {
+          font-size: 9.5px; font-weight: 800; color: #92400e;
+          text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+        }
+        .narrative-cell.action .narrative-label { color: #047857; }
+        .narrative-body {
+          font-size: 11px; line-height: 1.6; color: #1f2937; white-space: pre-wrap;
+        }
+
+        /* ────── SEVERITY/STATUS CHIPS ────── */
+        .rag-chip {
+          display: inline-block; padding: 3px 10px; border-radius: 12px;
+          font-size: 10px; font-weight: 800; color: #fff; min-width: 50px; text-align: center;
+        }
+        .rag-Red    { background: #dc2626; }
+        .rag-Amber  { background: #d97706; }
+        .rag-Green  { background: #16a34a; }
+
+        /* ────── PROGRESS BARS ────── */
+        .bar-wrap {
+          display: inline-block; width: 100px; height: 8px;
+          background: #e5e7eb; border-radius: 4px; vertical-align: middle;
+          margin-right: 8px;
+        }
+        .bar-fill {
+          height: 100%; border-radius: 4px;
+        }
+
+        /* ────── FOOTER ────── */
+        .footer {
+          margin: 56px 56px 28px;
+          padding: 18px 0 0;
+          border-top: 1px solid #e2e8f0;
+          display: flex; justify-content: space-between;
+          color: #94a3b8; font-size: 10px;
+        }
+        .footer .conf {
+          font-weight: 700; color: #b45309;
+          letter-spacing: 0.08em; text-transform: uppercase;
+        }
+
+        /* ────── PRINT ────── */
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           section { page-break-inside: avoid; }
+          tr.kri-main { page-break-inside: avoid; }
+          tr.kri-narrative { page-break-before: avoid; }
           .cover { page-break-after: avoid; }
         }
+        @page { size: A4; margin: 0; }
       </style>
     </head><body>
+
+      <!-- ════════════ COVER ════════════ -->
       <div class="cover">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-          <span style="font-size:32px">🛡️</span>
+        <div class="classification">● Confidential · Executive Review</div>
+        <div class="crest">
+          <div class="icon">🛡</div>
           <div>
-            <h1>GRC Risk Intelligence Report</h1>
+            <h1>GRC Risk Intelligence<br><em>Quarterly Report</em></h1>
             <div class="sub">Key Risk Indicators · Risk Register · Risk Appetite · Audit Findings · Corrective Actions</div>
           </div>
         </div>
-        <div style="opacity:0.5;font-size:11px">Generated: ${dateStr} &nbsp;|&nbsp; PMO Enterprise Portal</div>
+        <div class="meta">
+          <div class="item"><div class="l">Generated</div><div class="v">${dateStr}</div></div>
+          <div class="item"><div class="l">Issued by</div><div class="v">PMO Enterprise Portal</div></div>
+          <div class="item"><div class="l">Scope</div><div class="v">${deptOptions.length} business units · ${kriWithLatest.length} KRIs</div></div>
+        </div>
       </div>
 
+      <!-- ════════════ EXECUTIVE SUMMARY ════════════ -->
+      <div class="exec-summary">
+        <div class="label">Executive Summary</div>
+        <p>${narrativeSummary}</p>
+        <p>${narrativeRisks}</p>
+        <p>${narrativeAudit}</p>
+      </div>
+
+      <!-- ════════════ KPI STRIP ════════════ -->
       <div class="kpi-grid">
-        <div class="kpi"><div class="val">${kriWithLatest.length}</div><div class="lbl">Total KRIs</div></div>
-        <div class="kpi"><div class="val" style="color:#dc2626">${redCount}</div><div class="lbl">Breaching (Red)</div></div>
-        <div class="kpi"><div class="val" style="color:#d97706">${amberCount}</div><div class="lbl">At Risk (Amber)</div></div>
-        <div class="kpi"><div class="val" style="color:#16a34a">${greenCount}</div><div class="lbl">Within Limits</div></div>
-        <div class="kpi"><div class="val" style="color:#7c3aed">${escalCount}</div><div class="lbl">Escalations</div></div>
-        <div class="kpi"><div class="val" style="color:#dc2626">${appBreaches}</div><div class="lbl">Appetite Breaches</div></div>
+        <div class="kpi brand"><div class="val">${kriWithLatest.length}</div><div class="lbl">Total KRIs</div><div class="desc">Active in register</div></div>
+        <div class="kpi red"><div class="val">${redCount}</div><div class="lbl">Breaching</div><div class="desc">Above threshold</div></div>
+        <div class="kpi amber"><div class="val">${amberCount}</div><div class="lbl">At Risk</div><div class="desc">Approaching limit</div></div>
+        <div class="kpi green"><div class="val">${greenCount}</div><div class="lbl">Within Limits</div><div class="desc">Compliant</div></div>
+        <div class="kpi purple"><div class="val">${escalCount}</div><div class="lbl">Escalations</div><div class="desc">Requiring action</div></div>
+        <div class="kpi red"><div class="val">${appBreaches}</div><div class="lbl">Appetite Breaches</div><div class="desc">Tolerance exceeded</div></div>
       </div>
 
+      <!-- ════════════ KRI STATUS BOARD ════════════ -->
       <section>
-        <h2>KRI Status Board</h2>
+        <div class="section-head">
+          <h2><span class="icon">▸</span>KRI Status Board</h2>
+          <div class="section-meta">${kriWithLatest.length} indicators · sorted by RAG severity</div>
+        </div>
         ${kriWithLatest.length === 0
           ? '<p style="color:#9ca3af;padding:12px 0">No active KRIs.</p>'
-          : `<table><thead><tr><th>KRI / Owner</th><th>Category</th><th>Current Value</th><th>RAG</th><th>Trend</th><th>Escalate</th><th>Comments</th></tr></thead><tbody>${kriRows}</tbody></table>`}
+          : `<table><thead><tr><th style="width:32%">KRI / Business Unit</th><th style="width:14%">Category</th><th style="width:14%;text-align:center">Current</th><th style="width:8%;text-align:center">RAG</th><th style="width:12%;text-align:center">Trend</th><th style="width:10%;text-align:center">Escalate</th></tr></thead><tbody>${kriRows}</tbody></table>`}
       </section>
 
+      <!-- ════════════ RISK REGISTER ════════════ -->
       <section>
-        <h2>Risk Register — Open Risks (sorted by score)</h2>
+        <div class="section-head">
+          <h2><span class="icon">▸</span>Risk Register</h2>
+          <div class="section-meta">${sortedRisks.length} open risk${sortedRisks.length === 1 ? "" : "s"} · sorted by likelihood × impact</div>
+        </div>
         ${sortedRisks.length === 0
           ? '<p style="color:#9ca3af;padding:12px 0">No open risks.</p>'
-          : `<table><thead><tr><th>Risk / Owner</th><th>Category</th><th>Score</th><th>Status</th><th>Appetite Breached</th><th>Mitigation</th></tr></thead><tbody>${riskRows}</tbody></table>`}
+          : `<table><thead><tr><th>Risk / Owner</th><th>Category</th><th style="text-align:center">Score</th><th style="text-align:center">Status</th><th style="text-align:center">Appetite</th><th>Mitigation</th></tr></thead><tbody>${riskRows}</tbody></table>`}
       </section>
 
+      <!-- ════════════ APPETITE MONITOR ════════════ -->
       <section>
-        <h2>Risk Appetite Monitor</h2>
+        <div class="section-head">
+          <h2><span class="icon">▸</span>Risk Appetite Monitor</h2>
+          <div class="section-meta">Tolerance utilisation by category</div>
+        </div>
         ${appetite.length === 0
           ? '<p style="color:#9ca3af;padding:12px 0">No appetite thresholds defined.</p>'
-          : `<table><thead><tr><th>Risk Category</th><th>Appetite Statement</th><th>Max Tolerable</th><th>Current Exposure</th><th>Utilisation</th><th>Status</th></tr></thead><tbody>${appRows}</tbody></table>`}
+          : `<table><thead><tr><th>Risk Category</th><th>Appetite Statement</th><th style="text-align:center">Max Tolerable</th><th style="text-align:center">Current</th><th>Utilisation</th><th style="text-align:center">Status</th></tr></thead><tbody>${appRows}</tbody></table>`}
       </section>
 
+      <!-- ════════════ AUDIT FINDINGS ════════════ -->
       <section>
-        <h2>Audit Findings — ${auditFindings.length} total, ${openAF} open &nbsp;|&nbsp; Critical: ${bySev.Critical} &nbsp; High: ${bySev.High} &nbsp; Medium: ${bySev.Medium} &nbsp; Low: ${bySev.Low}</h2>
+        <div class="section-head">
+          <h2><span class="icon">▸</span>Audit Findings</h2>
+          <div class="section-meta">${auditFindings.length} total · ${openAF} open · Critical: ${bySev.Critical} · High: ${bySev.High} · Medium: ${bySev.Medium} · Low: ${bySev.Low}</div>
+        </div>
         ${auditFindings.length === 0
           ? '<p style="color:#9ca3af;padding:12px 0">No audit findings.</p>'
-          : `<table><thead><tr><th>Finding</th><th>Severity</th><th>Business Unit</th><th>Status</th><th>Due Date</th></tr></thead><tbody>${afRows}</tbody></table>`}
+          : `<table><thead><tr><th>Finding</th><th style="text-align:center">Severity</th><th>Business Unit</th><th style="text-align:center">Status</th><th style="text-align:center">Due Date</th></tr></thead><tbody>${afRows}</tbody></table>`}
       </section>
 
+      <!-- ════════════ CORRECTIVE ACTIONS ════════════ -->
       <section>
-        <h2>Corrective Actions — ${correctiveActions.length} total &nbsp;|&nbsp; Completed: ${caComplete} &nbsp; Open: ${caOpen} &nbsp; Avg Completion: ${avgCompletion}%</h2>
+        <div class="section-head">
+          <h2><span class="icon">▸</span>Corrective Actions</h2>
+          <div class="section-meta">${correctiveActions.length} total · ${caComplete} completed · ${caOpen} open · avg completion ${avgCompletion}%</div>
+        </div>
         ${correctiveActions.length === 0
           ? '<p style="color:#9ca3af;padding:12px 0">No corrective actions.</p>'
-          : `<table><thead><tr><th>Action</th><th>Completion</th><th>Status</th><th>Target Date</th></tr></thead><tbody>${caRows}</tbody></table>`}
+          : `<table><thead><tr><th>Action</th><th style="text-align:center">Completion</th><th style="text-align:center">Status</th><th style="text-align:center">Target Date</th></tr></thead><tbody>${caRows}</tbody></table>`}
       </section>
 
+      <!-- ════════════ FOOTER ════════════ -->
       <div class="footer">
-        <span>PMO Enterprise Portal — GRC Risk Intelligence Report</span>
-        <span>Generated ${dateStr}</span>
+        <span>PMO Enterprise Portal · GRC Risk Intelligence Report · Tree Digital Insurance Company</span>
+        <span class="conf">● Confidential</span>
       </div>
     </body></html>`;
 
