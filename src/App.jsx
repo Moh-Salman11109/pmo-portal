@@ -2264,41 +2264,69 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
           <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Milestone Details</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {project.milestones.map((m, i) => {
+            {(() => {
+              // GROUP each milestone with its activity children before rendering.
+              // The raw project.milestones array preserves creation order, which
+              // for nested WBS often interleaves activities of different parents
+              // (M1, A-of-M2, M2, A-of-M1...). Rendering in that order made
+              // activities appear under the wrong milestones — the bug the user
+              // just flagged. Same tops/kidsOf pattern the Gantt uses.
+              const all = project.milestones || [];
+              const tops = all.filter(x => !x.parentId);
+              const kidsOf = (id) => all.filter(x => x.parentId === id);
+              const ordered = [];
+              tops.forEach(t => {
+                ordered.push(t);
+                kidsOf(t.id).forEach(k => ordered.push(k));
+              });
+              // Orphan activities (parentId set but parent missing) — append at end
+              all.forEach(x => {
+                if (x.parentId && !tops.some(t => t.id === x.parentId) && !ordered.some(o => o.id === x.id)) {
+                  ordered.push(x);
+                }
+              });
+              return ordered;
+            })().map((m, i, ordered) => {
               // Colours: In Progress = green, Completed = blue, Upcoming = grey,
               // Delayed/Overdue = red. Yellow removed — it visually clashed with At Risk.
+              // softColor = a paler tint of lineColor used for activity rows.
+              // Keeps the activity recognisable by status (green / blue / red /
+              // grey family) while letting parent milestones stand out as the
+              // stronger, more saturated anchor.
               const statusStyles = {
-                "Completed":   { bg: "#dbeafe", text: "#1e40af", icon: "✓", lineColor: "#3b82f6" },
-                "In Progress": { bg: "#dcfce7", text: "#15803d", icon: "◎", lineColor: "#16a34a" },
-                "Upcoming":    { bg: "#f3f4f6", text: "#6b7280", icon: "○", lineColor: "#d1d5db" },
-                "Delayed":     { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" },
+                "Completed":   { bg: "#dbeafe", text: "#1e40af", icon: "✓", lineColor: "#3b82f6", softColor: "#93c5fd" },
+                "In Progress": { bg: "#dcfce7", text: "#15803d", icon: "◎", lineColor: "#16a34a", softColor: "#86efac" },
+                "Upcoming":    { bg: "#f3f4f6", text: "#6b7280", icon: "○", lineColor: "#d1d5db", softColor: "#e5e7eb" },
+                "Delayed":     { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626", softColor: "#fca5a5" },
               };
               const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
               const s = isOverdue
-                ? { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" }
+                ? { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626", softColor: "#fca5a5" }
                 : (statusStyles[m.status] || statusStyles["Upcoming"]);
               // Top-level item = milestone (diamond) · child = activity (smaller circle).
               const isMilestone = !m.parentId;
-              // Connector line going DOWN from this row's icon → dashed when the
-              // next row is an activity (tree branch), solid when transitioning
-              // to the next milestone (group break). Creates a clear visual
-              // hierarchy without any extra columns.
-              const nextItem = project.milestones[i + 1];
+              // Activities use the softer paler tint; milestones use the full
+              // saturated lineColor. Tree connectors take the softer shade so
+              // they read as background structure, never compete with the
+              // milestone diamonds for attention.
+              const ringColor = isMilestone ? s.lineColor : s.softColor;
+              const nextItem = ordered[i + 1];
               const nextIsActivity = nextItem && nextItem.parentId;
+              const connectorColor = nextIsActivity ? s.softColor : s.lineColor;
               const connectorStyle = nextIsActivity
-                ? `2px dashed ${s.lineColor}`
-                : `2px solid ${s.lineColor}`;
+                ? `2px dashed ${connectorColor}`
+                : `2px solid ${connectorColor}`;
               return (
                 <div key={m.id} style={{ display: "flex", gap: 16, position: "relative" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
                     {isMilestone ? (
-                      <div style={{ width: 30, height: 30, background: s.bg, border: `2px solid ${s.lineColor}`, transform: "rotate(45deg)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, borderRadius: 4, marginTop: 2 }}>
+                      <div style={{ width: 30, height: 30, background: s.bg, border: `2px solid ${ringColor}`, transform: "rotate(45deg)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, borderRadius: 4, marginTop: 2 }}>
                         <span style={{ transform: "rotate(-45deg)", fontSize: 13, color: s.text, fontWeight: 800, lineHeight: 1 }}>{s.icon}</span>
                       </div>
                     ) : (
-                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: s.bg, border: `2px solid ${s.lineColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: s.text, fontWeight: 700, zIndex: 1, marginTop: 6 }}>{s.icon}</div>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: s.bg, border: `2px solid ${ringColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: s.text, fontWeight: 700, zIndex: 1, marginTop: 6 }}>{s.icon}</div>
                     )}
-                    {i < project.milestones.length - 1 && (
+                    {i < ordered.length - 1 && (
                       <div style={{ width: 0, flex: 1, borderLeft: connectorStyle, opacity: 0.45, minHeight: 20 }} />
                     )}
                   </div>
@@ -2307,13 +2335,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                         the vertical line into the activity card's left edge.
                         Only on activities — milestones stand on their own. */}
                     {!isMilestone && (
-                      <div style={{ position: "absolute", left: -16, top: 22, width: 16, height: 0, borderTop: `2px dashed ${s.lineColor}`, opacity: 0.45 }} />
+                      <div style={{ position: "absolute", left: -16, top: 22, width: 16, height: 0, borderTop: `2px dashed ${s.softColor}`, opacity: 0.55 }} />
                     )}
                     <div style={{
                       background: T.bg, borderRadius: 12, padding: "14px 18px",
                       borderLeft: isMilestone
                         ? `3px solid ${s.lineColor}`
-                        : `2px dashed ${s.lineColor}`,
+                        : `2px dashed ${s.softColor}`,
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 4 }}>
                         <span style={{ fontSize: isMilestone ? 14 : 13, fontWeight: isMilestone ? 700 : 600, color: T.text }}>
@@ -2328,12 +2356,27 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                       <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>
                         {m.startDate ? `${m.startDate} → ${m.date || "—"}` : (m.date ? `Target: ${m.date}` : "No date set")} · Owner: {m.owner || "—"}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${m.progress ?? (m.status === "Completed" ? 100 : 0)}%`, background: s.lineColor, borderRadius: 3, transition: "width 0.3s" }} />
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: s.text, minWidth: 32 }}>{m.progress ?? (m.status === "Completed" ? 100 : 0)}%</span>
-                      </div>
+                      {(() => {
+                        // BUG FIX: milestone was showing its own (zero) progress
+                        // while its activity children showed 56%/44%. A parent
+                        // milestone's progress must roll up from its children —
+                        // weighted by child weights — same rule the Gantt uses.
+                        const kids = isMilestone ? project.milestones.filter(c => c.parentId === m.id) : [];
+                        const computedProgress = kids.length > 0
+                          ? (() => {
+                              const w = kids.reduce((sum, c) => sum + (c.weight || 1), 0);
+                              return w ? Math.round(kids.reduce((sum, c) => sum + (c.weight || 1) * (c.progress || 0), 0) / w) : 0;
+                            })()
+                          : (m.progress ?? (m.status === "Completed" ? 100 : 0));
+                        return (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${computedProgress}%`, background: s.lineColor, borderRadius: 3, transition: "width 0.3s" }} />
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: s.text, minWidth: 32 }}>{computedProgress}%</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
