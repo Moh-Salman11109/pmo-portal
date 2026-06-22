@@ -961,7 +961,6 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const [phase, setPhase]             = useState(project.phase || "Execution");
   const [gate, setGate]               = useState(project.gate || "");
   const [priority, setPriority]       = useState(project.priority || "Medium");
-  const [progress, setProgress]       = useState(project.progress ?? 0);
   const [plannedProgress, setPlanned] = useState(project.plannedProgress ?? 0);
   const [startDate, setStartDate]       = useState(project.startDate || "");
   const [plannedEnd, setPlannedEnd]     = useState(project.plannedEnd || "");
@@ -987,6 +986,13 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
   const statusOpts = ["On Track","At Risk","Delayed","Completed","Not Started"];
   const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
+
+  // Actual Progress is derived — WBS rollup if any milestones exist, otherwise
+  // the project's stored legacy progress value. Never user-edited from this panel.
+  const autoProgress = useMemo(() => {
+    const wbs = calcProjectProgressFromWBS({ milestones });
+    return wbs != null ? wbs : (project.progress ?? 0);
+  }, [milestones, project.progress]);
   const TABS = [
     { key: "Status",     icon: "📊" },
     { key: "Financials", icon: "💰" },
@@ -1001,13 +1007,10 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     setSaving(true);
     setSaveError("");
     try {
-      // If the WBS has any milestones, use its weighted progress instead of the
-      // manual slider value. Keeps project.progress in sync with what the user
-      // entered in the Activities tab.
-      const wbsP = calcProjectProgressFromWBS({ milestones });
-      const finalProgress = wbsP != null ? wbsP : progress;
+      // Actual progress is always the derived autoProgress — see definition above.
+      // The Activities tab is the single source of truth.
       await onSubmit(project.id, {
-        status, phase, gate, priority, progress: finalProgress, plannedProgress, startDate, plannedEnd,
+        status, phase, gate, priority, progress: autoProgress, plannedProgress, startDate, plannedEnd,
         roadmapDeadline,
         health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
         milestones, risks, benefits, documents, note,
@@ -1054,18 +1057,45 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
         </div>
         <div>
           <SL>PROGRESS</SL>
-          <div style={{ marginBottom: 16 }}>
+          {/* Actual — READ ONLY, auto from Activities. The Activities tab is the
+              single source of truth; this bar mirrors it so PM/PMO see the
+              current rolled-up % without an editable control that would lie. */}
+          <div style={{ marginBottom: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 6 }}>
-              <span>Actual Progress</span><span style={{ color: T.primary, fontWeight: 900 }}>{progress}%</span>
+              <span>
+                Actual Progress
+                <span style={{ marginLeft: 6, fontSize: 10, fontStyle: "italic", opacity: 0.7 }}>
+                  · auto from Activities
+                </span>
+              </span>
+              <span style={{ color: T.primary, fontWeight: 900 }}>{autoProgress}%</span>
             </div>
-            <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} style={{ width: "100%", accentColor: T.primary, cursor: "pointer" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginTop: 3 }}><span>0%</span><span>50%</span><span>100%</span></div>
+            <div style={{ height: 8, background: T.border, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ width: `${autoProgress}%`, height: "100%", background: T.primary, transition: "width 0.3s" }} />
+            </div>
+            {milestones.length === 0 && (
+              <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 5, opacity: 0.8 }}>
+                Add activities in the Activities tab to drive this automatically.
+              </div>
+            )}
           </div>
+          {/* Planned — MANUAL. Slider for quick adjustment, number input for precision. */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 6 }}>
-              <span>Planned Progress</span><span style={{ color: T.muted, fontWeight: 700 }}>{plannedProgress}%</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: T.muted }}>
+                Planned Progress
+                <span style={{ marginLeft: 6, fontSize: 10, fontStyle: "italic", opacity: 0.7 }}>
+                  · manual
+                </span>
+              </span>
+              <input
+                type="number" min={0} max={100} value={plannedProgress}
+                onChange={e => setPlanned(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                style={{ width: 64, padding: "3px 8px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 12, fontWeight: 700, color: T.muted, background: T.inputBg, textAlign: "right", outline: "none" }}
+              />
             </div>
             <input type="range" min={0} max={100} value={plannedProgress} onChange={e => setPlanned(Number(e.target.value))} style={{ width: "100%", accentColor: T.muted, cursor: "pointer" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginTop: 3 }}><span>0%</span><span>50%</span><span>100%</span></div>
           </div>
         </div>
         <div>
@@ -1091,7 +1121,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
         <div>
           <SL>PERFORMANCE INDICES (AUTO-CALCULATED)</SL>
           {(() => {
-            const r = calcProjectIPIFull({ ...project, budget, actualCost, progress, milestones });
+            const r = calcProjectIPIFull({ ...project, budget, actualCost, progress: autoProgress, milestones });
             const spiV = r.components.spiFinal ?? r.components.spi;
             const cpiV = r.components.cpi;
             const spiC = spiV == null ? T.muted : spiV >= 1 ? "#16a34a" : "#dc2626";
