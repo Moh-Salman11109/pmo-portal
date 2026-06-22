@@ -1372,11 +1372,11 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px 14px", marginBottom: 20, overflowX: "auto" }}>
       <div style={{ fontWeight: 800, fontSize: 13, color: T.text, marginBottom: 12 }}>Gantt Chart</div>
-      <div style={{ minWidth: 520 }}>
+      <div style={{ minWidth: 640 }}>
 
         {/* Month labels */}
         <div style={{ display: "flex", marginBottom: 4 }}>
-          <div style={{ width: 165, flexShrink: 0 }} />
+          <div style={{ width: 280, flexShrink: 0 }} />
           <div style={{ flex: 1, position: "relative", height: 20 }}>
             {ticks.map((t, i) => (
               <div key={i} style={{ position: "absolute", left: `${t.p}%`, transform: "translateX(-50%)", fontSize: 9, color: T.muted, fontWeight: 700, whiteSpace: "nowrap" }}>{t.label}</div>
@@ -1412,7 +1412,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
               background: isMs ? `${T.primary}06` : "transparent",
             }}>
               <div style={{
-                width: 165, flexShrink: 0, paddingRight: 12, paddingLeft: labelPad,
+                width: 280, flexShrink: 0, paddingRight: 12, paddingLeft: labelPad,
                 fontSize: isMs ? 12 : 10.5,
                 fontWeight: isMs ? 800 : 500,
                 color: sp == null && ep == null ? T.muted : T.text,
@@ -1445,11 +1445,18 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
                       </div>
                     )
                 }
-                {m.date && ep != null && (
-                  <div style={{ position: "absolute", left: `calc(${ep}% + 6px)`, top: isMs ? 11 : 9, fontSize: 9, color: T.muted, whiteSpace: "nowrap", zIndex: 4 }}>
-                    {new Date(m.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                  </div>
-                )}
+                {m.date && ep != null && (() => {
+                  // Diamond corners stick out ~14px past the row position after
+                  // the 45° rotation — bars don't. Bump the date offset for
+                  // milestone diamonds so the label doesn't overlap the marker.
+                  const isDiamond = isMs && !hasDuration;
+                  const dx = isDiamond ? 18 : 6;
+                  return (
+                    <div style={{ position: "absolute", left: `calc(${ep}% + ${dx}px)`, top: isMs ? 11 : 9, fontSize: 9, color: T.muted, whiteSpace: "nowrap", zIndex: 4 }}>
+                      {new Date(m.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );
@@ -1458,7 +1465,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
         {/* Today label */}
         {todayPct != null && (
           <div style={{ display: "flex" }}>
-            <div style={{ width: 165, flexShrink: 0 }} />
+            <div style={{ width: 280, flexShrink: 0 }} />
             <div style={{ flex: 1, position: "relative", height: 16 }}>
               <div style={{ position: "absolute", left: `${todayPct}%`, transform: "translateX(-50%)", fontSize: 9, color: T.accent, fontWeight: 800, whiteSpace: "nowrap" }}>▲ Today</div>
             </div>
@@ -1467,7 +1474,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
 
         {/* Legend */}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
-          <div style={{ width: 165, flexShrink: 0 }} />
+          <div style={{ width: 280, flexShrink: 0 }} />
           {[["#3b82f6","Completed"],["#16a34a","In Progress"],["#ef4444","Delayed / Overdue"],["#94a3b8","Upcoming"]].map(([col, lbl]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
               <div style={{ width: 14, height: 8, background: col, borderRadius: 2 }} />
