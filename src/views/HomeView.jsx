@@ -303,7 +303,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
             const text  = delta > 0 ? `▲ +${delta} vs last month` : delta < 0 ? `▼ ${delta} vs last month` : "— unchanged vs last month";
             return <div style={{ fontSize: 12, color, fontWeight: 600 }}>{text}</div>;
           })()}
-          <div style={{ marginTop: 8, fontSize: 11, color: T.muted }}>SPI 50% · CPI 25% · Docs 25%</div>
+          <div style={{ marginTop: 8, fontSize: 11, color: T.muted }}>SPI 50% · CPI 25% · MCI 25%</div>
         </div>
 
         <div
@@ -446,8 +446,8 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
 
         {/* Department IPI Scores */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }} title="Integrated Performance Index: Schedule Performance (SPI) × 50% + Cost Performance (CPI) × 25% + Document Compliance × 25%">Department IPI Scores</h3>
-          <p style={{ margin: "0 0 16px", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + Docs×25% — delivery performance index</p>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }} title="Integrated Performance Index: Schedule Performance (SPI) × 50% + Cost Performance (CPI) × 25% + Maturity/Compliance Index (MCI) × 25%">Department IPI Scores</h3>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: T.muted }}>SPI×50% + CPI×25% + MCI×25% — delivery performance index</p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
@@ -463,10 +463,10 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
           </ResponsiveContainer>
           <div style={{ display: "flex", gap: 20, marginTop: 12, flexWrap: "wrap" }}>
             {[
-              { label: "Excellent 90+", color: "#15803d" },
-              { label: "Good 70+",      color: "#003932" },
-              { label: "Fair 55+",      color: "#854d0e" },
-              { label: "Poor <55",      color: "#991b1b" },
+              { label: "On Track 100+",  color: "#15803d" },
+              { label: "Watch 90–99",    color: "#854d0e" },
+              { label: "At Risk 70–89",  color: "#c05621" },
+              { label: "Critical <70",   color: "#991b1b" },
             ].map(b => (
               <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: b.color }} />
@@ -581,7 +581,7 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 22, fontWeight: 900, color: T.primary }}>{stats.health}%</div>
-                  <div style={{ fontSize: 10, color: T.muted }}>health</div>
+                  <div style={{ fontSize: 10, color: T.muted }}>avg progress</div>
                 </div>
               </div>
               <Progress value={stats.health} color={stats.health > 70 ? T.accent : stats.health > 50 ? "#eab308" : "#dc2626"} height={6} />

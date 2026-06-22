@@ -1584,13 +1584,31 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 </button>
               )}
             </div>
-            <div style={{ fontSize: 32, fontWeight: 900, color: T.accent }}>{effectiveProgress}%</div>
-            <div style={{ fontSize: 12, opacity: 0.6 }}>Overall Progress{wbsProgress != null ? " · auto from WBS" : ""}</div>
-            {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
+            {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
           </div>
         </div>
-        {/* IPI banner row */}
-        <div style={{ display: "flex", gap: 10, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {/* Performance banner — Progress + IPI side by side, equal billing */}
+        <div style={{ display: "flex", gap: 14, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "stretch", flexWrap: "wrap" }}>
+          {/* Progress block — promoted out of the corner, given equal visual weight to IPI */}
+          <div style={{
+            background: "rgba(0,184,148,0.10)",
+            border: "1px solid rgba(0,184,148,0.25)",
+            borderRadius: 10,
+            padding: "10px 16px",
+            minWidth: 180,
+            display: "flex", flexDirection: "column", justifyContent: "center",
+          }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 30, fontWeight: 900, color: T.accent, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{effectiveProgress}%</span>
+              <span style={{ fontSize: 10, color: T.accent, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.85 }}>Progress</span>
+            </div>
+            <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${effectiveProgress}%`, background: T.accent, borderRadius: 3, transition: "width 0.4s" }} />
+            </div>
+            <div style={{ fontSize: 10, opacity: 0.65, marginTop: 6, color: T.headerText }}>
+              {wbsProgress != null ? "Auto-rolled from Activities" : "Manual entry"}
+            </div>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
             <div style={{ background: ipiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
               <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi == null ? "—" : countedIPI}</div>
