@@ -1584,11 +1584,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       kidsOf(t.id).forEach(k => ordered.push({ ...k, _isMs: false }));
     });
 
+    // Gantt bar palette — sourced from the Tree brand palette
+    // (Canopy = stable/done, Sea = alive/in-flight, Maroon = gravity/late, Moss = waiting)
     const sc = {
-      "Completed":   { fill: "#3b82f6", border: "#1e40af", txt: "#fff" },
-      "In Progress": { fill: "#16a34a", border: "#15803d", txt: "#fff" },
-      "Delayed":     { fill: "#dc2626", border: "#991b1b", txt: "#fff" },
-      "Upcoming":    { fill: "#cbd5e1", border: "#94a3b8", txt: "#0d1f1c" },
+      "Completed":   { fill: "#003932", border: "#001f1a", txt: "#fff" },     // Canopy
+      "In Progress": { fill: "#00FFB3", border: "#00b894", txt: "#003932" },  // Sea — dark txt for contrast
+      "Delayed":     { fill: "#490300", border: "#2c0200", txt: "#fff" },     // Maroon
+      "Upcoming":    { fill: "#A1B9AB", border: "#7a9485", txt: "#003932" },  // Moss
     };
     const rowsHtml = ordered.length === 0
       ? `<div class="empty">No activities recorded yet.</div>`
@@ -1619,12 +1621,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         return (ord[b.level] || 0) - (ord[a.level] || 0);
       })
       .slice(0, 6);
+    // Severity chips — Tree palette mapping (Maroon = critical, Orange = high,
+    // Moss = medium, Sea-tint = low). Light tinted backgrounds for readability.
     const riskColor = (lvl) => ({
-      Critical: { bg: "#fee2e2", txt: "#991b1b" },
-      High:     { bg: "#fed7aa", txt: "#9a3412" },
-      Medium:   { bg: "#fef3c7", txt: "#92400e" },
-      Low:      { bg: "#dcfce7", txt: "#15803d" },
-    }[lvl] || { bg: "#f3f4f6", txt: "#475569" });
+      Critical: { bg: "#f0d4d0", txt: "#490300" },   // Maroon tint
+      High:     { bg: "#ffd9c2", txt: "#FF5000" },   // Orange tint
+      Medium:   { bg: "#dde7df", txt: "#3a5547" },   // Moss tint
+      Low:      { bg: "#ccfff0", txt: "#003932" },   // Sea tint
+    }[lvl] || { bg: "#C9D5C9", txt: "#475569" });
     const riskRows = openRisks.length === 0
       ? `<tr><td colspan="3" class="empty-cell">No open risks.</td></tr>`
       : openRisks.map(r => {
@@ -1656,14 +1660,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       ? `<div class="empty-sub">Nothing scheduled in the next 14 days.</div>`
       : upcoming.map(m => `<div class="bullet up">○ <span>${esc(m.name)}</span> <em>${fmtDate(m.date)}</em></div>`).join("");
 
-    // ── Status chip
+    // Status chip — Tree palette mapping
     const statusStyle = {
-      "On Track":   { bg: "#dcfce7", txt: "#15803d", dot: "#16a34a" },
-      "At Risk":    { bg: "#ffedd5", txt: "#9a3412", dot: "#ea580c" },
-      "Delayed":    { bg: "#fee2e2", txt: "#991b1b", dot: "#dc2626" },
-      "Completed":  { bg: "#dbeafe", txt: "#1e40af", dot: "#3b82f6" },
-      "Not Started":{ bg: "#f3f4f6", txt: "#475569", dot: "#94a3b8" },
-    }[project.status] || { bg: "#f3f4f6", txt: "#475569", dot: "#94a3b8" };
+      "On Track":   { bg: "#ccfff0", txt: "#003932", dot: "#00FFB3" },   // Sea
+      "At Risk":    { bg: "#ffd9c2", txt: "#FF5000", dot: "#FF5000" },   // Orange
+      "Delayed":    { bg: "#f0d4d0", txt: "#490300", dot: "#490300" },   // Maroon
+      "Completed":  { bg: "#ccfff0", txt: "#003932", dot: "#003932" },   // Sea-tint + Canopy
+      "Not Started":{ bg: "#C9D5C9", txt: "#3a5547", dot: "#A1B9AB" },   // Lichen + Moss
+    }[project.status] || { bg: "#C9D5C9", txt: "#3a5547", dot: "#A1B9AB" };
 
     // ── Budget formatting
     const fmtSAR = (n) => "SAR " + (Number(n) || 0).toLocaleString("en-US");
@@ -1678,74 +1682,77 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         @page { size: A4 landscape; margin: 0; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
-        .cover { background: linear-gradient(135deg, #001f1a 0%, #003932 50%, #007a62 100%); color: #fff; padding: 28px 40px; display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; }
-        .cover::after { content: ''; position: absolute; bottom: -60px; right: -60px; width: 220px; height: 220px; background: rgba(0,184,148,0.10); border-radius: 50%; }
-        .cover .left .dept { font-size: 11px; color: rgba(110,231,183,0.85); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+        /* Cover uses pure Canopy gradient with a Sea-tint halo */
+        .cover { background: linear-gradient(135deg, #001f1a 0%, #003932 55%, #0a5448 100%); color: #fff; padding: 28px 40px; display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; border-bottom: 3px solid #00FFB3; }
+        .cover::after { content: ''; position: absolute; bottom: -60px; right: -60px; width: 220px; height: 220px; background: rgba(0,255,179,0.12); border-radius: 50%; }
+        .cover .left .dept { font-size: 11px; color: #00FFB3; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; opacity: 0.85; }
         .cover .left h1 { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px; }
         .cover .left .sub { opacity: 0.7; font-size: 11px; }
         .cover .right { position: relative; z-index: 2; }
         .status-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 18px; border-radius: 22px; font-size: 13px; font-weight: 800; background: ${statusStyle.bg}; color: ${statusStyle.txt}; }
         .status-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: ${statusStyle.dot}; }
 
-        .kpi-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; background: #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+        /* KPI strip — dividers in Lichen, progress fill in Sea */
+        .kpi-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; background: #C9D5C9; border-bottom: 1px solid #C9D5C9; }
         .kpi-tile { background: #fff; padding: 14px 16px; }
-        .kpi-tile .lbl { font-size: 9px; color: #6b7280; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
-        .kpi-tile .val { font-size: 14px; font-weight: 800; color: #0d1f1c; line-height: 1.2; }
+        .kpi-tile .lbl { font-size: 9px; color: #3a5547; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+        .kpi-tile .val { font-size: 14px; font-weight: 800; color: #003932; line-height: 1.2; }
         .kpi-tile .val.mono { font-family: 'JetBrains Mono', monospace; }
-        .kpi-tile .sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
-        .progress-mini { height: 5px; background: #e2e8f0; border-radius: 3px; margin-top: 5px; overflow: hidden; }
-        .progress-mini .fill { height: 100%; background: #00b894; border-radius: 3px; }
+        .kpi-tile .sub { font-size: 10px; color: #7a9485; margin-top: 2px; }
+        .progress-mini { height: 5px; background: #C9D5C9; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+        .progress-mini .fill { height: 100%; background: #00FFB3; border-radius: 3px; }
 
         section { padding: 22px 40px 0; }
         section .section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; border-bottom: 2px solid #003932; padding-bottom: 6px; }
         section h2 { font-size: 13px; font-weight: 900; color: #003932; letter-spacing: 0.06em; text-transform: uppercase; }
-        section h2 .icon { color: #00b894; }
-        section .head-meta { margin-left: auto; font-size: 10px; color: #6b7280; }
+        section h2 .icon { color: #00FFB3; }
+        section .head-meta { margin-left: auto; font-size: 10px; color: #7a9485; }
 
-        /* ─── TIMELINE ─── */
-        .timeline { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; overflow: hidden; }
+        /* ─── TIMELINE — Lichen borders, Sea today marker, Moss grid ─── */
+        .timeline { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; overflow: hidden; }
         .timeline .axis { display: flex; margin-bottom: 6px; padding-left: 200px; position: relative; height: 14px; }
-        .timeline .axis .tick { position: absolute; transform: translateX(-50%); font-size: 9px; color: #94a3b8; font-weight: 600; }
-        .timeline .row { display: flex; align-items: center; height: 22px; border-top: 1px solid #f1f5f9; }
-        .timeline .row.ms { background: rgba(0,57,50,0.03); height: 24px; font-weight: 700; }
-        .timeline .row.act .label { padding-left: 26px; font-size: 10px; font-weight: 500; color: #475569; }
-        .timeline .row .label { width: 200px; flex-shrink: 0; padding: 0 12px 0 14px; font-size: 11px; color: #0d1f1c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .timeline .axis .tick { position: absolute; transform: translateX(-50%); font-size: 9px; color: #7a9485; font-weight: 600; }
+        .timeline .row { display: flex; align-items: center; height: 22px; border-top: 1px solid #ecf2ed; }
+        .timeline .row.ms { background: rgba(0,57,50,0.04); height: 24px; font-weight: 700; }
+        .timeline .row.act .label { padding-left: 26px; font-size: 10px; font-weight: 500; color: #3a5547; }
+        .timeline .row .label { width: 200px; flex-shrink: 0; padding: 0 12px 0 14px; font-size: 11px; color: #003932; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .timeline .row .track { flex: 1; position: relative; height: 100%; min-width: 400px; }
-        .timeline .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #f1f5f9; }
-        .timeline .today { position: absolute; top: 0; bottom: 0; width: 2px; background: #00b894; opacity: 0.7; z-index: 3; }
+        .timeline .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #ecf2ed; }
+        .timeline .today { position: absolute; top: 0; bottom: 0; width: 2px; background: #00FFB3; box-shadow: 0 0 4px rgba(0,255,179,0.6); z-index: 3; }
         .timeline .bar { position: absolute; top: 5px; height: 14px; border: 1.5px solid; border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 1; min-width: 4px; }
         .timeline .bar-pct { font-size: 8px; font-weight: 800; }
         .timeline .diamond { position: absolute; top: 4px; width: 16px; height: 16px; border: 2px solid; border-radius: 3px; transform: rotate(45deg); z-index: 2; }
-        .empty { padding: 30px; text-align: center; color: #94a3b8; font-style: italic; }
+        .empty { padding: 30px; text-align: center; color: #7a9485; font-style: italic; }
 
         /* ─── BOTTOM GRID ─── */
         .bottom-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; padding: 22px 40px; }
 
-        .risk-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+        .risk-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; }
         .risk-card table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .risk-card th { background: #f8fafc; padding: 7px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
-        .risk-card td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        .risk-card th { background: #f4f7f4; padding: 7px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #3a5547; text-transform: uppercase; letter-spacing: 0.04em; }
+        .risk-card td { padding: 8px 10px; border-bottom: 1px solid #ecf2ed; vertical-align: top; }
         .risk-card tr:last-child td { border-bottom: none; }
         .sev { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 10px; font-weight: 800; }
-        .risk-title { font-weight: 600; color: #0d1f1c; }
-        .risk-mit { color: #6b7280; font-size: 10.5px; }
-        .empty-cell { text-align: center; color: #94a3b8; font-style: italic; padding: 18px 0; }
+        .risk-title { font-weight: 600; color: #003932; }
+        .risk-mit { color: #3a5547; font-size: 10.5px; }
+        .empty-cell { text-align: center; color: #7a9485; font-style: italic; padding: 18px 0; }
 
         .right-stack { display: flex; flex-direction: column; gap: 14px; }
-        .mini-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+        .mini-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; }
         .mini-card .mini-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1.5px solid; }
-        .mini-card.completed .mini-head { border-bottom-color: #3b82f6; }
-        .mini-card.upcoming .mini-head { border-bottom-color: #16a34a; }
-        .mini-card .mini-head h3 { font-size: 11px; font-weight: 800; color: #0d1f1c; letter-spacing: 0.08em; text-transform: uppercase; }
+        .mini-card.completed .mini-head { border-bottom-color: #003932; }   /* Canopy */
+        .mini-card.upcoming .mini-head  { border-bottom-color: #00FFB3; }   /* Sea */
+        .mini-card .mini-head h3 { font-size: 11px; font-weight: 800; color: #003932; letter-spacing: 0.08em; text-transform: uppercase; }
         .mini-card .mini-head .ic { font-size: 12px; }
-        .bullet { display: flex; align-items: baseline; gap: 8px; font-size: 11px; color: #0d1f1c; padding: 4px 0; }
-        .bullet { color: #3b82f6; }
-        .bullet.up { color: #16a34a; }
-        .bullet span { color: #0d1f1c; flex: 1; font-weight: 500; }
-        .bullet em { color: #94a3b8; font-style: normal; font-size: 10px; font-family: 'JetBrains Mono', monospace; }
-        .empty-sub { color: #94a3b8; font-style: italic; font-size: 10.5px; padding: 6px 0; }
+        .mini-card.completed .mini-head .ic { color: #003932; }
+        .mini-card.upcoming .mini-head .ic  { color: #00b894; }
+        .bullet { display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 4px 0; color: #003932; }
+        .bullet.up { color: #00b894; }
+        .bullet span { color: #003932; flex: 1; font-weight: 500; }
+        .bullet em { color: #7a9485; font-style: normal; font-size: 10px; font-family: 'JetBrains Mono', monospace; }
+        .empty-sub { color: #7a9485; font-style: italic; font-size: 10.5px; padding: 6px 0; }
 
-        .footer { padding: 18px 40px 22px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; color: #94a3b8; font-size: 10px; margin-top: 22px; }
+        .footer { padding: 18px 40px 22px; border-top: 1px solid #C9D5C9; display: flex; justify-content: space-between; color: #7a9485; font-size: 10px; margin-top: 22px; }
       </style>
     </head><body>
 
