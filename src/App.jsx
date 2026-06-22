@@ -1646,7 +1646,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               )}
             </div>
           </div>
-          <div style={{ background: ipiC.bg, color: ipiC.color, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 800 }}>{ipiC.label}</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: infoCols, gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
           {[
@@ -3567,14 +3566,15 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: T.headerText, marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
           <div style={{ fontSize: 12, color: T.headerText, opacity: 0.7, marginBottom: 12 }}>
-            Budget × Priority weighted across all active projects — SPI (auto from milestones) ×50% + CPI (auto from budget) ×25% + MCI ×25%
+            Budget × Priority weighted across all active projects — SPI (auto from activities) ×50% + CPI (auto from budget) ×25% + MCI (compliance) ×25%
           </div>
-          <div style={{ display: "flex", gap: 20 }}>
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
             {[
-              { label: "Excellent (85–100)", color: "#15803d" },
-              { label: "Good (70–84)",       color: "#0891b2" },
-              { label: "Fair (55–69)",       color: "#854d0e" },
-              { label: "Poor (<55)",         color: "#991b1b" },
+              { label: "On Track 100+",  color: "#15803d" },
+              { label: "Watch 90–99",    color: "#854d0e" },
+              { label: "At Risk 70–89",  color: "#c05621" },
+              { label: "Critical <70",   color: "#991b1b" },
+              { label: "No Data",        color: "#6b7280" },
             ].map(b => (
               <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: b.color }} />
@@ -3595,7 +3595,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
                   .replace("Operations", "Ops")
                   .replace("Performance", "Perf")
                   .split(" ")[0],
-                ipi: d.deptIPI ?? 0,
+                ipi: d.deptIPI,
               }))}
               barSize={15}
               margin={{ top: 4, right: 4, left: 0, bottom: 28 }}
@@ -3611,10 +3611,10 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
                 height={44}
               />
               <YAxis domain={[0, 100]} hide />
-              <Tooltip formatter={v => [`IPI: ${v}`, ""]} {...ttStyle()} />
+              <Tooltip formatter={v => [v == null ? "No measurable IPI" : `IPI: ${v}`, ""]} {...ttStyle()} />
               <Bar dataKey="ipi" radius={[3, 3, 0, 0]}>
                 {deptData.map((d, i) => (
-                  <Cell key={i} fill={ipiColor(d.deptIPI ?? 0).color} />
+                  <Cell key={i} fill={ipiColor(d.deptIPI).color} />
                 ))}
               </Bar>
             </BarChart>
@@ -3667,29 +3667,35 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
                 <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Project Status</span>
                 <span style={{ fontSize: 11, color: T.muted }}>{d.stats.total} total</span>
               </div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                {d.stats.total > 0 && [
-                  { count: d.stats.active, color: "#16a34a", label: "On Track" },
-                  { count: d.stats.total - d.stats.active - d.stats.delayed - d.stats.completed, color: "#eab308", label: "At Risk" },
-                  { count: d.stats.delayed, color: "#dc2626", label: "Delayed" },
-                  { count: d.stats.completed, color: "#3b82f6", label: "Done" },
-                ].map(({ count, color, label }) => count > 0 && (
-                  <div key={label} title={`${label}: ${count}`} style={{ height: 6, flex: count, background: color, borderRadius: 4 }} />
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4 }}>
-                {[
-                  { label: "On Track", val: d.stats.active, color: "#16a34a" },
-                  { label: "At Risk", val: d.stats.total - d.stats.active - d.stats.delayed - d.stats.completed, color: "#eab308" },
-                  { label: "Delayed", val: d.stats.delayed, color: "#dc2626" },
-                  { label: "Done", val: d.stats.completed, color: "#3b82f6" },
-                ].map(({ label, val, color }) => (
-                  <div key={label} style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color }}>{val}</div>
-                    <div style={{ fontSize: 9, color: T.muted }}>{label}</div>
-                  </div>
-                ))}
-              </div>
+              {(() => {
+                // stats.active = onTrack + atRisk. We display each separately
+                // so the breakdown is honest. Not Started = anything left over.
+                const notStarted = Math.max(0, d.stats.total - d.stats.onTrack - d.stats.atRisk - d.stats.delayed - d.stats.completed);
+                const buckets = [
+                  { label: "On Track",    val: d.stats.onTrack,   color: "#16a34a" },
+                  { label: "At Risk",     val: d.stats.atRisk,    color: "#ea580c" },
+                  { label: "Delayed",     val: d.stats.delayed,   color: "#dc2626" },
+                  { label: "Done",        val: d.stats.completed, color: "#3b82f6" },
+                  { label: "Not Started", val: notStarted,        color: "#94a3b8" },
+                ];
+                return (
+                  <>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {d.stats.total > 0 && buckets.map(({ val, color, label }) => val > 0 && (
+                        <div key={label} title={`${label}: ${val}`} style={{ height: 6, flex: val, background: color, borderRadius: 4 }} />
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: `repeat(${notStarted > 0 ? 5 : 4}, 1fr)`, gap: 4 }}>
+                      {buckets.filter(b => !(b.label === "Not Started" && b.val === 0)).map(({ label, val, color }) => (
+                        <div key={label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color }}>{val}</div>
+                          <div style={{ fontSize: 9, color: T.muted }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Risk & Issues row */}
