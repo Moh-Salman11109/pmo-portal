@@ -1860,31 +1860,28 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     <div style={{ padding: pad, maxWidth: 1400 }}>
       {/* Project Header */}
       <div style={{ background: T.headerBg, borderRadius: 16, padding: bp === "mobile" ? "16px 18px" : "24px 28px", marginBottom: 24, color: T.headerText }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <span style={{ background: T.accent, color: T.accentText, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
-              {(() => { const sla = getGateSLA(project); return <span style={{ background: sla && sla.days > 30 ? "rgba(220,38,38,0.35)" : "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>{project.gate}{sla && <span style={{ fontSize: 9, fontWeight: 800, opacity: 0.9 }}>· Day {sla.days}</span>}</span>; })()}
-              <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
-              <TypeBadge type={project.projectType || "Project"} />
-              {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>🗺 Roadmap</span>}
-            </div>
-            <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
-            <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
+        {/* Top toolbar row — badges left, status + action buttons right.
+            Sits on its own line so the long description below doesn't
+            squeeze the buttons into a vertical waterfall. */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ background: T.accent, color: T.accentText, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{project.code}</span>
+            {(() => { const sla = getGateSLA(project); return <span style={{ background: sla && sla.days > 30 ? "rgba(220,38,38,0.35)" : "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>{project.gate}{sla && <span style={{ fontSize: 9, fontWeight: 800, opacity: 0.9 }}>· Day {sla.days}</span>}</span>; })()}
+            <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
+            <TypeBadge type={project.projectType || "Project"} />
+            {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>🗺 Roadmap</span>}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-            {/* Status chip — own line so it doesn't compete with the action stack */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <Badge status={project.status} />
-            {/* Action row — horizontal, uniform height, wraps on narrow screens */}
             {(() => {
-              const H = 36;   // shared height across all buttons
+              const H = 36;
               const baseBtn = {
                 height: H, padding: "0 14px", borderRadius: 8, fontSize: 12, cursor: "pointer",
                 boxSizing: "border-box", whiteSpace: "nowrap",
                 display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
               };
               return (
-                <div style={{ display: "flex", flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <>
                   {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
                     <button onClick={() => setShowUpdate(true)}
                       style={{ ...baseBtn, background: T.accent, color: T.accentText, border: "1px solid transparent", fontWeight: 800 }}>
@@ -1907,12 +1904,19 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     style={{ ...baseBtn, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontWeight: 600 }}>
                     📄 Print Report
                   </button>
-                </div>
+                </>
               );
             })()}
-            {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 2, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a" }}>Updated {d}d ago</div>; })()}
           </div>
         </div>
+        {/* Title + description — full width on their own line.
+            Description renders only when set, otherwise the title sits flush
+            against the performance banner with no empty void. */}
+        <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 900 }}>{project.name}</h1>
+        {project.objective && project.objective.trim() && (
+          <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
+        )}
+        {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
         {/* Performance banner — Progress + IPI side by side, equal billing */}
         <div style={{ display: "flex", gap: 14, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "stretch", flexWrap: "wrap" }}>
           {/* Progress block — promoted out of the corner, given equal visual weight to IPI */}
