@@ -1607,9 +1607,15 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const visual = (m._isMs && !hasDuration)
           ? `<div class="diamond" style="left:calc(${left}% - 8px); background:${c.fill}; border-color:${c.border}"></div>`
           : `<div class="bar" style="left:${left}%; width:${width}%; background:${c.fill}; border-color:${c.border}"><span class="bar-pct" style="color:${c.txt}">${pct}%</span></div>`;
+        // Past-fade overlay: a soft Lichen mist over the days that have already
+        // passed. Sits BELOW the bars so completed work stays crisp; thicker in
+        // the distant past, fading to transparent right at the Today marker —
+        // gives the timeline a real sense of time flowing forward.
+        const pastFade = todayPct > 0.5
+          ? `<div class="past-fade" style="width:${todayPct}%"></div>` : "";
         return `<div class="row ${m._isMs ? "ms" : "act"}">
           <div class="label" title="${esc(m.name)}">${m._isMs ? "📍" : "↳"} ${esc(m.name) || "(unnamed)"}</div>
-          <div class="track">${ticks.map(t => `<div class="grid" style="left:${t.p}%"></div>`).join("")}${visual}<div class="today" style="left:${todayPct}%"></div></div>
+          <div class="track">${pastFade}${ticks.map(t => `<div class="grid" style="left:${t.p}%"></div>`).join("")}${visual}<div class="today" style="left:${todayPct}%"></div></div>
         </div>`;
       }).join("");
 
@@ -1708,20 +1714,42 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         section h2 .icon { color: #00FFB3; }
         section .head-meta { margin-left: auto; font-size: 10px; color: #7a9485; }
 
-        /* ─── TIMELINE — Lichen borders, Sea today marker, Moss grid ─── */
+        /* ─── TIMELINE — Lichen borders, Sea today marker, Moss grid, past-fade ─── */
         .timeline { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; overflow: hidden; }
-        .timeline .axis { display: flex; margin-bottom: 6px; padding-left: 200px; position: relative; height: 14px; }
+        .timeline .axis { display: flex; margin-bottom: 6px; padding-left: 260px; position: relative; height: 14px; }
         .timeline .axis .tick { position: absolute; transform: translateX(-50%); font-size: 9px; color: #7a9485; font-weight: 600; }
-        .timeline .row { display: flex; align-items: center; height: 22px; border-top: 1px solid #ecf2ed; }
-        .timeline .row.ms { background: rgba(0,57,50,0.04); height: 24px; font-weight: 700; }
-        .timeline .row.act .label { padding-left: 26px; font-size: 10px; font-weight: 500; color: #3a5547; }
-        .timeline .row .label { width: 200px; flex-shrink: 0; padding: 0 12px 0 14px; font-size: 11px; color: #003932; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .timeline .row .track { flex: 1; position: relative; height: 100%; min-width: 400px; }
-        .timeline .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #ecf2ed; }
-        .timeline .today { position: absolute; top: 0; bottom: 0; width: 2px; background: #00FFB3; box-shadow: 0 0 4px rgba(0,255,179,0.6); z-index: 3; }
-        .timeline .bar { position: absolute; top: 5px; height: 14px; border: 1.5px solid; border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 1; min-width: 4px; }
+        .timeline .row { display: flex; align-items: stretch; min-height: 26px; border-top: 1px solid #ecf2ed; }
+        .timeline .row.ms { background: rgba(0,57,50,0.04); min-height: 28px; font-weight: 700; }
+        .timeline .row.act .label { padding: 6px 12px 6px 26px; font-size: 10px; font-weight: 500; color: #3a5547; }
+        /* Label column: widened + allow up to 2 lines for long milestone names */
+        .timeline .row .label {
+          width: 260px; flex-shrink: 0; padding: 6px 12px 6px 14px;
+          font-size: 11px; color: #003932; line-height: 1.3;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden; text-overflow: ellipsis;
+        }
+        .timeline .row .track { flex: 1; position: relative; min-width: 400px; overflow: hidden; }
+        /* Past-fade: Lichen mist over days that have already passed. Sits at
+           z-index 0 so bars (z:1) and diamonds (z:2) stay on top, crisp. The
+           gradient fades to transparent right at the Today line. */
+        .timeline .past-fade {
+          position: absolute; top: 0; bottom: 0; left: 0;
+          background: linear-gradient(90deg,
+            rgba(161, 185, 171, 0.32) 0%,
+            rgba(161, 185, 171, 0.20) 40%,
+            rgba(161, 185, 171, 0.08) 80%,
+            rgba(161, 185, 171, 0.00) 100%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .timeline .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #ecf2ed; z-index: 0; }
+        .timeline .today {
+          position: absolute; top: -2px; bottom: -2px; width: 2px;
+          background: #00FFB3; box-shadow: 0 0 6px rgba(0,255,179,0.7); z-index: 4;
+        }
+        .timeline .bar { position: absolute; top: 6px; height: 14px; border: 1.5px solid; border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 1; min-width: 4px; }
         .timeline .bar-pct { font-size: 8px; font-weight: 800; }
-        .timeline .diamond { position: absolute; top: 4px; width: 16px; height: 16px; border: 2px solid; border-radius: 3px; transform: rotate(45deg); z-index: 2; }
+        .timeline .diamond { position: absolute; top: 6px; width: 16px; height: 16px; border: 2px solid; border-radius: 3px; transform: rotate(45deg); z-index: 2; }
         .empty { padding: 30px; text-align: center; color: #7a9485; font-style: italic; }
 
         /* ─── BOTTOM GRID ─── */
@@ -1814,7 +1842,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <span class="head-meta">${ordered.length} item${ordered.length === 1 ? "" : "s"} · ▾ Today</span>
         </div>
         <div class="timeline">
-          ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:calc(200px + ${t.p}% * (100% - 200px) / 100%)">${t.label}</div>`).join("")}</div>` : ""}
+          ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:calc(260px + (100% - 260px) * ${t.p} / 100)">${t.label}</div>`).join("")}</div>` : ""}
           ${rowsHtml}
         </div>
       </section>
