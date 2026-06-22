@@ -4339,7 +4339,7 @@ const STATUS_CHIP = {
   Delayed:       { bg: "#fee2e2", text: "#991b1b" },
 };
 
-const MilestoneRow = ({ item, isActivity, items, upd, remove }) => {
+const MilestoneRow = ({ item, isActivity, items, upd, remove, move }) => {
   const T = useT();
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
@@ -4347,6 +4347,23 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove }) => {
   const kids = items.filter(i => i.parentId === item.id);
   const autoProgress = !isActivity && kids.length > 0 ? milestoneProgress(item, items) : null;
   const progress = autoProgress != null ? autoProgress : (item.progress ?? 0);
+  // Sibling position so we can disable the move buttons at the edges
+  const siblings = items.filter(x => (x.parentId || null) === (item.parentId || null));
+  const sibIdx = siblings.findIndex(x => x.id === item.id);
+  const canUp = sibIdx > 0;
+  const canDown = sibIdx < siblings.length - 1;
+  const arrowBtn = (enabled) => ({
+    background: enabled ? T.bg : "transparent",
+    border: `1px solid ${T.border}`,
+    borderRadius: 6,
+    cursor: enabled ? "pointer" : "not-allowed",
+    color: enabled ? T.text : T.muted,
+    fontWeight: 800,
+    fontSize: 10,
+    padding: "4px 8px",
+    opacity: enabled ? 1 : 0.35,
+    lineHeight: 1,
+  });
   return (
     <div style={{
       background: isActivity ? T.surface : T.bg,
@@ -4364,7 +4381,11 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove }) => {
           placeholder={isActivity ? "Activity name *" : "Milestone name *"}
           style={{ ...s, fontWeight: 600 }} />
         <span style={{ background: c.bg, color: c.text, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{item.status}</span>
-        <button onClick={() => remove(item.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px" }}>×</button>
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <button onClick={() => canUp && move(item.id, "up")} title="Move up" disabled={!canUp} style={arrowBtn(canUp)}>▲</button>
+          <button onClick={() => canDown && move(item.id, "down")} title="Move down" disabled={!canDown} style={arrowBtn(canDown)}>▼</button>
+          <button onClick={() => remove(item.id)} title="Remove" style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px", marginLeft: 2 }}>×</button>
+        </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
         <div>
@@ -4430,6 +4451,25 @@ const MilestoneListEditor = ({ items, onChange }) => {
     onChange(items.filter(m => m.id !== id && m.parentId !== id));
   };
   const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
+  // Reorder among siblings: a top-level milestone swaps with another top-level
+  // milestone; an activity swaps with another activity under the same parent.
+  // All downstream views (Activities tab, Gantt, Print Report) re-group by
+  // parent at render time, so the swap propagates cleanly everywhere.
+  const move = (id, dir) => {
+    const item = items.find(x => x.id === id);
+    if (!item) return;
+    const parentKey = item.parentId || null;
+    const siblings = items.filter(x => (x.parentId || null) === parentKey);
+    const sibIdx = siblings.findIndex(x => x.id === id);
+    const targetSibIdx = dir === "up" ? sibIdx - 1 : sibIdx + 1;
+    if (targetSibIdx < 0 || targetSibIdx >= siblings.length) return;
+    const targetId = siblings[targetSibIdx].id;
+    const aIdx = items.findIndex(x => x.id === id);
+    const bIdx = items.findIndex(x => x.id === targetId);
+    const next = [...items];
+    [next[aIdx], next[bIdx]] = [next[bIdx], next[aIdx]];
+    onChange(next);
+  };
 
   return (
     <div>
@@ -4443,9 +4483,9 @@ const MilestoneListEditor = ({ items, onChange }) => {
       {milestones.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet — start by adding a milestone, then add activities under it</div>}
       {milestones.map(m => (
         <div key={m.id} style={{ marginBottom: 12 }}>
-          <MilestoneRow item={m} items={items} upd={upd} remove={remove} />
+          <MilestoneRow item={m} items={items} upd={upd} remove={remove} move={move} />
           <div style={{ marginLeft: 24, paddingLeft: 12, borderLeft: `2px dashed ${T.border}` }}>
-            {childrenOf(m.id).map(a => <MilestoneRow key={a.id} item={a} isActivity items={items} upd={upd} remove={remove} />)}
+            {childrenOf(m.id).map(a => <MilestoneRow key={a.id} item={a} isActivity items={items} upd={upd} remove={remove} move={move} />)}
             <button onClick={() => addActivity(m.id)}
               style={{ background: "transparent", border: `1px dashed ${T.accent}`, color: T.accent, borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
               + Add Activity under "{m.name || "this milestone"}"
