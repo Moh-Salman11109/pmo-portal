@@ -1333,8 +1333,8 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   }
 
   const SC = {
-    Completed:     { track: "#dcfce7", fill: "#16a34a", border: "#15803d", lbl: "#15803d" },
-    "In Progress": { track: "#fef9c3", fill: "#eab308", border: "#d97706", lbl: "#854d0e" },
+    Completed:     { track: "#dbeafe", fill: "#3b82f6", border: "#1e40af", lbl: "#1e40af" },
+    "In Progress": { track: "#dcfce7", fill: "#16a34a", border: "#15803d", lbl: "#15803d" },
     Delayed:       { track: "#fee2e2", fill: "#ef4444", border: "#dc2626", lbl: "#991b1b" },
     Upcoming:      { track: "#f1f5f9", fill: "#94a3b8", border: "#cbd5e1", lbl: "#64748b" },
   };
@@ -1438,7 +1438,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
         {/* Legend */}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
           <div style={{ width: 165, flexShrink: 0 }} />
-          {[["#16a34a","Completed"],["#eab308","In Progress"],["#ef4444","Delayed / Overdue"],["#94a3b8","Upcoming"]].map(([col, lbl]) => (
+          {[["#3b82f6","Completed"],["#16a34a","In Progress"],["#ef4444","Delayed / Overdue"],["#94a3b8","Upcoming"]].map(([col, lbl]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
               <div style={{ width: 14, height: 8, background: col, borderRadius: 2 }} />
               {lbl}
@@ -1842,26 +1842,38 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Milestone Details</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {project.milestones.map((m, i) => {
+              // Colours: In Progress = green, Completed = blue, Upcoming = grey,
+              // Delayed/Overdue = red. Yellow removed — it visually clashed with At Risk.
               const statusStyles = {
-                "Completed": { bg: "#dcfce7", text: "#15803d", icon: "✓", lineColor: "#16a34a" },
-                "In Progress": { bg: "#fef9c3", text: "#854d0e", icon: "◎", lineColor: "#eab308" },
-                "Upcoming": { bg: "#f3f4f6", text: "#6b7280", icon: "○", lineColor: "#d1d5db" },
-                "Delayed": { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" },
+                "Completed":   { bg: "#dbeafe", text: "#1e40af", icon: "✓", lineColor: "#3b82f6" },
+                "In Progress": { bg: "#dcfce7", text: "#15803d", icon: "◎", lineColor: "#16a34a" },
+                "Upcoming":    { bg: "#f3f4f6", text: "#6b7280", icon: "○", lineColor: "#d1d5db" },
+                "Delayed":     { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" },
               };
               const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
               const s = isOverdue
                 ? { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626" }
                 : (statusStyles[m.status] || statusStyles["Upcoming"]);
+              // Top-level item = milestone (diamond) · child = activity (smaller circle).
+              const isMilestone = !m.parentId;
               return (
                 <div key={m.id} style={{ display: "flex", gap: 16, position: "relative" }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: s.bg, border: `2px solid ${s.lineColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: s.text, fontWeight: 700, zIndex: 1 }}>{s.icon}</div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
+                    {isMilestone ? (
+                      <div style={{ width: 30, height: 30, background: s.bg, border: `2px solid ${s.lineColor}`, transform: "rotate(45deg)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, borderRadius: 4, marginTop: 2 }}>
+                        <span style={{ transform: "rotate(-45deg)", fontSize: 13, color: s.text, fontWeight: 800, lineHeight: 1 }}>{s.icon}</span>
+                      </div>
+                    ) : (
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: s.bg, border: `2px solid ${s.lineColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: s.text, fontWeight: 700, zIndex: 1, marginTop: 6 }}>{s.icon}</div>
+                    )}
                     {i < project.milestones.length - 1 && <div style={{ width: 2, flex: 1, background: s.lineColor, opacity: 0.3, minHeight: 20 }} />}
                   </div>
-                  <div style={{ flex: 1, paddingBottom: 20 }}>
-                    <div style={{ background: T.bg, borderRadius: 12, padding: "14px 18px" }}>
+                  <div style={{ flex: 1, paddingBottom: 20, paddingLeft: isMilestone ? 0 : 24 }}>
+                    <div style={{ background: T.bg, borderRadius: 12, padding: "14px 18px", borderLeft: isMilestone ? `3px solid ${s.lineColor}` : "none" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 4 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.name}</span>
+                        <span style={{ fontSize: isMilestone ? 14 : 13, fontWeight: isMilestone ? 700 : 600, color: T.text }}>
+                          {isMilestone ? "" : "↳ "}{m.name}
+                        </span>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {m.weight > 1 && <span style={{ background: T.surface, color: T.muted, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, border: `1px solid ${T.border}` }}>W:{m.weight}</span>}
                           {isOverdue && <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20, letterSpacing: "0.04em" }}>OVERDUE</span>}
