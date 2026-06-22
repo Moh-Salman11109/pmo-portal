@@ -1267,23 +1267,49 @@ const GRCDashboard = ({ canEdit = false }) => {
       </tr>`;
     }).join("");
 
-    // Dynamic executive narrative — one paragraph that summarises the moment.
+    // ─── Dynamic narrative — three card-shaped blocks for executive scanning ───
+    const criticalRisks = sortedRisks.filter(r => (Number(r.LikelihoodScore) * Number(r.ImpactScore)) >= 15).length;
     const exposurePct = kriWithLatest.length > 0
       ? Math.round(((redCount + amberCount) / kriWithLatest.length) * 100)
       : 0;
-    const criticalRisks = sortedRisks.filter(r => (Number(r.LikelihoodScore) * Number(r.ImpactScore)) >= 15).length;
-    const narrativeSummary = [
-      `As of ${now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}, the portfolio holds <strong>${kriWithLatest.length} active Key Risk Indicators</strong> across <strong>${deptOptions.length} business units</strong>.`,
-      redCount > 0   ? `<strong style="color:#991b1b">${redCount} KRIs are currently breaching threshold</strong>` : null,
-      amberCount > 0 ? `${amberCount} ${amberCount === 1 ? "is" : "are"} flagged at risk` : null,
-      greenCount > 0 ? `${greenCount} remain within tolerance` : null,
-    ].filter(Boolean).join(", ") + ".";
-    const narrativeRisks = sortedRisks.length === 0
-      ? "No open risks are recorded in the Risk Register."
-      : `The Risk Register holds <strong>${sortedRisks.length} open risk${sortedRisks.length === 1 ? "" : "s"}</strong>${criticalRisks > 0 ? `, of which <strong style="color:#991b1b">${criticalRisks} ${criticalRisks === 1 ? "carries" : "carry"} a Critical score (≥15)</strong>` : ""}. ${appBreaches > 0 ? `<strong style="color:#991b1b">${appBreaches} appetite breach${appBreaches === 1 ? "" : "es"}</strong> ${appBreaches === 1 ? "is" : "are"} active.` : "No appetite breaches are active."}`;
-    const narrativeAudit = auditFindings.length === 0
-      ? "No outstanding audit findings."
-      : `Internal Audit has logged <strong>${auditFindings.length} finding${auditFindings.length === 1 ? "" : "s"}</strong>${openAF > 0 ? ` (${openAF} open)` : ""}${bySev.Critical + bySev.High > 0 ? `, including <strong style="color:#991b1b">${bySev.Critical + bySev.High} of Critical or High severity</strong>` : ""}. ${correctiveActions.length > 0 ? `Corrective actions are <strong>${avgCompletion}% complete</strong> on average across ${correctiveActions.length} tracked items.` : ""}`;
+    const asOfDate = now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+    // Card 1 — Key Risk Indicators
+    const card1Headline = `${kriWithLatest.length}`;
+    const card1Subline  = `Active KRIs across ${deptOptions.length} business unit${deptOptions.length === 1 ? "" : "s"}`;
+    const card1Narrative = (() => {
+      if (kriWithLatest.length === 0) return "No active KRIs in the register.";
+      const parts = [];
+      if (redCount > 0)   parts.push(`<span class="danger">${redCount} breaching</span>`);
+      if (amberCount > 0) parts.push(`<strong>${amberCount} at risk</strong>`);
+      if (greenCount > 0) parts.push(`${greenCount} within tolerance`);
+      return parts.join(" · ") + `. Combined exposure stands at <strong>${exposurePct}%</strong> of the indicator portfolio.`;
+    })();
+
+    // Card 2 — Open Risks
+    const card2Headline = `${sortedRisks.length}`;
+    const card2Subline  = `Open risks in the register${criticalRisks > 0 ? ` · ${criticalRisks} Critical` : ""}`;
+    const card2Narrative = (() => {
+      if (sortedRisks.length === 0) return "No open risks are recorded.";
+      const lines = [];
+      if (criticalRisks > 0) lines.push(`<span class="danger">${criticalRisks} ${criticalRisks === 1 ? "risk carries" : "risks carry"} a Critical score (≥15)</span>`);
+      lines.push(appBreaches > 0
+        ? `<span class="danger">${appBreaches} appetite breach${appBreaches === 1 ? "" : "es"}</span> active`
+        : "No appetite breaches active");
+      return lines.join(". ") + ".";
+    })();
+
+    // Card 3 — Audit & Corrective Actions
+    const card3Headline = `${openAF}`;
+    const card3Subline  = `Open audit finding${openAF === 1 ? "" : "s"} of ${auditFindings.length} total`;
+    const card3Narrative = (() => {
+      if (auditFindings.length === 0 && correctiveActions.length === 0) return "No outstanding audit findings or corrective actions.";
+      const lines = [];
+      const sevSum = bySev.Critical + bySev.High;
+      if (sevSum > 0) lines.push(`<span class="danger">${sevSum} ${sevSum === 1 ? "finding" : "findings"} of Critical or High severity</span>`);
+      if (correctiveActions.length > 0) lines.push(`Corrective actions averaging <strong>${avgCompletion}% complete</strong> across ${correctiveActions.length} item${correctiveActions.length === 1 ? "" : "s"}`);
+      return (lines.join(". ") || "All findings closed") + ".";
+    })();
 
     const html = `<!DOCTYPE html><html lang="en"><head>
       <meta charset="UTF-8">
@@ -1340,16 +1366,75 @@ const GRCDashboard = ({ canEdit = false }) => {
 
         /* ────── EXEC SUMMARY ────── */
         .exec-summary {
-          background: #f8fafc;
-          padding: 24px 56px;
+          background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+          padding: 36px 56px 40px;
           border-bottom: 1px solid #e2e8f0;
         }
-        .exec-summary .label {
-          font-size: 10px; font-weight: 800; color: #003932; letter-spacing: 0.1em;
-          text-transform: uppercase; margin-bottom: 10px;
+        .exec-summary .head {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 22px;
         }
-        .exec-summary p { font-size: 12.5px; line-height: 1.75; color: #1f2937; margin-bottom: 8px; }
-        .exec-summary p:last-child { margin-bottom: 0; }
+        .exec-summary .label {
+          font-size: 18px; font-weight: 900; color: #003932; letter-spacing: -0.4px;
+          display: inline-flex; align-items: center; gap: 10px;
+        }
+        .exec-summary .label::before {
+          content: ''; display: inline-block;
+          width: 4px; height: 22px; background: #00b894; border-radius: 2px;
+        }
+        .exec-summary .as-of {
+          font-size: 10.5px; color: #6b7280; font-weight: 600;
+          letter-spacing: 0.04em; text-transform: uppercase;
+        }
+        .exec-summary .es-grid {
+          display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+        }
+        .es-card {
+          background: #fff;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 20px 22px;
+          position: relative; overflow: hidden;
+        }
+        .es-card::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+          background: var(--accent);
+        }
+        .es-card.indicators { --accent: #003932; }
+        .es-card.risks      { --accent: #d97706; }
+        .es-card.audit      { --accent: #7c3aed; }
+        .es-card .es-topic {
+          display: flex; align-items: center; gap: 8px;
+          margin-bottom: 12px;
+        }
+        .es-card .es-icon {
+          width: 28px; height: 28px; border-radius: 8px;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 14px;
+          background: rgba(0,184,148,0.08);
+        }
+        .es-card.risks .es-icon { background: rgba(217,119,6,0.10); }
+        .es-card.audit .es-icon { background: rgba(124,58,237,0.10); }
+        .es-card .es-topic-name {
+          font-size: 10px; font-weight: 800; color: #6b7280;
+          letter-spacing: 0.10em; text-transform: uppercase;
+        }
+        .es-card .es-headline {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 26px; font-weight: 700; color: var(--accent);
+          line-height: 1.05; margin-bottom: 4px;
+          letter-spacing: -0.5px;
+        }
+        .es-card .es-subline {
+          font-size: 11px; color: #6b7280; font-weight: 500;
+          margin-bottom: 14px;
+        }
+        .es-card .es-narrative {
+          font-size: 11.5px; line-height: 1.6; color: #1f2937;
+          padding-top: 12px; border-top: 1px dashed #e2e8f0;
+        }
+        .es-card .es-narrative strong { color: var(--accent); font-weight: 700; }
+        .es-card .es-narrative .danger { color: #991b1b; font-weight: 700; }
 
         /* ────── KPI GRID ────── */
         .kpi-grid {
@@ -1412,8 +1497,10 @@ const GRCDashboard = ({ canEdit = false }) => {
           padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
         }
         tr.kri-main td { background: #fff; }
-        tr.kri-main:nth-child(4n+1) td { background: #fafbfc; }
         tr:last-child td { border-bottom: none; }
+        /* Strong divider between each KRI group (main row + optional narrative). */
+        tbody tr.kri-main td { border-top: 2.5px solid #cbd5e1; padding-top: 14px; }
+        tbody tr.kri-main:first-child td { border-top: none; padding-top: 10px; }
         .kri-title { font-weight: 700; color: #0d1f1c; font-size: 11.5px; line-height: 1.4; }
         .kri-meta  { font-size: 10px; color: #6b7280; margin-top: 2px; }
         .num       { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #0d1f1c; }
@@ -1496,7 +1583,6 @@ const GRCDashboard = ({ canEdit = false }) => {
 
       <!-- ════════════ COVER ════════════ -->
       <div class="cover">
-        <div class="classification">● Confidential · Executive Review</div>
         <div class="crest">
           <div class="icon">🛡</div>
           <div>
@@ -1506,17 +1592,46 @@ const GRCDashboard = ({ canEdit = false }) => {
         </div>
         <div class="meta">
           <div class="item"><div class="l">Generated</div><div class="v">${dateStr}</div></div>
-          <div class="item"><div class="l">Issued by</div><div class="v">PMO Enterprise Portal</div></div>
+          <div class="item"><div class="l">Source</div><div class="v">GRC Intelligence Dashboard</div></div>
           <div class="item"><div class="l">Scope</div><div class="v">${deptOptions.length} business units · ${kriWithLatest.length} KRIs</div></div>
         </div>
       </div>
 
       <!-- ════════════ EXECUTIVE SUMMARY ════════════ -->
       <div class="exec-summary">
-        <div class="label">Executive Summary</div>
-        <p>${narrativeSummary}</p>
-        <p>${narrativeRisks}</p>
-        <p>${narrativeAudit}</p>
+        <div class="head">
+          <div class="label">Executive Summary</div>
+          <div class="as-of">As of ${asOfDate}</div>
+        </div>
+        <div class="es-grid">
+          <div class="es-card indicators">
+            <div class="es-topic">
+              <span class="es-icon">📊</span>
+              <span class="es-topic-name">Key Risk Indicators</span>
+            </div>
+            <div class="es-headline">${card1Headline}</div>
+            <div class="es-subline">${card1Subline}</div>
+            <div class="es-narrative">${card1Narrative}</div>
+          </div>
+          <div class="es-card risks">
+            <div class="es-topic">
+              <span class="es-icon">⚠</span>
+              <span class="es-topic-name">Open Risks</span>
+            </div>
+            <div class="es-headline">${card2Headline}</div>
+            <div class="es-subline">${card2Subline}</div>
+            <div class="es-narrative">${card2Narrative}</div>
+          </div>
+          <div class="es-card audit">
+            <div class="es-topic">
+              <span class="es-icon">🔍</span>
+              <span class="es-topic-name">Audit &amp; Actions</span>
+            </div>
+            <div class="es-headline">${card3Headline}</div>
+            <div class="es-subline">${card3Subline}</div>
+            <div class="es-narrative">${card3Narrative}</div>
+          </div>
+        </div>
       </div>
 
       <!-- ════════════ KPI STRIP ════════════ -->
@@ -1586,8 +1701,8 @@ const GRCDashboard = ({ canEdit = false }) => {
 
       <!-- ════════════ FOOTER ════════════ -->
       <div class="footer">
-        <span>PMO Enterprise Portal · GRC Risk Intelligence Report · Tree Digital Insurance Company</span>
-        <span class="conf">● Confidential</span>
+        <span>GRC Intelligence Dashboard · Tree Digital Insurance Company</span>
+        <span>${dateStr}</span>
       </div>
     </body></html>`;
 
