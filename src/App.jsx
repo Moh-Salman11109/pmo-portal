@@ -1875,17 +1875,16 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
             {/* Status chip — own line so it doesn't compete with the action stack */}
             <Badge status={project.status} />
-            {/* Action stack — pixel-locked uniform width and height for every variant */}
+            {/* Action row — horizontal, uniform height, wraps on narrow screens */}
             {(() => {
-              const W = 150;   // shared width
-              const H = 36;    // shared height
+              const H = 36;   // shared height across all buttons
               const baseBtn = {
-                width: W, height: H, borderRadius: 8, fontSize: 12, cursor: "pointer",
-                textAlign: "center", boxSizing: "border-box",
+                height: H, padding: "0 14px", borderRadius: 8, fontSize: 12, cursor: "pointer",
+                boxSizing: "border-box", whiteSpace: "nowrap",
                 display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
               };
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
                     <button onClick={() => setShowUpdate(true)}
                       style={{ ...baseBtn, background: T.accent, color: T.accentText, border: "1px solid transparent", fontWeight: 800 }}>
