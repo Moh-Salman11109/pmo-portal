@@ -1626,7 +1626,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const ord = { Critical: 4, High: 3, Medium: 2, Low: 1 };
         return (ord[b.level] || 0) - (ord[a.level] || 0);
       })
-      .slice(0, 6);
+      .slice(0, 5);  // Top 5 only — keeps the page on one sheet
     // Severity chips — Tree palette mapping (Maroon = critical, Orange = high,
     // Moss = medium, Sea-tint = low). Light tinted backgrounds for readability.
     const riskColor = (lvl) => ({
@@ -1651,7 +1651,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     const completed = ordered
       .filter(m => m.status === "Completed" && m.date && new Date(m.date) >= thirtyDaysAgo)
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .slice(0, 5);
+      .slice(0, 4);  // Cap at 4 — fits on one page
     const completedHtml = completed.length === 0
       ? `<div class="empty-sub">No activities completed in the last 30 days.</div>`
       : completed.map(m => `<div class="bullet">● <span>${esc(m.name)}</span> <em>${fmtDate(m.date)}</em></div>`).join("");
@@ -1661,7 +1661,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     const upcoming = ordered
       .filter(m => m.status !== "Completed" && m.date && new Date(m.date) >= now && new Date(m.date) <= inTwoWeeks)
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
-      .slice(0, 5);
+      .slice(0, 4);  // Cap at 4 — fits on one page
     const upcomingHtml = upcoming.length === 0
       ? `<div class="empty-sub">Nothing scheduled in the next 14 days.</div>`
       : upcoming.map(m => `<div class="bullet up">○ <span>${esc(m.name)}</span> <em>${fmtDate(m.date)}</em></div>`).join("");
@@ -1684,51 +1684,52 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; font-size: 12px; color: #0d1f1c; background: #fff; line-height: 1.5; }
+        body { font-family: 'Inter', sans-serif; font-size: 11px; color: #0d1f1c; background: #fff; line-height: 1.45; }
         @page { size: A4 landscape; margin: 0; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
+        /* COMPACT layout — sized to fit one A4 landscape page (297×210mm). */
         /* Cover uses pure Canopy gradient with a Sea-tint halo */
-        .cover { background: linear-gradient(135deg, #001f1a 0%, #003932 55%, #0a5448 100%); color: #fff; padding: 28px 40px; display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; border-bottom: 3px solid #00FFB3; }
+        .cover { background: linear-gradient(135deg, #001f1a 0%, #003932 55%, #0a5448 100%); color: #fff; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; border-bottom: 3px solid #00FFB3; }
         .cover::after { content: ''; position: absolute; bottom: -60px; right: -60px; width: 220px; height: 220px; background: rgba(0,255,179,0.12); border-radius: 50%; }
-        .cover .left .dept { font-size: 11px; color: #00FFB3; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; opacity: 0.85; }
-        .cover .left h1 { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px; }
-        .cover .left .sub { opacity: 0.7; font-size: 11px; }
+        .cover .left .dept { font-size: 10px; color: #00FFB3; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; opacity: 0.85; }
+        .cover .left h1 { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 3px; }
+        .cover .left .sub { opacity: 0.7; font-size: 10px; }
         .cover .right { position: relative; z-index: 2; }
-        .status-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 18px; border-radius: 22px; font-size: 13px; font-weight: 800; background: ${statusStyle.bg}; color: ${statusStyle.txt}; }
-        .status-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: ${statusStyle.dot}; }
+        .status-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 22px; font-size: 12px; font-weight: 800; background: ${statusStyle.bg}; color: ${statusStyle.txt}; }
+        .status-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: ${statusStyle.dot}; }
 
-        /* KPI strip — dividers in Lichen, progress fill in Sea */
+        /* KPI strip — compact tiles */
         .kpi-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; background: #C9D5C9; border-bottom: 1px solid #C9D5C9; }
-        .kpi-tile { background: #fff; padding: 14px 16px; }
-        .kpi-tile .lbl { font-size: 9px; color: #3a5547; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
-        .kpi-tile .val { font-size: 14px; font-weight: 800; color: #003932; line-height: 1.2; }
+        .kpi-tile { background: #fff; padding: 9px 12px; }
+        .kpi-tile .lbl { font-size: 8.5px; color: #3a5547; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px; }
+        .kpi-tile .val { font-size: 13px; font-weight: 800; color: #003932; line-height: 1.15; }
         .kpi-tile .val.mono { font-family: 'JetBrains Mono', monospace; }
-        .kpi-tile .sub { font-size: 10px; color: #7a9485; margin-top: 2px; }
-        .progress-mini { height: 5px; background: #C9D5C9; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+        .kpi-tile .sub { font-size: 9px; color: #7a9485; margin-top: 1px; }
+        .progress-mini { height: 4px; background: #C9D5C9; border-radius: 3px; margin-top: 4px; overflow: hidden; }
         .progress-mini .fill { height: 100%; background: #00FFB3; border-radius: 3px; }
 
-        section { padding: 22px 40px 0; }
-        section .section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; border-bottom: 2px solid #003932; padding-bottom: 6px; }
-        section h2 { font-size: 13px; font-weight: 900; color: #003932; letter-spacing: 0.06em; text-transform: uppercase; }
+        section { padding: 12px 32px 0; }
+        section .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; border-bottom: 1.5px solid #003932; padding-bottom: 4px; }
+        section h2 { font-size: 12px; font-weight: 900; color: #003932; letter-spacing: 0.06em; text-transform: uppercase; }
         section h2 .icon { color: #00FFB3; }
-        section .head-meta { margin-left: auto; font-size: 10px; color: #7a9485; }
+        section .head-meta { margin-left: auto; font-size: 9.5px; color: #7a9485; }
 
         /* ─── TIMELINE — Lichen borders, Sea today marker, Moss grid, past-fade ─── */
-        .timeline { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; overflow: hidden; }
-        .timeline .axis { display: flex; margin-bottom: 6px; padding-left: 260px; position: relative; height: 14px; }
-        .timeline .axis .tick { position: absolute; transform: translateX(-50%); font-size: 9px; color: #7a9485; font-weight: 600; }
-        .timeline .row { display: flex; align-items: stretch; min-height: 26px; border-top: 1px solid #ecf2ed; }
-        .timeline .row.ms { background: rgba(0,57,50,0.04); min-height: 28px; font-weight: 700; }
-        .timeline .row.act .label { padding: 6px 12px 6px 26px; font-size: 10px; font-weight: 500; color: #3a5547; }
-        /* Label column: widened + allow up to 2 lines for long milestone names */
+        .timeline { background: #fff; border: 1px solid #C9D5C9; border-radius: 8px; padding: 8px 10px; overflow: hidden; }
+        .timeline .axis { display: flex; margin-bottom: 4px; padding-left: 220px; position: relative; height: 12px; }
+        .timeline .axis .tick { position: absolute; transform: translateX(-50%); font-size: 8.5px; color: #7a9485; font-weight: 600; }
+        .timeline .row { display: flex; align-items: stretch; min-height: 18px; border-top: 1px solid #ecf2ed; }
+        .timeline .row.ms { background: rgba(0,57,50,0.04); min-height: 20px; font-weight: 700; }
+        .timeline .row.act .label { padding: 3px 10px 3px 22px; font-size: 9px; font-weight: 500; color: #3a5547; }
+        /* Label column: compact but still wraps 2 lines for long names */
         .timeline .row .label {
-          width: 260px; flex-shrink: 0; padding: 6px 12px 6px 14px;
-          font-size: 11px; color: #003932; line-height: 1.3;
+          width: 220px; flex-shrink: 0; padding: 3px 10px 3px 12px;
+          font-size: 10px; color: #003932; line-height: 1.2;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
           overflow: hidden; text-overflow: ellipsis;
         }
-        .timeline .row .track { flex: 1; position: relative; min-width: 400px; overflow: hidden; }
+        .timeline .row .track { flex: 1; position: relative; min-width: 360px; overflow: hidden; }
         /* Past-fade: Lichen mist over days that have already passed. Sits at
            z-index 0 so bars (z:1) and diamonds (z:2) stay on top, crisp. The
            gradient fades to transparent right at the Today line. */
@@ -1747,40 +1748,40 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           position: absolute; top: -2px; bottom: -2px; width: 2px;
           background: #00FFB3; box-shadow: 0 0 6px rgba(0,255,179,0.7); z-index: 4;
         }
-        .timeline .bar { position: absolute; top: 6px; height: 14px; border: 1.5px solid; border-radius: 4px; display: flex; align-items: center; justify-content: center; z-index: 1; min-width: 4px; }
-        .timeline .bar-pct { font-size: 8px; font-weight: 800; }
-        .timeline .diamond { position: absolute; top: 6px; width: 16px; height: 16px; border: 2px solid; border-radius: 3px; transform: rotate(45deg); z-index: 2; }
-        .empty { padding: 30px; text-align: center; color: #7a9485; font-style: italic; }
+        .timeline .bar { position: absolute; top: 4px; height: 11px; border: 1.5px solid; border-radius: 3px; display: flex; align-items: center; justify-content: center; z-index: 1; min-width: 3px; }
+        .timeline .bar-pct { font-size: 7.5px; font-weight: 800; }
+        .timeline .diamond { position: absolute; top: 4px; width: 12px; height: 12px; border: 1.5px solid; border-radius: 2px; transform: rotate(45deg); z-index: 2; }
+        .empty { padding: 22px; text-align: center; color: #7a9485; font-style: italic; font-size: 10.5px; }
 
-        /* ─── BOTTOM GRID ─── */
-        .bottom-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; padding: 22px 40px; }
+        /* ─── BOTTOM GRID ─── compact */
+        .bottom-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; padding: 12px 32px 0; }
 
-        .risk-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; }
-        .risk-card table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .risk-card th { background: #f4f7f4; padding: 7px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #3a5547; text-transform: uppercase; letter-spacing: 0.04em; }
-        .risk-card td { padding: 8px 10px; border-bottom: 1px solid #ecf2ed; vertical-align: top; }
+        .risk-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 8px; padding: 10px 12px; }
+        .risk-card table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .risk-card th { background: #f4f7f4; padding: 5px 8px; text-align: left; font-size: 8.5px; font-weight: 700; color: #3a5547; text-transform: uppercase; letter-spacing: 0.04em; }
+        .risk-card td { padding: 5px 8px; border-bottom: 1px solid #ecf2ed; vertical-align: top; line-height: 1.35; }
         .risk-card tr:last-child td { border-bottom: none; }
-        .sev { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 10px; font-weight: 800; }
-        .risk-title { font-weight: 600; color: #003932; }
-        .risk-mit { color: #3a5547; font-size: 10.5px; }
-        .empty-cell { text-align: center; color: #7a9485; font-style: italic; padding: 18px 0; }
+        .sev { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 9px; font-weight: 800; }
+        .risk-title { font-weight: 600; color: #003932; font-size: 10px; }
+        .risk-mit { color: #3a5547; font-size: 9.5px; }
+        .empty-cell { text-align: center; color: #7a9485; font-style: italic; padding: 12px 0; }
 
-        .right-stack { display: flex; flex-direction: column; gap: 14px; }
-        .mini-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; }
-        .mini-card .mini-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1.5px solid; }
-        .mini-card.completed .mini-head { border-bottom-color: #3b82f6; }   /* Blue (universal: done) */
-        .mini-card.upcoming .mini-head  { border-bottom-color: #00FFB3; }   /* Sea (in-flight) */
-        .mini-card .mini-head h3 { font-size: 11px; font-weight: 800; color: #003932; letter-spacing: 0.08em; text-transform: uppercase; }
-        .mini-card .mini-head .ic { font-size: 12px; }
+        .right-stack { display: flex; flex-direction: column; gap: 10px; }
+        .mini-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 8px; padding: 10px 12px; }
+        .mini-card .mini-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1.5px solid; }
+        .mini-card.completed .mini-head { border-bottom-color: #3b82f6; }
+        .mini-card.upcoming .mini-head  { border-bottom-color: #00FFB3; }
+        .mini-card .mini-head h3 { font-size: 10px; font-weight: 800; color: #003932; letter-spacing: 0.06em; text-transform: uppercase; }
+        .mini-card .mini-head .ic { font-size: 11px; }
         .mini-card.completed .mini-head .ic { color: #3b82f6; }
         .mini-card.upcoming .mini-head .ic  { color: #00b894; }
-        .bullet { display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 4px 0; color: #3b82f6; }
+        .bullet { display: flex; align-items: baseline; gap: 6px; font-size: 10px; padding: 2px 0; color: #3b82f6; }
         .bullet.up { color: #00b894; }
         .bullet span { color: #003932; flex: 1; font-weight: 500; }
-        .bullet em { color: #7a9485; font-style: normal; font-size: 10px; font-family: 'JetBrains Mono', monospace; }
-        .empty-sub { color: #7a9485; font-style: italic; font-size: 10.5px; padding: 6px 0; }
+        .bullet em { color: #7a9485; font-style: normal; font-size: 9px; font-family: 'JetBrains Mono', monospace; }
+        .empty-sub { color: #7a9485; font-style: italic; font-size: 9.5px; padding: 4px 0; }
 
-        .footer { padding: 18px 40px 22px; border-top: 1px solid #C9D5C9; display: flex; justify-content: space-between; color: #7a9485; font-size: 10px; margin-top: 22px; }
+        .footer { padding: 8px 32px 10px; border-top: 1px solid #C9D5C9; display: flex; justify-content: space-between; color: #7a9485; font-size: 9px; margin-top: 10px; }
       </style>
     </head><body>
 
@@ -1842,7 +1843,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <span class="head-meta">${ordered.length} item${ordered.length === 1 ? "" : "s"} · ▾ Today</span>
         </div>
         <div class="timeline">
-          ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:calc(260px + (100% - 260px) * ${t.p} / 100)">${t.label}</div>`).join("")}</div>` : ""}
+          ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:calc(220px + (100% - 220px) * ${t.p} / 100)">${t.label}</div>`).join("")}</div>` : ""}
           ${rowsHtml}
         </div>
       </section>
