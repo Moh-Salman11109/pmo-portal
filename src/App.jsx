@@ -1584,13 +1584,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       kidsOf(t.id).forEach(k => ordered.push({ ...k, _isMs: false }));
     });
 
-    // Gantt bar palette — sourced from the Tree brand palette
-    // (Canopy = stable/done, Sea = alive/in-flight, Maroon = gravity/late, Moss = waiting)
+    // Gantt bar palette — universal PM convention with Tree brand accents:
+    // blue for done, green for in-flight, grey for waiting, brand maroon for late.
     const sc = {
-      "Completed":   { fill: "#003932", border: "#001f1a", txt: "#fff" },     // Canopy
-      "In Progress": { fill: "#00FFB3", border: "#00b894", txt: "#003932" },  // Sea — dark txt for contrast
-      "Delayed":     { fill: "#490300", border: "#2c0200", txt: "#fff" },     // Maroon
-      "Upcoming":    { fill: "#A1B9AB", border: "#7a9485", txt: "#003932" },  // Moss
+      "Completed":   { fill: "#3b82f6", border: "#1e40af", txt: "#fff" },     // Blue (universal "done")
+      "In Progress": { fill: "#00FFB3", border: "#00b894", txt: "#003932" },  // Sea — Tree mint
+      "Delayed":     { fill: "#490300", border: "#2c0200", txt: "#fff" },     // Maroon — Tree gravity
+      "Upcoming":    { fill: "#A1B9AB", border: "#7a9485", txt: "#003932" },  // Moss — Tree neutral
     };
     const rowsHtml = ordered.length === 0
       ? `<div class="empty">No activities recorded yet.</div>`
@@ -1660,13 +1660,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       ? `<div class="empty-sub">Nothing scheduled in the next 14 days.</div>`
       : upcoming.map(m => `<div class="bullet up">○ <span>${esc(m.name)}</span> <em>${fmtDate(m.date)}</em></div>`).join("");
 
-    // Status chip — Tree palette mapping
+    // Status chip — universal convention (blue/green/grey/red family)
     const statusStyle = {
-      "On Track":   { bg: "#ccfff0", txt: "#003932", dot: "#00FFB3" },   // Sea
-      "At Risk":    { bg: "#ffd9c2", txt: "#FF5000", dot: "#FF5000" },   // Orange
-      "Delayed":    { bg: "#f0d4d0", txt: "#490300", dot: "#490300" },   // Maroon
-      "Completed":  { bg: "#ccfff0", txt: "#003932", dot: "#003932" },   // Sea-tint + Canopy
-      "Not Started":{ bg: "#C9D5C9", txt: "#3a5547", dot: "#A1B9AB" },   // Lichen + Moss
+      "On Track":   { bg: "#ccfff0", txt: "#003932", dot: "#00FFB3" },   // Sea green
+      "At Risk":    { bg: "#ffd9c2", txt: "#FF5000", dot: "#FF5000" },   // Orange (warning)
+      "Delayed":    { bg: "#f0d4d0", txt: "#490300", dot: "#490300" },   // Maroon (gravity)
+      "Completed":  { bg: "#dbeafe", txt: "#1e40af", dot: "#3b82f6" },   // Blue (done)
+      "Not Started":{ bg: "#C9D5C9", txt: "#3a5547", dot: "#A1B9AB" },   // Moss/Lichen
     }[project.status] || { bg: "#C9D5C9", txt: "#3a5547", dot: "#A1B9AB" };
 
     // ── Budget formatting
@@ -1740,13 +1740,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         .right-stack { display: flex; flex-direction: column; gap: 14px; }
         .mini-card { background: #fff; border: 1px solid #C9D5C9; border-radius: 10px; padding: 14px 16px; }
         .mini-card .mini-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1.5px solid; }
-        .mini-card.completed .mini-head { border-bottom-color: #003932; }   /* Canopy */
-        .mini-card.upcoming .mini-head  { border-bottom-color: #00FFB3; }   /* Sea */
+        .mini-card.completed .mini-head { border-bottom-color: #3b82f6; }   /* Blue (universal: done) */
+        .mini-card.upcoming .mini-head  { border-bottom-color: #00FFB3; }   /* Sea (in-flight) */
         .mini-card .mini-head h3 { font-size: 11px; font-weight: 800; color: #003932; letter-spacing: 0.08em; text-transform: uppercase; }
         .mini-card .mini-head .ic { font-size: 12px; }
-        .mini-card.completed .mini-head .ic { color: #003932; }
+        .mini-card.completed .mini-head .ic { color: #3b82f6; }
         .mini-card.upcoming .mini-head .ic  { color: #00b894; }
-        .bullet { display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 4px 0; color: #003932; }
+        .bullet { display: flex; align-items: baseline; gap: 8px; font-size: 11px; padding: 4px 0; color: #3b82f6; }
         .bullet.up { color: #00b894; }
         .bullet span { color: #003932; flex: 1; font-weight: 500; }
         .bullet em { color: #7a9485; font-style: normal; font-size: 10px; font-family: 'JetBrains Mono', monospace; }
@@ -1875,31 +1875,42 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
             {/* Status chip — own line so it doesn't compete with the action stack */}
             <Badge status={project.status} />
-            {/* Action stack — uniform width, primary action first, equal heights */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 140 }}>
-              {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
-                <button onClick={() => setShowUpdate(true)}
-                  style={{ background: T.accent, color: T.accentText, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
-                  ✏️ Update
-                </button>
-              )}
-              {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) && project.pmoStatus === "Submitted" && (
-                <button onClick={() => setRoute({ view: "actions" })}
-                  style={{ background: "#f59e0b", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
-                  ✅ Validate Update
-                </button>
-              )}
-              {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
-                <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id, from: "project" })}
-                  style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
-                  Edit Fields
-                </button>
-              )}
-              <button onClick={printProjectReport}
-                style={{ background: T.bg, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "center", boxSizing: "border-box" }}>
-                📄 Print Report
-              </button>
-            </div>
+            {/* Action stack — pixel-locked uniform width and height for every variant */}
+            {(() => {
+              const W = 150;   // shared width
+              const H = 36;    // shared height
+              const baseBtn = {
+                width: W, height: H, borderRadius: 8, fontSize: 12, cursor: "pointer",
+                textAlign: "center", boxSizing: "border-box",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              };
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
+                    <button onClick={() => setShowUpdate(true)}
+                      style={{ ...baseBtn, background: T.accent, color: T.accentText, border: "1px solid transparent", fontWeight: 800 }}>
+                      ✏️ Update
+                    </button>
+                  )}
+                  {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) && project.pmoStatus === "Submitted" && (
+                    <button onClick={() => setRoute({ view: "actions" })}
+                      style={{ ...baseBtn, background: "#f59e0b", color: "#fff", border: "1px solid transparent", fontWeight: 800 }}>
+                      ✅ Validate
+                    </button>
+                  )}
+                  {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
+                    <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: project.id, from: "project" })}
+                      style={{ ...baseBtn, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontWeight: 600 }}>
+                      Edit Fields
+                    </button>
+                  )}
+                  <button onClick={printProjectReport}
+                    style={{ ...baseBtn, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontWeight: 600 }}>
+                    📄 Print Report
+                  </button>
+                </div>
+              );
+            })()}
             {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 2, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a" }}>Updated {d}d ago</div>; })()}
           </div>
         </div>
