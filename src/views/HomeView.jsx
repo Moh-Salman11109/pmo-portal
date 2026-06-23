@@ -97,13 +97,17 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   // (no project record yet) and every closure awaiting sign-off at G5.
   // Match by gateNumber rather than gateLabel — SP stores labels like
   // "Gate 1 — Project Initiation" which won't equal the GATE_DEFS short label "Gate 1".
+  // SP stores the placeholder string "0" for projectCode when a submission isn't yet
+  // linked to an official project record — treat it as missing so each row gets a
+  // unique fallback key, otherwise two unlinked closures collapse into one count.
+  const realId = (id) => (id && id !== "0") ? id : null;
   const gatePipeline = useMemo(() => GATE_DEFS.map(def => {
     const gateNum = def.id.replace("G", ""); // G1 → "1"
     const ids = new Set();
     activeProjects.forEach(p => { if (p.gate === def.label) ids.add(p.id); });
-    pendingGates.forEach(g => { if (String(g.gateNumber) === gateNum) ids.add(g.projectId || `gs-${g.id}`); });
+    pendingGates.forEach(g => { if (String(g.gateNumber) === gateNum) ids.add(realId(g.projectId) || `gs-${g.id}`); });
     if (def.id === "G5") {
-      pendingClosures.forEach(c => ids.add(c.projectId || `cs-${c.id}`));
+      pendingClosures.forEach(c => ids.add(realId(c.projectId) || `cs-${c.id}`));
     }
     return { ...def, count: ids.size };
   }), [activeProjects, pendingGates, pendingClosures]);
