@@ -489,9 +489,14 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 
   // Pending actions = submissions where pendingWithEmail matches current user
   const actionsCount = useMemo(() => {
-    const reqPending        = (requests           || []).filter(r => r.pendingWithEmail && r.pendingWithEmail === currentUserEmail).length;
-    const gatePending       = (gateSubmissions    || []).filter(g => g.pendingWithEmail && g.pendingWithEmail === currentUserEmail).length;
-    const closurePending    = (closureSubmissions || []).filter(c => c.pendingWithEmail && c.pendingWithEmail === currentUserEmail).length;
+    // Sidebar badge counts — match user against single email OR the
+    // pendingStakeholderEmails list (multi-reviewer stages).
+    const ownsItem = (it) =>
+      (it.pendingWithEmail && it.pendingWithEmail === currentUserEmail) ||
+      (Array.isArray(it.pendingStakeholderEmails) && it.pendingStakeholderEmails.includes(currentUserEmail));
+    const reqPending        = (requests           || []).filter(r => ownsItem(r)).length;
+    const gatePending       = (gateSubmissions    || []).filter(g => ownsItem(g)).length;
+    const closurePending    = (closureSubmissions || []).filter(c => ownsItem(c)).length;
     const validationPending = (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF)
       ? (projects || []).filter(p => p.pmoStatus === "Submitted").length
       : 0;
@@ -3365,14 +3370,22 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
     (isMock || r.pendingWithEmail === currentUserEmail)
   );
 
+  // Match the current user against either (a) the single pendingWithEmail
+  // (PMO / Sponsor / Finance routing) OR (b) the pendingStakeholderEmails
+  // array (multi-stakeholder review stage — only those who still owe a
+  // decision per the ApprovalLog are in this list).
+  const ownsThis = (item) =>
+    item.pendingWithEmail === currentUserEmail ||
+    (Array.isArray(item.pendingStakeholderEmails) && item.pendingStakeholderEmails.includes(currentUserEmail));
+
   const pendingGates = (gateSubmissions || []).filter(g =>
     !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected") &&
-    (isMock || g.pendingWithEmail === currentUserEmail)
+    (isMock || ownsThis(g))
   );
 
   const pendingClosures = (closureSubmissions || []).filter(c =>
     c.status !== "Closed" && c.status !== "Rejected" &&
-    (isMock || c.pendingWithEmail === currentUserEmail)
+    (isMock || ownsThis(c))
   );
 
   // PMO-only: projects where PM submitted an update awaiting validation

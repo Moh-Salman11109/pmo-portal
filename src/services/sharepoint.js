@@ -624,6 +624,38 @@ const G1_SELECT = [
 ].join(",");
 const G1_EXPAND = "ProjectManager,ProjectSponsor,Stakeholders,Author";
 
+// Extract approver names from a multi-line ApprovalLog string.
+// Each line is "{emoji} {Name} (Role) — {Approve|Reject} — {date} — {comment}".
+// Returns lower-cased names so we can compare against stakeholder names regardless of case/space.
+const extractApproverNames = (raw) => {
+  if (!raw || typeof raw !== "string") return [];
+  return raw.split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const parts = line.split(/\s+[—–-]\s+/);
+      if (parts.length < 2) return null;
+      const head = parts[0];
+      const emojiMatch = head.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|[✅❌⚠️])\s*/u);
+      const rest = emojiMatch ? head.slice(emojiMatch[0].length).trim() : head.trim();
+      const roleMatch = rest.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      return (roleMatch ? roleMatch[1] : rest).trim();
+    })
+    .filter(Boolean);
+};
+
+// Given the stakeholders array and the ApprovalLog string, return the stakeholders
+// who have NOT yet voted (no entry in the log). Each returned item is { title, email }.
+// Used to drive the "Pending with: X, Y, Z" display and route the My Actions queue
+// only to stakeholders still owing a decision.
+const computePendingStakeholders = (stakeholdersRaw, approvalLog) => {
+  const voted = new Set(extractApproverNames(approvalLog).map(n => n.toLowerCase()));
+  return (stakeholdersRaw || [])
+    .filter(u => u && u.Title)
+    .map(u => ({ title: u.Title, email: u.EMail || "" }))
+    .filter(s => !voted.has(s.title.toLowerCase()));
+};
+
 // Derive who the item is currently pending with from its status string.
 const pendingWithFromG1Status = (status) => {
   if (!status) return "";
@@ -646,6 +678,12 @@ export function mapSPItemToGateSubmission(item) {
   const daysAtGate = submissionDate
     ? Math.floor((Date.now() - new Date(item.Created)) / 86400000)
     : 0;
+  const st = item.Status || "";
+  // Stakeholders who still owe a decision — computed from the ApprovalLog.
+  // When status is "Stakeholder Review" this is the routing list; when status
+  // is at another stage, the field is still populated for the UI to show
+  // upcoming reviewers.
+  const pendingStakeholders = computePendingStakeholders(item.Stakeholders, item.ApprovalLog);
   return {
     id:                   `GS${item.ID}`,
     spId:                 item.ID                          || null,
@@ -654,12 +692,11 @@ export function mapSPItemToGateSubmission(item) {
     projectId:            item.ProjectCode                 || "", // matched by code in UI
     gateNumber:           "1",
     gateLabel:            "Gate 1 — Project Initiation",
-    status:               item.Status                      || "",
-    pendingWith:          pendingWithFromG1Status(item.Status),
+    status:               st,
+    pendingWith:          pendingWithFromG1Status(st),
     pendingWithEmail:     (() => {
-      const st = item.Status || "";
       if (st === "Project Sponsor Review")             return item.ProjectSponsor?.EMail || "";
-      if (st === "Stakeholder Review")                 return (item.Stakeholders || [])[0]?.EMail || "";
+      if (st === "Stakeholder Review")                 return ""; // multiple emails — routed via pendingStakeholderEmails
       if (st === "PMO Review")                         return PMO_COORDINATOR_EMAIL;
       if (st === "Finance Review (Stage 1)")           return FINANCE_STAGE1_EMAIL;
       if (st === "Finance Review (Final Stage)")       return FINANCE_FINAL_EMAIL;
@@ -668,6 +705,8 @@ export function mapSPItemToGateSubmission(item) {
     projectManager:       item.ProjectManager?.Title       || "",
     projectSponsor:       item.ProjectSponsor?.Title       || "",
     stakeholders:         (item.Stakeholders || []).map(u => u.Title).filter(Boolean),
+    pendingStakeholders:  pendingStakeholders.map(s => s.title),
+    pendingStakeholderEmails: pendingStakeholders.map(s => s.email).filter(Boolean),
     financeCapital:       item.IsFinanceCapitalizationAssessmen || "No",
     submittedBy:          item.Author?.Title               || "",
     submittedByEmail:     item.Author?.EMail               || "",
@@ -853,19 +892,16 @@ export function mapSPItemToClosureSubmission(item) {
     : 0;
   const st = item.Status || "";
   // Derive who currently holds the closure for review.
-  // Workflow: PM submits → PMO does first-pass review (status defaults to
-  // "Submitted") → PMO releases for stakeholder review (status flips to
-  // "In Review") → stakeholders approve → status becomes "Closed".
-  // So "In Review" sits with STAKEHOLDERS, not PMO. The previous mapping
-  // had this inverted and was mis-labelling the queue.
+  // Workflow: PM submits → PMO first-pass review ("Submitted") → PMO releases
+  // for stakeholder review ("In Review") → stakeholders approve → "Closed".
+  // pendingStakeholders = stakeholders who still owe a decision (parsed from
+  // the ApprovalLog). Drives both the display label and the My Actions queue
+  // routing for the "In Review" stage.
+  const pendingStakeholders = computePendingStakeholders(item.Stakeholders, item.ApprovalLog);
   const pendingWith = st === "Closed" || st === "Rejected" ? ""
-                    : st === "In Review" ? "Stakeholders"
-                    : "PMO";
-  // pendingWithEmail drives the My Actions queue routing. Single email when
-  // it sits with PMO (one inbox). When it sits with stakeholders (multiple
-  // people) we leave it blank — the queue logic should match the user
-  // against the stakeholders array instead. TODO: queue logic for stakeholder
-  // routing — flagged for the audit follow-up.
+                    : st === "In Review"
+                      ? (pendingStakeholders.length > 0 ? pendingStakeholders.map(s => s.title).join(", ") : "Stakeholders")
+                      : "PMO";
   const pendingWithEmail = (st === "Closed" || st === "Rejected" || st === "In Review")
     ? "" : PMO_COORDINATOR_EMAIL;
   return {
@@ -878,6 +914,8 @@ export function mapSPItemToClosureSubmission(item) {
     status:         st,
     projectManager: item.ProjectManager?.Title     || "",
     stakeholders:   (item.Stakeholders || []).map(u => u.Title).filter(Boolean),
+    pendingStakeholders:      pendingStakeholders.map(s => s.title),
+    pendingStakeholderEmails: pendingStakeholders.map(s => s.email).filter(Boolean),
     comments:       item.Comments                  || "",
     submittedBy:    item.Author?.Title             || "",
     submittedByEmail: item.Author?.EMail           || "",
