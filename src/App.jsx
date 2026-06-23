@@ -3191,10 +3191,19 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
     );
   };
 
+  // Pending dot/colour escalates with age: red after 14d, amber after 7d,
+  // brand mint by default. Same rule we adopted on the My Actions queue
+  // so the two screens read consistently.
+  const urgencyForDays = (days) => {
+    if (days > 14) return { dot: "#dc2626", text: "#dc2626" };
+    if (days > 7)  return { dot: "#d97706", text: "#d97706" };
+    return { dot: "#0891b2", text: T.muted };
+  };
   const GateCard = ({ gs }) => {
     const isRejected = gs.status?.startsWith("Rejected");
     const isApproved = gs.status?.startsWith("Approved");
     const borderColor = isRejected ? "#fecaca" : isApproved ? "#bbf7d0" : T.border;
+    const u = urgencyForDays(gs.daysAtGate || 0);
     return (
       <div style={{ background: T.surface, border: `1px solid ${borderColor}`, borderRadius: 12, padding: "14px 18px" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
@@ -3210,8 +3219,8 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
               {gs.projectSponsor && <span> · Sponsor: {gs.projectSponsor}</span>}
             </div>
             {gs.pendingWith && !isRejected && !isApproved && (
-              <div style={{ fontSize: 12, color: "#d97706", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#d97706", display: "inline-block" }} />
+              <div style={{ fontSize: 12, color: u.text, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: u.dot, display: "inline-block" }} />
                 Pending with {gs.pendingWith}
                 {gs.daysAtGate > 0 && <span style={{ color: T.muted }}> · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</span>}
               </div>
@@ -3299,35 +3308,36 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Closure Reviews In Progress</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pendingClosures.map(cl => (
-              <div key={cl.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cl.projectTitle}</span>
-                      <span style={{ fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>Project Closure</span>
-                      {cl.projectCode && <span style={{ fontSize: 11, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px" }}>{cl.projectCode}</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: T.muted }}>
-                      Submitted {cl.submissionDate} · PM: {cl.projectManager}
-                      {cl.department && <span> · {cl.department}</span>}
-                    </div>
-                    {cl.daysInClosure > 0 && (
-                      <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#d97706" }} />
-                        <span style={{ fontSize: 12, color: T.muted }}>
-                          {cl.pendingWith ? `Pending with ${cl.pendingWith}` : "In review"} · <strong>{cl.daysInClosure} day{cl.daysInClosure !== 1 ? "s" : ""}</strong>
-                        </span>
+            {pendingClosures.map(cl => {
+              const u = urgencyForDays(cl.daysInClosure || 0);
+              return (
+                <div key={cl.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cl.projectTitle}</span>
+                        <span style={{ fontSize: 11, color: T.muted, background: T.bgAlt || "#f3f4f6", border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>Project Closure</span>
+                        {cl.projectCode && <span style={{ fontSize: 11, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px" }}>{cl.projectCode}</span>}
                       </div>
-                    )}
+                      <div style={{ fontSize: 12, color: T.muted }}>
+                        Submitted {cl.submissionDate} · PM: {cl.projectManager}
+                        {cl.department && <span> · {cl.department}</span>}
+                      </div>
+                      {cl.daysInClosure > 0 && (
+                        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: u.dot }} />
+                          <span style={{ fontSize: 12, color: u.text }}>
+                            {cl.pendingWith ? `Pending with ${cl.pendingWith}` : "In review"} · <strong>{cl.daysInClosure} day{cl.daysInClosure !== 1 ? "s" : ""}</strong>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <RequestStatusBadge status={cl.status || "In Review"} />
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "4px 12px", whiteSpace: "nowrap" }}>
-                    {cl.status || "In Review"}
-                  </div>
+                  <ApprovalLogPanel log={cl.approvalLog} />
                 </div>
-                <ApprovalLogPanel log={cl.approvalLog} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
