@@ -87,7 +87,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   const pendingApprovals = useMemo(() => {
     const merged = [
       ...pendingGates.map(g => ({ ...g, _kind: "gate" })),
-      ...pendingClosures.map(c => ({ ...c, _kind: "closure", gateLabel: "Gate 5", daysAtGate: c.daysAtClosure || c.daysOpen || 0 })),
+      ...pendingClosures.map(c => ({ ...c, _kind: "closure", gateLabel: "Gate 5 — Closure", daysAtGate: c.daysInClosure || 0 })),
     ];
     return merged.sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0));
   }, [pendingGates, pendingClosures]);
@@ -95,10 +95,13 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   // Gate pipeline — union of projects.gate AND pending workflow queues, deduped by project id.
   // Without merging the queues we miss every project sitting in Stakeholder Review at G1
   // (no project record yet) and every closure awaiting sign-off at G5.
+  // Match by gateNumber rather than gateLabel — SP stores labels like
+  // "Gate 1 — Project Initiation" which won't equal the GATE_DEFS short label "Gate 1".
   const gatePipeline = useMemo(() => GATE_DEFS.map(def => {
+    const gateNum = def.id.replace("G", ""); // G1 → "1"
     const ids = new Set();
     activeProjects.forEach(p => { if (p.gate === def.label) ids.add(p.id); });
-    pendingGates.forEach(g => { if (g.gateLabel === def.label) ids.add(g.projectId || `gs-${g.id}`); });
+    pendingGates.forEach(g => { if (String(g.gateNumber) === gateNum) ids.add(g.projectId || `gs-${g.id}`); });
     if (def.id === "G5") {
       pendingClosures.forEach(c => ids.add(c.projectId || `cs-${c.id}`));
     }
