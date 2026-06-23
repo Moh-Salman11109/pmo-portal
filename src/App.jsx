@@ -4893,15 +4893,18 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 
   const [form, setForm] = useState(() => existing ? { ...existing, _newUpdate: "" } : {
     name: "", code: "", deptId: "", pm: "", sponsor: "",
-    projectType: "Enterprise Project", phase: "Planning", gate: "Gate 1",
-    status: "Not Started", priority: "Medium", riskLevel: "Low",
-    budgetStatus: "On Budget", classification: "Strategic", strategic: "",
+    projectType: "Enterprise Project", gate: "Gate 1",
+    status: "Not Started", priority: "Medium",
+    classification: "Strategic", strategic: "",
     objective: "", businessCase: "",
     startDate: today, plannedEnd: "", roadmapDeadline: "",
+    // Progress is auto-derived from the WBS on save (see handleSave) — these
+    // 0 defaults seed new projects until activities are added.
     progress: 0, plannedProgress: 0,
     budget: 0, forecast: 0, actualCost: 0,
-    spi: 1.0, cpi: 1.0, daysRemaining: 0, daysDelayed: 0, scheduleVariance: "0",
-    health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Green", quality: "Green", resource: "Green", benefits: "Green", governance: "Green" },
+    // No phase / riskLevel / budgetStatus / health / spi / cpi / daysRemaining /
+    // daysDelayed / scheduleVariance: all derived from raw data at render time
+    // (Phase 2 simplification). Seeding them here would create dead state.
     milestones: [], risks: [], issues: [], updates: [], benefits: [], approvals: [],
     documents: [...MANDATORY_DOCS], requiredDocs: [],
     gates: GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" })),
@@ -4911,7 +4914,6 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const setH = (k, v) => setForm(f => ({ ...f, health: { ...f.health, [k]: v } }));
 
   const validate = () => {
     const e = {};
@@ -4952,26 +4954,9 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   const sErr = k => fInputStyle(T, !!errors[k]);
   const ss = { ...s, background: T.selectBg };
 
-  const RAGBtn = ({ hKey, label }) => {
-    const opts = ["Green", "Amber", "Red"];
-    const clr = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
-    const v = form.health[hKey];
-    return (
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 6 }}>{label}</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {opts.map(o => (
-            <button key={o} onClick={() => setH(hKey, o)} style={{ flex: 1, padding: "7px 4px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-              background: v === o ? clr[o].bg : T.bg,
-              border: v === o ? `2px solid ${clr[o].b}` : `1px solid ${T.border}`,
-              color: v === o ? clr[o].text : T.muted }}>
-              {o}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  // RAGBtn / setH lived here for the old Health 8-dim step. That step was
+  // dropped in Phase 1 simplification; the form no longer renders any health
+  // controls. Cleaned up.
 
   const renderStep = () => {
     if (step === 0) return (
