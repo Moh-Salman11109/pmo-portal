@@ -2975,6 +2975,9 @@ const REQUEST_STATUS_META = {
   "Finance Review (Final Stage)": { label: "Finance (Final)",         color: "#1d4ed8", bg: "#dbeafe" },
   "Approved - Capitalized Proj":  { label: "Approved (Capital)",      color: "#15803d", bg: "#dcfce7" },
   "Approved - Non-Capitalized":   { label: "Approved (Non-Capital)",  color: "#16a34a", bg: "#f0fdf4" },
+  // ── Project Closure statuses ──────────────────────────────────────
+  "In Review":     { label: "In Review",       color: "#0891b2", bg: "#ecfeff" },
+  Closed:          { label: "Closed",          color: "#15803d", bg: "#dcfce7" },
   // ── Legacy / mock compatibility ───────────────────────────────────
   Draft:           { label: "Draft",           color: "#6b7280", bg: "#f3f4f6" },
   Submitted:       { label: "Submitted",       color: "#2563eb", bg: "#eff6ff" },
@@ -3475,7 +3478,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
                 title={req.title}
                 subtitle={`Requested by ${req.requestedBy} · ${req.daysInCurrentStage} day${req.daysInCurrentStage !== 1 ? "s" : ""} pending`}
                 rightContent={<RequestStatusBadge status={req.status} />}
-                urgency={req.daysInCurrentStage > 5 ? "medium" : null}
+                urgency={req.daysInCurrentStage > 14 ? "high" : req.daysInCurrentStage > 7 ? "medium" : null}
                 onClick={() => setRoute({ view: "requests" })}
               />
             ))}
@@ -3498,7 +3501,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
                   title={`${gs.gateLabel} — ${gs.projectTitle}`}
                   subtitle={`Submitted by ${gs.submittedBy} · ${gs.daysAtGate} day${gs.daysAtGate !== 1 ? "s" : ""} at gate`}
                   rightContent={<RequestStatusBadge status={gs.status} />}
-                  urgency={gs.daysAtGate > 5 ? "medium" : null}
+                  urgency={gs.daysAtGate > 14 ? "high" : gs.daysAtGate > 7 ? "medium" : null}
                   onClick={() => setRoute({ view: "project", projectId: gs.projectId, from: "actions" })}
                 />
                 <ApprovalLogPanel log={gs.approvalLog} />
@@ -3521,9 +3524,9 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
                 <ActionCard
                   icon="🔐"
                   title={`${cl.projectTitle}${cl.projectCode ? ` (${cl.projectCode})` : ""}`}
-                  subtitle={`PM: ${cl.projectManager} · ${cl.daysInClosure} day${cl.daysInClosure !== 1 ? "s" : ""} in closure · Pending with ${cl.pendingWith}`}
-                  rightContent={<span style={{ fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 10px", fontWeight: 700 }}>{cl.status || "Stakeholder Review"}</span>}
-                  urgency={cl.daysInClosure > 7 ? "medium" : null}
+                  subtitle={`PM: ${cl.projectManager} · ${cl.daysInClosure} day${cl.daysInClosure !== 1 ? "s" : ""} in closure · Pending with ${cl.pendingWith || "—"}`}
+                  rightContent={<RequestStatusBadge status={cl.status || "In Review"} />}
+                  urgency={cl.daysInClosure > 14 ? "high" : cl.daysInClosure > 7 ? "medium" : null}
                 />
                 <ApprovalLogPanel log={cl.approvalLog} />
               </div>
