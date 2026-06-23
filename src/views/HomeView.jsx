@@ -170,7 +170,12 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   }, [activeProjects]);
   const flagsHigh  = interventionFlags.filter(f => f.severity === "high").length;
   const flagsMed   = interventionFlags.length - flagsHigh;
-  const topConcern = interventionFlags[0] || null;
+  // Risk Watchlist = critical/high risks on projects NOT already in the intervention panel.
+  // Each surface earns its place by adding new information — risks for flagged projects
+  // are already visible in the intervention row's reasons, so showing them again here
+  // would just repeat the same headline three times.
+  const flaggedProjectIds = useMemo(() => new Set(interventionFlags.map(f => f.project.id)), [interventionFlags]);
+  const watchlistRisks    = useMemo(() => portfolioRisks.filter(r => !flaggedProjectIds.has(r.projectId)), [portfolioRisks, flaggedProjectIds]);
 
   // ── Narrative ──────────────────────────────────────────────────
   const greeting = useMemo(() => {
@@ -327,22 +332,6 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
               ))}
             </div>
 
-            {/* Top concern callout */}
-            {topConcern && (
-              <div onClick={() => setRoute({ view: "project", projectId: topConcern.project.id })} style={{
-                background: "rgba(255,80,0,0.10)", border: "1px solid rgba(255,80,0,0.30)", borderLeft: "3px solid #FF5000",
-                borderRadius: 10, padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
-              }}>
-                <span style={{ fontSize: 18 }}>🔴</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: "#ffa07a", fontSize: 9, fontWeight: 800, letterSpacing: "0.6px", textTransform: "uppercase", marginBottom: 2 }}>Top concern today</div>
-                  <div style={{ color: "white", fontSize: 12.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{topConcern.project.code} · {topConcern.project.name}</div>
-                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 10.5, marginTop: 1 }}>{topConcern.reasons.slice(0, 3).join(" · ")}</div>
-                </div>
-                <span style={{ color: "#00FFB3", fontSize: 16, fontWeight: 700 }}>→</span>
-              </div>
-            )}
-
             {/* Composition strip */}
             <div>
               <div style={{ display: "flex", gap: 3, height: 8 }}>
@@ -404,23 +393,28 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         </div>
       )}
 
-      {/* Risk Register (collapsible) */}
-      {userRole !== ROLE_PM && portfolioRisks.length > 0 && (
+      {/* Risk Watchlist (collapsible) — only risks on projects NOT already flagged for intervention,
+          so the user discovers EARLY-WARNING signals here rather than re-reading the same project's
+          headline three times across the page. */}
+      {userRole !== ROLE_PM && watchlistRisks.length > 0 && (
         <details style={{ marginBottom: 14 }}>
-          <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 22px", background: T.surface, borderLeft: "4px solid #490300", border: `1px solid ${T.border}`, borderLeftWidth: 4, borderLeftColor: "#490300", borderRadius: 12, fontSize: 14, fontWeight: 800, color: T.text }}>
-            <span style={{ fontSize: 16 }}>⚠</span>
-            <span>Portfolio Risk Register</span>
-            {portfolioRisks.filter(r => r.level === "Critical").length > 0 && (
-              <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{portfolioRisks.filter(r => r.level === "Critical").length} Critical</span>
+          <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 22px", background: T.surface, borderLeft: "4px solid #490300", border: `1px solid ${T.border}`, borderLeftWidth: 4, borderLeftColor: "#490300", borderRadius: 12, fontSize: 14, fontWeight: 800, color: T.text, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 16 }}>👁</span>
+            <span>Risk Watchlist</span>
+            {watchlistRisks.filter(r => r.level === "Critical").length > 0 && (
+              <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "Critical").length} Critical</span>
             )}
-            <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{portfolioRisks.filter(r => r.level === "High").length} High</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: T.muted, fontWeight: 400 }}>click to expand ▼</span>
+            {watchlistRisks.filter(r => r.level === "High").length > 0 && (
+              <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "High").length} High</span>
+            )}
+            <span style={{ fontSize: 11, color: T.muted, fontWeight: 400, flex: 1, minWidth: 200 }}>· early warning — open risks on projects not yet flagged above</span>
+            <span style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>click to expand ▼</span>
           </summary>
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 12px 12px", overflow: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr style={{ background: T.bg }}>{["Project", "Risk", "Level", "Owner", "Due Date", "Status"].map(h => (<th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>))}</tr></thead>
               <tbody>
-                {portfolioRisks.slice(0, 25).map(r => (
+                {watchlistRisks.slice(0, 25).map(r => (
                   <tr key={`${r.projectId}-${r.id}`} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer" }}
                     onClick={() => setRoute({ view: "project", projectId: r.projectId })}
                     onMouseEnter={e => e.currentTarget.style.background = T.bg}
@@ -439,7 +433,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                     <td style={{ padding: "10px 14px" }}><span style={{ fontSize: 11, fontWeight: 600, color: r.status === "Open" ? "#dc2626" : "#eab308" }}>{r.status}</span></td>
                   </tr>
                 ))}
-                {portfolioRisks.length > 25 && (<tr><td colSpan={6} style={{ padding: "10px 14px", fontSize: 12, color: T.muted, textAlign: "center" }}>+{portfolioRisks.length - 25} more — drill into departments to see all</td></tr>)}
+                {watchlistRisks.length > 25 && (<tr><td colSpan={6} style={{ padding: "10px 14px", fontSize: 12, color: T.muted, textAlign: "center" }}>+{watchlistRisks.length - 25} more — drill into departments to see all</td></tr>)}
               </tbody>
             </table>
           </div>
