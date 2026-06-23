@@ -321,12 +321,36 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 600, lineHeight: 1.5 }}>{portfolioStory}</div>
 
-            {/* Stats row */}
+            {/* Stats row — sublines name names, not severity counts.
+                Counting is the headline; identity is what makes the stat actionable. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
               {[
-                { label: "Need attention", value: interventionFlags.length, color: interventionFlags.length > 0 ? "#fca5a5" : "white", sub: interventionFlags.length > 0 ? `${flagsHigh} high · ${flagsMed} medium` : "all clear" },
-                { label: "Budget utilised", value: `${budgetUtilPct}%`, color: "white", sub: `${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)}` },
-                { label: "Pending approvals", value: pendingApprovals.length, color: pendingApprovals.length > 0 ? "#00FFB3" : "white", sub: pendingApprovals.length > 0 ? `oldest ${pendingApprovals[0]?.daysAtGate || 0}d` : "queue clear" },
+                {
+                  label: "Need attention",
+                  value: interventionFlags.length,
+                  color: interventionFlags.length > 0 ? "#fca5a5" : "white",
+                  sub: interventionFlags.length === 0
+                    ? "all clear"
+                    : interventionFlags.length === 1
+                      ? interventionFlags[0].project.code
+                      : interventionFlags.length === 2
+                        ? `${interventionFlags[0].project.code} · ${interventionFlags[1].project.code}`
+                        : `${interventionFlags[0].project.code} · ${interventionFlags[1].project.code} +${interventionFlags.length - 2} more`,
+                },
+                {
+                  label: "Budget utilised",
+                  value: `${budgetUtilPct}%`,
+                  color: "white",
+                  sub: `${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)}`,
+                },
+                {
+                  label: "Pending approvals",
+                  value: pendingApprovals.length,
+                  color: pendingApprovals.length > 0 ? "#00FFB3" : "white",
+                  sub: pendingApprovals.length === 0
+                    ? "queue clear"
+                    : `${(pendingApprovals[0].projectCode || pendingApprovals[0].projectTitle || "—")} · ${pendingApprovals[0].daysAtGate || 0}d`,
+                },
               ].map(s => (
                 <div key={s.label} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "12px 14px" }}>
                   <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
