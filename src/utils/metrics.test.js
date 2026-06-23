@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./metrics.js";
+import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcPortfolioIPI, calcTimeWeightedIPI, effectiveProgress, calcProjectProgressFromWBS, ipiColor } from "./metrics.js";
 
 // Convenience: build a minimal project that calcProjectIPIFull will accept.
 // asOfDate frozen so the time-based PV piece is deterministic across runs.
@@ -262,5 +262,194 @@ describe("IPI consistency — number must match its breakdown", () => {
       100 * (0.5 * r.components.spiFinal + 0.25 * r.components.cpi + 0.25 * r.components.mci)
     );
     expect(r.ipi).toBe(expected);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Mathematical soundness — these tests lock in every governance-grade claim
+// the IPI Methodology PDF makes. If any fails, the PDF and the engine have
+// drifted and need to be re-aligned before shipping.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("Caps — components clamp at IPI_DEFAULTS.cap (1.20)", () => {
+  it("SPI is capped at 1.20 when raw EV/PV exceeds it", () => {
+    // 100% progress with only 50% of timeline elapsed → raw SPI = 2.0; cap to 1.20.
+    const p = mk({
+      milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    expect(ipi(p).components.spi).toBeLessThanOrEqual(1.20);
+    expect(ipi(p).components.spi).toBeGreaterThan(1.0);
+  });
+  it("CPI is capped at 1.20 when BCWP / AC exceeds it", () => {
+    // 50% progress, budget 1M, actual cost 100K → BCWP=500K, CPI=5.0; cap to 1.20.
+    const p = mk({ budget: 1_000_000, actualCost: 100_000,
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    expect(ipi(p).components.cpi).toBe(1.20);
+  });
+  it("MCI is capped at 1.0 (compliance has no over-achievement)", () => {
+    // 5 docs all Approved → 5/5 = 1.0, never exceeds.
+    const p = mk({ documents: Array.from({ length: 5 }, (_, i) =>
+      ({ name: `D${i}`, required: true, requiredAtGate: 1, status: "Approved" })),
+    });
+    expect(ipi(p).components.mci).toBe(1.0);
+  });
+});
+
+describe("Roadmap penalty — multiplicative decay 1% per day past deadline", () => {
+  it("penalty is 1.0 (no effect) when project is within roadmap", () => {
+    const p = mk({ roadmapDeadline: "2027-01-01" });
+    expect(ipi(p).components.penalty).toBe(1.0);
+  });
+  it("penalty is 0.90 when 10 days past roadmap deadline", () => {
+    // ASOF is 2026-06-19. Set roadmap to 2026-06-09 → 10 days overdue.
+    const p = mk({ roadmapDeadline: "2026-06-09",
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    expect(ipi(p).components.penalty).toBeCloseTo(0.90, 2);
+  });
+  it("penalty floors at 0 (never negative) when 100+ days past deadline", () => {
+    const p = mk({ roadmapDeadline: "2025-01-01",
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    expect(ipi(p).components.penalty).toBe(0);
+  });
+  it("penalty is applied multiplicatively to SPI (spiFinal = spi × penalty)", () => {
+    const p = mk({ roadmapDeadline: "2026-06-09",
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    const r = ipi(p);
+    expect(r.components.spiFinal).toBeCloseTo(r.components.spi * r.components.penalty, 3);
+  });
+});
+
+describe("Null handling — neutral 1.0 default + all-null returns null IPI", () => {
+  it("treats individual null components as neutral 1.0 in the IPI sum", () => {
+    // No budget → CPI null. Should NOT pull the IPI down.
+    const p = mk({ budget: 0, actualCost: 0,
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    expect(ipi(p).components.cpi).toBe(null);
+    expect(ipi(p).ipi).not.toBe(null);  // still produces a meaningful IPI
+  });
+  it("returns null IPI ('Pending Plan') when ALL three components are null", () => {
+    const p = mk({ budget: 0, actualCost: 0, milestones: [], documents: [],
+      startDate: "", plannedEnd: "" });
+    expect(ipi(p).ipi).toBe(null);
+    expect(ipi(p).status).toBe("Pending Plan");
+  });
+});
+
+describe("CPI sources BCWP from effectiveProgress, not the stale field", () => {
+  it("uses WBS-rolled progress when activities exist, regardless of project.progress", () => {
+    // project.progress stored as 10 (stale), but WBS rolls up to 50%.
+    // CPI should compute BCWP from 50, not 10.
+    const p = mk({
+      progress: 10,            // stale field — ignored
+      budget: 1_000_000,
+      actualCost: 500_000,
+      milestones: [{ id: "M1", weight: 1, progress: 50, status: "In Progress", startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    // BCWP = 0.50 × 1,000,000 = 500,000;  CPI = 500,000 / 500,000 = 1.0
+    expect(ipi(p).components.cpi).toBe(1.0);
+  });
+});
+
+describe("calcDeptIPI — budget × priority weighted rollup", () => {
+  it("Critical × big-budget project dominates the dept score", () => {
+    const dp = [
+      { id: "p1", deptId: "d1", priority: "Critical", budget: 50_000_000,
+        gate: "Gate 4", startDate: "2026-04-01", plannedEnd: "2027-01-01",
+        progress: 90, actualCost: 25_000_000,
+        milestones: [{ id: "M1", weight: 1, progress: 90, startDate: "2026-04-01", date: "2026-12-31" }],
+        documents: [{ name: "Charter", required: true, requiredAtGate: 2, status: "Approved" }] },
+      { id: "p2", deptId: "d1", priority: "Low", budget: 1_000_000,
+        gate: "Gate 4", startDate: "2026-04-01", plannedEnd: "2027-01-01",
+        progress: 10, actualCost: 800_000,
+        milestones: [{ id: "M1", weight: 1, progress: 10, startDate: "2026-04-01", date: "2026-06-19" }],
+        documents: [{ name: "Charter", required: true, requiredAtGate: 2, status: "Draft" }] },
+    ];
+    const deptIPI = calcDeptIPI("d1", dp);
+    const p1IPI = calcProjectIPI(dp[0]);
+    const p2IPI = calcProjectIPI(dp[1]);
+    // Critical+50M is 200× weight of Low+1M, so dept IPI rounds to ≈ p1's IPI.
+    expect(Math.abs(deptIPI - p1IPI)).toBeLessThan(2);
+    expect(Math.abs(deptIPI - p2IPI)).toBeGreaterThan(10);
+  });
+  it("excludes null-IPI (Pending Plan) projects from the denominator", () => {
+    const dp = [
+      { id: "p1", deptId: "d1", priority: "High", budget: 1_000_000,
+        gate: "Gate 4", startDate: "2026-04-01", plannedEnd: "2027-01-01",
+        progress: 80, actualCost: 500_000,
+        milestones: [{ id: "M1", weight: 1, progress: 80, startDate: "2026-04-01", date: "2026-12-31" }],
+        documents: [{ name: "Charter", required: true, requiredAtGate: 2, status: "Approved" }] },
+      // Pending Plan — no schedule, cost, or doc data
+      { id: "p2", deptId: "d1", priority: "Medium", budget: 0,
+        milestones: [], documents: [], startDate: "", plannedEnd: "" },
+    ];
+    const deptIPI = calcDeptIPI("d1", dp);
+    const p1IPI = calcProjectIPI(dp[0]);
+    expect(deptIPI).toBe(p1IPI);  // Pending Plan project doesn't dilute
+  });
+  it("returns null when no measurable projects in the dept", () => {
+    expect(calcDeptIPI("empty-dept", [])).toBe(null);
+  });
+});
+
+describe("calcTimeWeightedIPI — weighted by days each snapshot was active", () => {
+  it("weights each snapshot by its duration to the next", () => {
+    // 30 days at IPI 80, then 30 days at IPI 100 → simple avg 90, time-weighted ≈ 90.
+    const p = mk({
+      ipiHistory: [
+        { date: "2026-04-01", ipi: 80 },
+        { date: "2026-05-01", ipi: 100 },
+      ],
+    });
+    const tw = calcTimeWeightedIPI(p, "2026-05-31");
+    expect(tw).toBeGreaterThanOrEqual(89);
+    expect(tw).toBeLessThanOrEqual(91);
+  });
+  it("falls back to the snapshot IPI when no history exists", () => {
+    const p = mk({ ipiHistory: [] });
+    expect(calcTimeWeightedIPI(p, "2026-06-19")).toBe(calcProjectIPI(p));
+  });
+});
+
+describe("effectiveProgress — single source of truth for progress%", () => {
+  it("prefers WBS rollup when milestones exist", () => {
+    const p = mk({
+      progress: 10,  // stale
+      milestones: [
+        { id: "M1", weight: 1, progress: 80 },
+        { id: "M2", weight: 1, progress: 20 },
+      ],
+    });
+    // Weighted avg of M1+M2 = (80+20)/2 = 50, not the stale 10
+    expect(effectiveProgress(p)).toBe(50);
+  });
+  it("falls back to project.progress when no WBS", () => {
+    const p = mk({ progress: 35, milestones: [] });
+    expect(effectiveProgress(p)).toBe(35);
+  });
+});
+
+describe("ipiColor — status bands match the documented thresholds", () => {
+  it("maps null to 'No Data' (grey)", () => {
+    expect(ipiColor(null).label).toBe("No Data");
+  });
+  it("maps >100 to 'Over Achieved' (green dark)", () => {
+    expect(ipiColor(110).label).toBe("Over Achieved");
+  });
+  it("maps exactly 100 to 'On Track' (green)", () => {
+    expect(ipiColor(100).label).toBe("On Track");
+  });
+  it("maps 90 to 'Watch' (amber)", () => {
+    expect(ipiColor(90).label).toBe("Watch");
+  });
+  it("maps 70 to 'At Risk' (orange)", () => {
+    expect(ipiColor(70).label).toBe("At Risk");
+  });
+  it("maps below 70 to 'Critical' (red)", () => {
+    expect(ipiColor(50).label).toBe("Critical");
   });
 });

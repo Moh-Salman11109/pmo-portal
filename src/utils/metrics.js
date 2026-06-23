@@ -159,13 +159,19 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   let ev, pv, spi;
   const totalW = leaves.reduce((s, m) => s + (m.weight || 1), 0);
 
+  // Project progress used for both SPI fallback (no-WBS path) and CPI BCWP.
+  // SOURCE OF TRUTH: effectiveProgress — prefers the WBS rollup so a stale
+  // project.progress field can never drift from the activity-driven reality
+  // shown in the UI. Falls back to project.progress only when no WBS exists.
+  const effProgress = effectiveProgress(project);
+
   if (leaves.length > 0 && totalW > 0) {
     ev = leaves.reduce((s, m) => s + (m.weight || 1) * actualPct(m),  0) / totalW;
     pv = leaves.reduce((s, m) => s + (m.weight || 1) * plannedPct(m), 0) / totalW;
     spi = pv === 0 ? null : Math.min(cap, ev / pv);
   } else if (project.startDate && project.plannedEnd) {
-    // No WBS — fall back to project-level dates + reported progress
-    ev = (project.progress ?? 0) / 100;
+    // No WBS — fall back to project-level dates + effective progress
+    ev = effProgress / 100;
     const startMs = new Date(project.startDate).getTime();
     const endMs   = new Date(project.plannedEnd).getTime();
     if (endMs > startMs) {
@@ -180,12 +186,13 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   }
 
   // ── CPI: auto from budget/actualCost, fallback to manual project.cpi ──────
+  // BCWP uses effProgress (not project.progress) so CPI always reflects the
+  // same progress number the user sees in the UI — no drift possible.
   const budget     = project.budget     || 0;
   const actualCost = project.actualCost || 0;
-  const progress   = project.progress   ?? 0;
   let cpi;
   if (budget > 0 && actualCost > 0) {
-    const bcwp = (progress / 100) * budget;
+    const bcwp = (effProgress / 100) * budget;
     cpi = Math.min(cap, bcwp / actualCost);
   } else if (project.cpi && project.cpi !== 0) {
     cpi = Math.min(cap, project.cpi);
