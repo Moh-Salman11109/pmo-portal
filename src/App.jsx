@@ -815,25 +815,165 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
   }
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
-  const kpiCols = bp === "mobile" ? "repeat(2, 1fr)" : bp === "tablet" ? "repeat(3, 1fr)" : "repeat(6, 1fr)";
+  const isNarrow = bp === "mobile" || bp === "tablet";
+
+  // ── Hero data ────────────────────────────────────────────────
+  const deptIPI = calcDeptIPI(deptId, projects);
+  const ipiBand = deptIPI != null ? ipiColor(deptIPI) : null;
+  const total      = stats.total || 0;
+  const onTrackN   = stats.onTrack   || 0;
+  const atRiskN    = stats.atRisk    || 0;
+  const delayedN   = stats.delayed   || 0;
+  const doneN      = stats.completed || 0;
+  const notStartedN = Math.max(0, total - onTrackN - atRiskN - delayedN - doneN);
+  const highRiskN  = deptProjects.filter(p => { const rl = deriveRiskLevel(p); return rl === "Critical" || rl === "High"; }).length;
+  const totalBudget = deptProjects.reduce((s, p) => s + (p.budget || 0), 0);
+  const totalCost   = deptProjects.reduce((s, p) => s + (p.actualCost || 0), 0);
+  const utilPct     = totalBudget ? Math.round((totalCost / totalBudget) * 100) : 0;
+  const topConcern  = deptProjects
+    .map(p => {
+      const rl = deriveRiskLevel(p);
+      let score = 0;
+      if (p.status === "Delayed") score += 100;
+      if (rl === "Critical") score += 50;
+      else if (rl === "High") score += 25;
+      return { p, rl, score };
+    })
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)[0] || null;
+  // Narrative — data-scientist voice for this dept
+  let heroNarrative;
+  if (total === 0) heroNarrative = "No projects in this department yet.";
+  else {
+    const bits = [`${total} ${total === 1 ? "project" : "projects"}`];
+    if (delayedN > 0) bits.push(`${delayedN} delayed`);
+    if (atRiskN > 0)  bits.push(`${atRiskN} at risk`);
+    if (highRiskN > 0) bits.push(`${highRiskN} carrying high/critical risks`);
+    if (delayedN === 0 && atRiskN === 0 && highRiskN === 0) bits.push("all healthy");
+    heroNarrative = bits.join(" · ") + ".";
+  }
 
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
-        <div style={{ width: bp === "mobile" ? 40 : 52, height: bp === "mobile" ? 40 : 52, background: T.primary, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: bp === "mobile" ? 20 : 26, flexShrink: 0 }}>{dept.icon}</div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 18 : 24, fontWeight: 900, color: T.text }}>{dept.name}</h1>
-          <p style={{ margin: 0, color: T.muted, fontSize: 13 }}>Department Project Portfolio · {deptProjects.length} projects</p>
-        </div>
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: kpiCols, gap: 14, marginBottom: 24 }}>
-        <KPICard label="Total Projects" value={stats.total} icon="📋" />
-        <KPICard label="On Track" value={stats.onTrack} color="#16a34a" icon="✅" />
-        <KPICard label="Delayed" value={stats.delayed} color="#dc2626" icon="🔴" />
-        <KPICard label="Completed" value={stats.completed} color="#3b82f6" icon="🏁" />
-        <KPICard label="Portfolio Health" value={`${stats.health}%`} color={T.primary} icon="💪" />
-        {(() => { const di = calcDeptIPI(deptId, projects); const c = ipiColor(di); return <KPICard label="Dept IPI" value={di ?? "—"} color={c.color} icon="📊" sub={c.label} />; })()}
+      {/* ══════ HERO ══════ */}
+      <div style={{
+        background:
+          "radial-gradient(circle at 88% 18%, rgba(0,255,179,0.10) 0%, transparent 42%), " +
+          "radial-gradient(circle at 12% 88%, rgba(0,255,179,0.06) 0%, transparent 38%), " +
+          "linear-gradient(135deg, #001f1a 0%, #003932 50%, #006b56 100%)",
+        color: "white",
+        borderRadius: 20,
+        padding: bp === "mobile" ? "20px 22px" : "28px 36px 30px",
+        position: "relative", overflow: "hidden",
+        borderBottom: "4px solid #00FFB3",
+        marginBottom: 24,
+      }}>
+        {/* Top row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, position: "relative", zIndex: 2, gap: 14, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 52, height: 52, background: "rgba(0,255,179,0.18)", border: "1px solid rgba(0,255,179,0.35)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>{dept.icon}</div>
+            <div>
+              <div style={{ color: "#00FFB3", fontSize: 11, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 3 }}>Department</div>
+              <h1 style={{ fontSize: bp === "mobile" ? 22 : 28, fontWeight: 800, color: "white", lineHeight: 1.05, letterSpacing: "-0.5px", margin: 0 }}>{dept.name}</h1>
+              <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, marginTop: 3 }}>Project Portfolio · {total} {total === 1 ? "project" : "projects"}</div>
+            </div>
+          </div>
+          <img src="/tree-logo.png" alt="Tree" style={{ height: 34, opacity: 0.95 }} />
+        </div>
+
+        {/* Main grid */}
+        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "320px 1fr", gap: 36, alignItems: "center", position: "relative", zIndex: 2 }}>
+
+          {/* IPI block */}
+          <div>
+            <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 6 }}>Department IPI</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+              <div style={{ fontSize: bp === "mobile" ? 72 : 100, fontWeight: 900, color: "white", lineHeight: 0.85, letterSpacing: "-4px" }}>{deptIPI ?? "—"}</div>
+              {ipiBand && <div style={{ background: "rgba(0,255,179,0.18)", border: "1px solid rgba(0,255,179,0.4)", color: "#00FFB3", padding: "3px 11px", borderRadius: 12, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>● {ipiBand.label}</div>}
+            </div>
+            {deptIPI != null && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ height: 9, background: "rgba(255,255,255,0.08)", borderRadius: 4.5, position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, deptIPI)}%`, background: "linear-gradient(90deg, #00b894, #00FFB3)", borderRadius: 4.5 }} />
+                  <div style={{ position: "absolute", left: "70%", top: -3, width: 1, height: 15, background: "rgba(255,255,255,0.25)" }} />
+                  <div style={{ position: "absolute", left: "90%", top: -3, width: 1, height: 15, background: "rgba(255,255,255,0.25)" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 9, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
+                  <span>0</span><span>At Risk · 70</span><span>Watch · 90</span><span>100</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 600, lineHeight: 1.5 }}>{heroNarrative}</div>
+
+            {/* Status quad */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+              {[
+                { l: "On Track",  v: onTrackN, c: onTrackN > 0 ? "#86efac" : "white" },
+                { l: "At Risk",   v: atRiskN,  c: atRiskN > 0 ? "#fcd34d" : "white" },
+                { l: "Delayed",   v: delayedN, c: delayedN > 0 ? "#fca5a5" : "white" },
+                { l: "Completed", v: doneN,    c: doneN > 0 ? "#93c5fd" : "white" },
+              ].map(s => (
+                <div key={s.l} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase", marginBottom: 4 }}>{s.l}</div>
+                  <div style={{ color: s.c, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Top concern callout — names the project, not the severity count */}
+            {topConcern && (
+              <div onClick={() => setRoute({ view: "project", projectId: topConcern.p.id, from: "department", deptId })} style={{
+                background: "rgba(255,80,0,0.10)", border: "1px solid rgba(255,80,0,0.30)", borderLeft: "3px solid #FF5000",
+                borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+              }}>
+                <span style={{ fontSize: 16 }}>🔴</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "#ffa07a", fontSize: 9, fontWeight: 800, letterSpacing: "0.6px", textTransform: "uppercase", marginBottom: 2 }}>Top concern in this dept</div>
+                  <div style={{ color: "white", fontSize: 12.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{topConcern.p.code} · {topConcern.p.name}</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 10.5, marginTop: 1 }}>
+                    {[
+                      topConcern.p.status === "Delayed" ? `Delayed${topConcern.p.daysDelayed > 0 ? ` ${topConcern.p.daysDelayed}d` : ""}` : null,
+                      topConcern.rl === "Critical" ? "Critical risk" : topConcern.rl === "High" ? "High risk" : null,
+                    ].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                <span style={{ color: "#00FFB3", fontSize: 15 }}>→</span>
+              </div>
+            )}
+
+            {/* Status mix + budget — single inline strip */}
+            <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 12 }}>
+              <div>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>Status mix</div>
+                <div style={{ display: "flex", gap: 2, height: 8, borderRadius: 4, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
+                  {onTrackN > 0   && <div style={{ background: "#22c55e", flex: onTrackN }} />}
+                  {atRiskN > 0    && <div style={{ background: "#eab308", flex: atRiskN }} />}
+                  {delayedN > 0   && <div style={{ background: "#FF5000", flex: delayedN }} />}
+                  {doneN > 0      && <div style={{ background: "#3b82f6", flex: doneN }} />}
+                  {notStartedN > 0 && <div style={{ background: "#A1B9AB", flex: notStartedN }} />}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
+                  Avg progress <strong style={{ color: "white", fontWeight: 800 }}>{stats.health || 0}%</strong>
+                  {highRiskN > 0 && <span> · <strong style={{ color: "#fca5a5", fontWeight: 800 }}>{highRiskN}</strong> high-risk</span>}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>Budget · {utilPct}% used</div>
+                <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, utilPct)}%`, background: utilPct > 90 ? "#FF5000" : "#00FFB3", borderRadius: 4 }} />
+                </div>
+                <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
+                  <strong style={{ color: "white", fontWeight: 800 }}>{fmtSAR(totalCost)}</strong> of <strong style={{ color: "white", fontWeight: 800 }}>{fmtSAR(totalBudget)}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
