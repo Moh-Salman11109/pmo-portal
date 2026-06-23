@@ -535,7 +535,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
       <div className="pmo-sidebar" style={sidebarStyle}>
         <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid rgba(255,255,255,0.1)`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, background: T.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+            <img src="/tree-logo.png" alt="Tree" style={{ width: 36, height: 36, borderRadius: 10, display: "block", objectFit: "cover" }} />
             <div>
               <div style={{ color: "#fff", fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>PMO Portal</div>
               <div style={{ color: T.secondary, fontSize: 10, lineHeight: 1.2 }}>Enterprise Governance</div>
