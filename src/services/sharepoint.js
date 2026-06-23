@@ -852,11 +852,22 @@ export function mapSPItemToClosureSubmission(item) {
     ? Math.floor((Date.now() - new Date(item.Created)) / 86400000)
     : 0;
   const st = item.Status || "";
-  // Derive who currently holds the closure for review
-  const pendingWith = st === "In Review" ? "PMO"
-                    : st === "Closed" || st === "Rejected" ? ""
-                    : "Stakeholders";
-  const pendingWithEmail = st === "In Review" ? PMO_COORDINATOR_EMAIL : "";
+  // Derive who currently holds the closure for review.
+  // Workflow: PM submits → PMO does first-pass review (status defaults to
+  // "Submitted") → PMO releases for stakeholder review (status flips to
+  // "In Review") → stakeholders approve → status becomes "Closed".
+  // So "In Review" sits with STAKEHOLDERS, not PMO. The previous mapping
+  // had this inverted and was mis-labelling the queue.
+  const pendingWith = st === "Closed" || st === "Rejected" ? ""
+                    : st === "In Review" ? "Stakeholders"
+                    : "PMO";
+  // pendingWithEmail drives the My Actions queue routing. Single email when
+  // it sits with PMO (one inbox). When it sits with stakeholders (multiple
+  // people) we leave it blank — the queue logic should match the user
+  // against the stakeholders array instead. TODO: queue logic for stakeholder
+  // routing — flagged for the audit follow-up.
+  const pendingWithEmail = (st === "Closed" || st === "Rejected" || st === "In Review")
+    ? "" : PMO_COORDINATOR_EMAIL;
   return {
     id:             `CL${item.ID}`,
     spId:           item.ID                        || null,
