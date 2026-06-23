@@ -315,7 +315,14 @@ export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
  */
 export function calcDeptIPI(deptId, projects) {
   const dp = projects.filter(p => p.deptId === deptId && !p.archived);
-  const measured = dp.map(p => ({ p, ipi: calcTimeWeightedIPI(p) })).filter(x => x.ipi != null);
+  // Today's rollup uses the snapshot IPI (matches what each project displays in
+  // its row in the Department table). Using calcTimeWeightedIPI here created a
+  // visible contradiction — a dept with a single project at snapshot 100 would
+  // render as dept IPI 91 simply because historical readings pulled the average
+  // down. Time-weighted IPI is still available for trend/historical work via the
+  // calcTimeWeightedIPI export, and is used by calcPortfolioIPI for asOfDate
+  // comparisons (last-month delta on Home).
+  const measured = dp.map(p => ({ p, ipi: calcProjectIPI(p) })).filter(x => x.ipi != null);
   if (!measured.length) return null;
   const totalW = measured.reduce((s, x) => s + projectWeight(x.p), 0);
   if (totalW === 0) return null;
@@ -326,11 +333,17 @@ export function calcDeptIPI(deptId, projects) {
 
 /**
  * Portfolio IPI — budget×priority weighted across all non-archived projects.
- * Same null-aware behaviour as dept rollup.
+ * Today's value uses snapshot IPI for consistency with department rollups and
+ * the project tables. Historical asOfDate (e.g. 30 days ago for the trend arrow)
+ * uses time-weighted IPI since that's the only way to reconstruct what each
+ * project's score looked like back then.
  */
 export function calcPortfolioIPI(projects, asOfDate = TODAY) {
   const active = projects.filter(p => !p.archived);
-  const measured = active.map(p => ({ p, ipi: calcTimeWeightedIPI(p, asOfDate) })).filter(x => x.ipi != null);
+  const isHistorical = asOfDate !== TODAY;
+  const measured = active
+    .map(p => ({ p, ipi: isHistorical ? calcTimeWeightedIPI(p, asOfDate) : calcProjectIPI(p) }))
+    .filter(x => x.ipi != null);
   if (!measured.length) return null;
   const totalW = measured.reduce((s, x) => s + projectWeight(x.p), 0);
   if (totalW === 0) return null;
