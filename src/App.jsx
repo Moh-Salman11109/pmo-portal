@@ -4177,12 +4177,14 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
   const [filterRoadmap, setFilterRoadmap] = useState(false);
   const [showCompleted, setShowCompleted] = useState(route?.filterStatus === "Completed");
   const [filterOverrun, setFilterOverrun] = useState(!!route?.filterOverrun);
+  // Column sort: { key: 'ipi' | 'progress' | 'name' | 'lastUpdate' | etc, dir: 'asc' | 'desc' } or null
+  const [sort, setSort] = useState(null);
 
   const active = projects.filter(p => !p.archived);
   const completedCount = active.filter(p => p.status === "Completed").length;
 
   const filtered = useMemo(() => active.filter(p => {
-    const matchSearch  = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || p.pm.toLowerCase().includes(search.toLowerCase());
+    const matchSearch  = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || (p.pm || "").toLowerCase().includes(search.toLowerCase()) || (p.sponsor || "").toLowerCase().includes(search.toLowerCase());
     const matchStatus  = filterStatus === "All"
       ? (showCompleted || p.status !== "Completed")
       : p.status === filterStatus;
@@ -4192,6 +4194,47 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
     const matchOverrun  = !filterOverrun  || (p.budget > 0 && (p.forecast || 0) > p.budget);
     return matchSearch && matchStatus && matchDept && matchType && matchRoadmap && matchOverrun;
   }), [active, search, filterStatus, filterDept, filterType, filterRoadmap, showCompleted, filterOverrun]);
+
+  // Apply sort on top of filter. null IPIs (Pending Plan) sink to the bottom
+  // regardless of direction so unmeasurable projects never sit on top.
+  const sorted = useMemo(() => {
+    if (!sort) return filtered;
+    const k = sort.key, d = sort.dir === "asc" ? 1 : -1;
+    const getter = {
+      ipi:        (p) => calcProjectIPI(p),
+      progress:   (p) => effectiveProgress(p),
+      name:       (p) => (p.name || "").toLowerCase(),
+      code:       (p) => p.code || "",
+      status:     (p) => p.status || "",
+      gate:       (p) => p.gate || "",
+      lastUpdate: (p) => p.lastUpdate || "",
+      pm:         (p) => (p.pm || "").toLowerCase(),
+      dept:       (p) => (departments.find(x => x.id === p.deptId)?.name || "").toLowerCase(),
+    }[k] || ((p) => p[k]);
+    return [...filtered].sort((a, b) => {
+      const va = getter(a), vb = getter(b);
+      // Null/undefined IPI (Pending Plan) always sinks to the bottom
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (va < vb) return -1 * d;
+      if (va > vb) return  1 * d;
+      return 0;
+    });
+  }, [filtered, sort, departments]);
+
+  // Click a header → cycle: unsorted → asc → desc → unsorted
+  const toggleSort = (key) => {
+    setSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" };
+      if (prev.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
+  };
+  const sortArrow = (key) => {
+    if (!sort || sort.key !== key) return null;
+    return sort.dir === "asc" ? " ▲" : " ▼";
+  };
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
 
@@ -4243,13 +4286,43 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
       <div className="pmo-table-wrap" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
-            {["Code", "Project Name", "Type", "Department", "PM", "Sponsor", "Progress", "Status", "Risk", "Budget", "Gate", "Last Update"].map(h => (
-              <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
-            ))}
+            {[
+              { lbl: "Code",         key: "code" },
+              { lbl: "Project Name", key: "name" },
+              { lbl: "Type",         key: null },
+              { lbl: "Department",   key: "dept" },
+              { lbl: "PM",           key: "pm" },
+              { lbl: "Progress",     key: "progress" },
+              { lbl: "IPI",          key: "ipi" },
+              { lbl: "Status",       key: "status" },
+              { lbl: "Risk",         key: null },
+              { lbl: "Budget",       key: null },
+              { lbl: "Gate",         key: "gate" },
+              { lbl: "Last Update",  key: "lastUpdate" },
+            ].map(h => {
+              const sortable = !!h.key;
+              const isActive = sort && sort.key === h.key;
+              return (
+                <th key={h.lbl}
+                  onClick={sortable ? () => toggleSort(h.key) : undefined}
+                  style={{
+                    padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                    color: isActive ? T.primary : T.muted,
+                    textTransform: "uppercase", whiteSpace: "nowrap",
+                    cursor: sortable ? "pointer" : "default",
+                    userSelect: "none",
+                  }}>
+                  {h.lbl}{sortable && sortArrow(h.key)}
+                </th>
+              );
+            })}
           </tr></thead>
           <tbody>
-            {filtered.map((p, i) => {
+            {sorted.map((p, i) => {
               const dept = departments.find(d => d.id === p.deptId);
+              const ipi = calcProjectIPI(p);
+              const ipiC = ipiColor(ipi);
+              const staleDays = daysSince(p.lastUpdate);
               return (
                 <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "projects" })}
                   className={p.status === "Delayed" ? "pmo-row-delayed" : ""}
@@ -4271,7 +4344,6 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                     </span>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.pm}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.sponsor}</td>
                   <td style={{ padding: "12px 14px", minWidth: 90 }}>
                     {(() => { const ep = effectiveProgress(p); return (
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -4280,13 +4352,20 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                       </div>
                     ); })()}
                   </td>
+                  <td style={{ padding: "12px 14px" }}>
+                    {ipi == null
+                      ? <span style={{ fontSize: 11, color: T.muted }}>—</span>
+                      : <span title={ipiC.label} style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipi}</span>}
+                  </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, color: T.muted }}>{p.lastUpdate || "—"}</div>
-                    {(() => { const d = daysSince(p.lastUpdate); if (!d || d < 14) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: d >= 30 ? "#fee2e2" : "#fef9c3", color: d >= 30 ? "#991b1b" : "#854d0e" }}>{d}d ago</span>; })()}
+                    {staleDays != null && staleDays >= 14 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: staleDays >= 30 ? "#fee2e2" : "#ffedd5", color: staleDays >= 30 ? "#991b1b" : "#9a3412" }}>{staleDays}d ago</span>
+                    )}
                   </td>
                 </tr>
               );
