@@ -6,7 +6,7 @@ import { useDepts } from "../deptContext.js";
 import { ROLE_PM } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
-import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, deriveRiskLevel } from "../utils/metrics.js";
+import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor } from "../utils/metrics.js";
 import { fmtSAR } from "../utils/format.js";
 import { Progress } from "../components/Progress.jsx";
 import { RiskBadge } from "../components/Badge.jsx";
@@ -87,8 +87,12 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
     count: activeProjects.filter(p => p.gate === def.label).length,
   })), [activeProjects]);
   const maxGateCount = Math.max(...gatePipeline.map(g => g.count), 1);
+  // Bottleneck = approval/transition gate where work piles up.
+  // Gate 4 (Execution) is excluded — projects spend months there by design, not a bottleneck signal.
   const bottleneckGate = useMemo(() => {
-    const max = gatePipeline.reduce((a, b) => (a.count > b.count ? a : b), gatePipeline[0]);
+    const approvalGates = gatePipeline.filter(g => g.id !== "G4");
+    if (approvalGates.length === 0) return null;
+    const max = approvalGates.reduce((a, b) => (a.count > b.count ? a : b), approvalGates[0]);
     return max && max.count > 1 ? max : null;
   }, [gatePipeline]);
 
@@ -103,9 +107,25 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
         reasons.push(`Delayed${p.daysDelayed > 0 ? ` — ${p.daysDelayed}d behind` : ""}`);
         severity = "high";
       }
-      const rl = deriveRiskLevel(p);
-      if (rl === "Critical") { reasons.push("Critical risk"); severity = "high"; }
-      else if (rl === "High") { reasons.push("High risk"); if (severity !== "high") severity = "medium"; }
+      // Risk reasons quote the actual risk title so the exec knows WHAT to act on,
+      // not just that "a risk exists". Owner shows on click-through to the project.
+      const openRisks = (p.risks || []).filter(r => r.status !== "Closed" && r.status !== "Mitigated");
+      const critical  = openRisks.filter(r => r.level === "Critical");
+      const high      = openRisks.filter(r => r.level === "High");
+      const truncate  = (s, n) => { const t = (s || "").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+      if (critical.length > 0) {
+        const title = truncate(critical[0].title, 42);
+        reasons.push(critical.length === 1
+          ? (title ? `Critical risk: ${title}` : "Critical risk open")
+          : (title ? `${critical.length} critical · top: ${title}` : `${critical.length} critical risks`));
+        severity = "high";
+      } else if (high.length > 0) {
+        const title = truncate(high[0].title, 42);
+        reasons.push(high.length === 1
+          ? (title ? `High risk: ${title}` : "High risk open")
+          : (title ? `${high.length} high · top: ${title}` : `${high.length} high risks`));
+        if (severity !== "high") severity = "medium";
+      }
       const staleDays = daysSince(p.lastUpdate);
       if (staleDays !== null && staleDays > 14) reasons.push(`No update ${staleDays}d`);
       if (p.budget > 0) {
