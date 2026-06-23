@@ -1973,10 +1973,19 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               {wbsProgress != null ? "Auto-rolled from Activities" : "Manual entry"}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-            <div style={{ background: ipiC.bg, borderRadius: 10, padding: "8px 18px", textAlign: "center", minWidth: 100 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: ipiC.color, lineHeight: 1 }}>{ipi == null ? "—" : countedIPI}</div>
-              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 700 }}>IPI Score</div>
+          <div style={{ display: "flex", alignItems: "stretch", gap: 14, flex: 1 }}>
+            {/* IPI Score block — sized to match the Progress block on its left
+                so the two headline metrics carry the same visual weight. */}
+            <div style={{
+              background: ipiC.bg,
+              borderRadius: 10,
+              padding: "10px 16px",
+              minWidth: 140,
+              display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+            }}>
+              <div style={{ fontSize: 30, fontWeight: 900, color: ipiC.color, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{ipi == null ? "—" : countedIPI}</div>
+              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 6, opacity: 0.85 }}>IPI Score</div>
+              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 600, marginTop: 4, opacity: 0.7 }}>{ipiC.label}</div>
             </div>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
               <div>
