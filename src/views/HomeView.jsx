@@ -6,7 +6,7 @@ import { useDepts } from "../deptContext.js";
 import { ROLE_PM } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
-import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor } from "../utils/metrics.js";
+import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark } from "../utils/metrics.js";
 import { fmtSAR } from "../utils/format.js";
 import { Progress } from "../components/Progress.jsx";
 import { RiskBadge } from "../components/Badge.jsx";
@@ -202,7 +202,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     : ipiDelta > 0 ? "#4ade80"
     : ipiDelta < 0 ? "#fca5a5"
     : "rgba(255,255,255,0.55)";
-  const ipiBand = portfolioIPI != null ? ipiColor(portfolioIPI) : null;
+  const ipiBand     = portfolioIPI != null ? ipiColor(portfolioIPI) : null;
+  const ipiBandDark = portfolioIPI != null ? ipiColorDark(portfolioIPI) : null;
 
   // Portfolio narrative — the "data scientist" voice
   const portfolioStory = useMemo(() => {
@@ -295,9 +296,9 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
               <div style={{ fontSize: bp === "mobile" ? 78 : 110, fontWeight: 900, color: "white", lineHeight: 0.85, letterSpacing: "-5px" }}>
                 {portfolioIPI ?? "—"}
               </div>
-              {ipiBand && (
+              {ipiBand && ipiBandDark && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ background: "rgba(0,255,179,0.18)", border: "1px solid rgba(0,255,179,0.4)", color: "#00FFB3", padding: "3px 11px", borderRadius: 12, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>● {ipiBand.label}</div>
+                  <div style={{ background: ipiBandDark.bg, border: `1px solid ${ipiBandDark.border}`, color: ipiBandDark.text, padding: "3px 11px", borderRadius: 12, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>● {ipiBand.label}</div>
                   <div style={{ color: trendColor, fontSize: 11, fontWeight: 700 }}>{trendText}</div>
                 </div>
               )}
@@ -306,7 +307,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
             {portfolioIPI != null && (
               <div style={{ marginTop: 18 }}>
                 <div style={{ height: 10, background: "rgba(255,255,255,0.08)", borderRadius: 5, position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, portfolioIPI)}%`, background: "linear-gradient(90deg, #00b894, #00FFB3)", borderRadius: 5 }} />
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, portfolioIPI)}%`, background: `linear-gradient(90deg, ${ipiBandDark.gaugeFrom}, ${ipiBandDark.gaugeTo})`, borderRadius: 5 }} />
                   <div style={{ position: "absolute", left: "70%", top: -3, width: 1, height: 16, background: "rgba(255,255,255,0.25)" }} />
                   <div style={{ position: "absolute", left: "90%", top: -3, width: 1, height: 16, background: "rgba(255,255,255,0.25)" }} />
                 </div>

@@ -467,6 +467,30 @@ export function ipiColor(score) {
   return               { color: "#991b1b", bg: "#fee2e2", label: "Critical" };
 }
 
+/**
+ * Dark-mode IPI pill + gauge colours — for the Canopy gradient hero where
+ * the light-mode palette returned by ipiColor() would either disappear
+ * (light backgrounds on dark) or mis-signal (Watch reading as healthy
+ * mint when it should read as amber caution).
+ */
+export function ipiColorDark(score) {
+  const band = ipiColor(score).label;
+  switch (band) {
+    case "Over Achieved":
+      return { bg: "rgba(0,255,179,0.22)", border: "rgba(0,255,179,0.45)", text: "#00FFB3", gaugeFrom: "#00b894", gaugeTo: "#00FFB3" };
+    case "On Track":
+      return { bg: "rgba(0,255,179,0.18)", border: "rgba(0,255,179,0.40)", text: "#00FFB3", gaugeFrom: "#00b894", gaugeTo: "#00FFB3" };
+    case "Watch":
+      return { bg: "rgba(245,158,11,0.20)", border: "rgba(245,158,11,0.45)", text: "#fcd34d", gaugeFrom: "#d97706", gaugeTo: "#fbbf24" };
+    case "At Risk":
+      return { bg: "rgba(255,80,0,0.20)", border: "rgba(255,80,0,0.45)", text: "#ffa07a", gaugeFrom: "#c2410c", gaugeTo: "#FF5000" };
+    case "Critical":
+      return { bg: "rgba(220,38,38,0.24)", border: "rgba(220,38,38,0.50)", text: "#fca5a5", gaugeFrom: "#7f1d1d", gaugeTo: "#dc2626" };
+    default:
+      return { bg: "rgba(255,255,255,0.10)", border: "rgba(255,255,255,0.20)", text: "rgba(255,255,255,0.7)", gaugeFrom: "#4b6c67", gaugeTo: "#a1b9ab" };
+  }
+}
+
 export function getGateSLA(project) {
   if (!project?.gates) return null;
   const ordered = GATE_DEFS.map(def => ({

@@ -11,7 +11,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
 import { fmt, fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -818,8 +818,9 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
   const isNarrow = bp === "mobile" || bp === "tablet";
 
   // ── Hero data ────────────────────────────────────────────────
-  const deptIPI = calcDeptIPI(deptId, projects);
-  const ipiBand = deptIPI != null ? ipiColor(deptIPI) : null;
+  const deptIPI     = calcDeptIPI(deptId, projects);
+  const ipiBand     = deptIPI != null ? ipiColor(deptIPI)     : null;
+  const ipiBandDark = deptIPI != null ? ipiColorDark(deptIPI) : null;
   const total      = stats.total || 0;
   const onTrackN   = stats.onTrack   || 0;
   const atRiskN    = stats.atRisk    || 0;
@@ -890,12 +891,12 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
             <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 6 }}>Department IPI</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
               <div style={{ fontSize: bp === "mobile" ? 72 : 100, fontWeight: 900, color: "white", lineHeight: 0.85, letterSpacing: "-4px" }}>{deptIPI ?? "—"}</div>
-              {ipiBand && <div style={{ background: "rgba(0,255,179,0.18)", border: "1px solid rgba(0,255,179,0.4)", color: "#00FFB3", padding: "3px 11px", borderRadius: 12, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>● {ipiBand.label}</div>}
+              {ipiBand && ipiBandDark && <div style={{ background: ipiBandDark.bg, border: `1px solid ${ipiBandDark.border}`, color: ipiBandDark.text, padding: "3px 11px", borderRadius: 12, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>● {ipiBand.label}</div>}
             </div>
             {deptIPI != null && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ height: 9, background: "rgba(255,255,255,0.08)", borderRadius: 4.5, position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, deptIPI)}%`, background: "linear-gradient(90deg, #00b894, #00FFB3)", borderRadius: 4.5 }} />
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, deptIPI)}%`, background: `linear-gradient(90deg, ${ipiBandDark.gaugeFrom}, ${ipiBandDark.gaugeTo})`, borderRadius: 4.5 }} />
                   <div style={{ position: "absolute", left: "70%", top: -3, width: 1, height: 15, background: "rgba(255,255,255,0.25)" }} />
                   <div style={{ position: "absolute", left: "90%", top: -3, width: 1, height: 15, background: "rgba(255,255,255,0.25)" }} />
                 </div>
