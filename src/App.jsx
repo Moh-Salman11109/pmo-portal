@@ -3669,7 +3669,10 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
 
   const openAdd = () => {
     setEditingProject(null);
-    setFormData({ name: "", code: "", deptId: "strategy", pm: "", sponsor: "", phase: "Initiation", gate: "Gate 1", status: "Not Started", priority: "Medium", progress: 0, riskLevel: "Low", budgetStatus: "On Budget", budget: 0, startDate: "", plannedEnd: "", objective: "", strategic: "" });
+    // No initial values for phase / riskLevel / budgetStatus — those are derived
+    // from gate, open risks, and budget vs actualCost respectively (Phase 2
+    // simplification). Setting them here would create dead state.
+    setFormData({ name: "", code: "", deptId: "strategy", pm: "", sponsor: "", gate: "Gate 1", status: "Not Started", priority: "Medium", progress: 0, budget: 0, startDate: "", plannedEnd: "", objective: "", strategic: "" });
     setShowForm(true);
   };
 
@@ -3788,16 +3791,13 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                   </div>
                   <Field label="Project Manager" field="pm" {...fp} />
                   <Field label="Sponsor" field="sponsor" {...fp} />
-                  <Field label="Phase" field="phase" options={["Initiation", "Planning", "Execution", "Monitoring", "Closure"]} {...fp} />
                   <Field label="Gate" field="gate" options={["Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5"]} {...fp} />
                   <Field label="Status" field="status" options={["Not Started", "On Track", "At Risk", "Delayed", "Completed"]} {...fp} />
                   <Field label="Priority" field="priority" options={["Low", "Medium", "High", "Critical"]} {...fp} />
-                  <Field label="Risk Level" field="riskLevel" options={["Low", "Medium", "High", "Critical"]} {...fp} />
                   <Field label="Budget (SAR)" field="budget" type="number" {...fp} />
                   <Field label="Progress %" field="progress" type="number" {...fp} />
                   <Field label="Start Date" field="startDate" type="date" {...fp} />
                   <Field label="Planned End Date" field="plannedEnd" type="date" {...fp} />
-                  <Field label="Budget Status" field="budgetStatus" options={["On Budget", "Over Budget", "Under Budget"]} {...fp} />
                   <Field label="Strategic Objective" field="strategic" {...fp} />
                   <Field label="Project Type" field="projectType" options={PROJECT_TYPES} {...fp} />
                 </div>
@@ -3847,36 +3847,44 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr style={{ background: T.bg }}>
-                {["ID", "Code", "Project Name", "Department", "PM", "Status", "Progress", "Gate", "Actions"].map(h => (
+                {["Code", "Project Name", "Department", "PM", "Progress", "IPI", "Status", "Gate", "Actions"].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
-              <tbody>{activeProjects.map(p => (
-                <tr key={p.id} style={{ borderTop: `1px solid ${T.border}` }}>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 700, color: T.muted }}>{p.id}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: T.primary }}>{p.code}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600 }}>{p.name}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{departments.find(d => d.id === p.deptId)?.name}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.pm}</td>
-                  <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
-                  <td style={{ padding: "12px 14px", minWidth: 100 }}>
-                    {(() => { const ep = effectiveProgress(p); return (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1 }}><Progress value={ep} height={4} /></div>
-                        <span style={{ fontSize: 11, fontWeight: 700 }}>{ep}%</span>
+              <tbody>{activeProjects.map(p => {
+                const ipi = calcProjectIPI(p);
+                const ipiC = ipiColor(ipi);
+                return (
+                  <tr key={p.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 700, color: T.primary }}>{p.code}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600 }}>{p.name}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{departments.find(d => d.id === p.deptId)?.name}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.pm}</td>
+                    <td style={{ padding: "12px 14px", minWidth: 100 }}>
+                      {(() => { const ep = effectiveProgress(p); return (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1 }}><Progress value={ep} height={4} /></div>
+                          <span style={{ fontSize: 11, fontWeight: 700 }}>{ep}%</span>
+                        </div>
+                      ); })()}
+                    </td>
+                    <td style={{ padding: "12px 14px" }}>
+                      {ipi == null
+                        ? <span style={{ fontSize: 11, color: T.muted }}>—</span>
+                        : <span title={ipiC.label} style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipi}</span>}
+                    </td>
+                    <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
+                    <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.gate}</td>
+                    <td style={{ padding: "12px 14px" }}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => openEdit(p)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
+                        <button onClick={() => setRoute({ view: "project", projectId: p.id, from: "admin" })} style={{ background: "#e8f5f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: T.primary, fontWeight: 600 }}>View</button>
+                        <button onClick={() => handleDelete(p.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Archive</button>
                       </div>
-                    ); })()}
-                  </td>
-                  <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.gate}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => openEdit(p)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
-                      <button onClick={() => setRoute({ view: "project", projectId: p.id, from: "admin" })} style={{ background: "#e8f5f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: T.primary, fontWeight: 600 }}>View</button>
-                      <button onClick={() => handleDelete(p.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Archive</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}</tbody>
+                    </td>
+                  </tr>
+                );
+              })}</tbody>
             </table>
           </div>
         </div>
@@ -3884,12 +3892,17 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
 
       {adminTab === "Archived" && (
         <div>
-          {/* Banner */}
-          <div style={{ background: "#1a0800", border: `1px solid #7c2d12`, borderRadius: 12, padding: "14px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Banner — theme-aware, soft orange tint that works on light & dark */}
+          <div style={{
+            background: themeStore.dark ? "rgba(124, 45, 18, 0.20)" : "#fff7ed",
+            border: `1px solid ${themeStore.dark ? "rgba(234, 88, 12, 0.35)" : "#fed7aa"}`,
+            borderRadius: 12, padding: "14px 20px", marginBottom: 20,
+            display: "flex", alignItems: "center", gap: 12,
+          }}>
             <span style={{ fontSize: 22 }}>🗄️</span>
             <div>
-              <div style={{ fontWeight: 700, color: "#fed7aa", fontSize: 14 }}>Archived Projects — {archivedProjects.length} projects</div>
-              <div style={{ fontSize: 12, color: "#9a5c38" }}>Archived projects are hidden from all dashboards and reports. You can restore them anytime or delete permanently.</div>
+              <div style={{ fontWeight: 700, color: themeStore.dark ? "#fed7aa" : "#9a3412", fontSize: 14 }}>Archived Projects — {archivedProjects.length} projects</div>
+              <div style={{ fontSize: 12, color: themeStore.dark ? "rgba(254, 215, 170, 0.7)" : "#9a3412", opacity: themeStore.dark ? 1 : 0.75 }}>Archived projects are hidden from all dashboards and reports. You can restore them anytime or delete permanently.</div>
             </div>
           </div>
 
