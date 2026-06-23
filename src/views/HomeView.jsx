@@ -11,7 +11,7 @@ import { fmtSAR } from "../utils/format.js";
 import { Progress } from "../components/Progress.jsx";
 import { RiskBadge } from "../components/Badge.jsx";
 
-const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, userRole }) => {
+const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, setRoute, loadedAt, userRole }) => {
   const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
@@ -74,18 +74,36 @@ const HomeView = ({ projects, requests, gateSubmissions, setRoute, loadedAt, use
     ).sort((a, b) => ({ Critical: 3, High: 2 }[b.level] || 0) - ({ Critical: 3, High: 2 }[a.level] || 0)),
   [activeProjects]);
 
-  // Pending approvals
-  const pendingApprovals = useMemo(() =>
-    (gateSubmissions || [])
-      .filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"))
-      .sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0)),
+  // Pending gate submissions (in workflow queue, awaiting approval)
+  const pendingGates = useMemo(() =>
+    (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected")),
   [gateSubmissions]);
+  // Pending closure submissions (Gate 5 workflow queue)
+  const pendingClosures = useMemo(() =>
+    (closureSubmissions || []).filter(c => c.status !== "Closed"),
+  [closureSubmissions]);
 
-  // Gate pipeline
-  const gatePipeline = useMemo(() => GATE_DEFS.map(def => ({
-    ...def,
-    count: activeProjects.filter(p => p.gate === def.label).length,
-  })), [activeProjects]);
+  // Pending approvals — gates + closures combined, oldest first
+  const pendingApprovals = useMemo(() => {
+    const merged = [
+      ...pendingGates.map(g => ({ ...g, _kind: "gate" })),
+      ...pendingClosures.map(c => ({ ...c, _kind: "closure", gateLabel: "Gate 5", daysAtGate: c.daysAtClosure || c.daysOpen || 0 })),
+    ];
+    return merged.sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0));
+  }, [pendingGates, pendingClosures]);
+
+  // Gate pipeline — union of projects.gate AND pending workflow queues, deduped by project id.
+  // Without merging the queues we miss every project sitting in Stakeholder Review at G1
+  // (no project record yet) and every closure awaiting sign-off at G5.
+  const gatePipeline = useMemo(() => GATE_DEFS.map(def => {
+    const ids = new Set();
+    activeProjects.forEach(p => { if (p.gate === def.label) ids.add(p.id); });
+    pendingGates.forEach(g => { if (g.gateLabel === def.label) ids.add(g.projectId || `gs-${g.id}`); });
+    if (def.id === "G5") {
+      pendingClosures.forEach(c => ids.add(c.projectId || `cs-${c.id}`));
+    }
+    return { ...def, count: ids.size };
+  }), [activeProjects, pendingGates, pendingClosures]);
   const maxGateCount = Math.max(...gatePipeline.map(g => g.count), 1);
   // Bottleneck = approval/transition gate where work piles up.
   // Gate 4 (Execution) is excluded — projects spend months there by design, not a bottleneck signal.

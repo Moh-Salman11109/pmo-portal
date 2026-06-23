@@ -5498,7 +5498,7 @@ export default function App() {
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
           <AnimStyles />
           {/* Portfolio-level views — blocked for PM role */}
-          {route.view === "home"        && userRole !== ROLE_PM && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
+          {route.view === "home"        && userRole !== ROLE_PM && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
           {route.view === "departments" && userRole !== ROLE_PM && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
           {route.view === "projects"    && userRole !== ROLE_PM && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
           {route.view === "department"  && userRole !== ROLE_PM && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
