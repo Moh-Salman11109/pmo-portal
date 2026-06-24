@@ -1,4 +1,40 @@
-﻿
+﻿// ============================================================================
+//  PMO Portal — Main Application File
+// ============================================================================
+//
+//  This file holds the entire application: every view, every route, and the
+//  top-level orchestration that ties them together. Navigation is state-driven
+//  via a `route` object (no router library) — see the App component near the
+//  bottom for how views are switched.
+//
+//  Map of what's where (line numbers approximate, jump-by-search works):
+//
+//    UI helpers       RiskMatrix, AnimStyles, GateTracker, DocComplianceBar,
+//                     Tab, RequestStatusBadge, ApprovalTimeline, ApprovalLogPanel
+//
+//    Chrome           Sidebar, Header — the left nav and top bar shared by
+//                     every screen
+//
+//    Views            HomeView (loaded from ./views/HomeView.jsx),
+//                     DepartmentView, ProjectView, MyRequestsView,
+//                     MyActionsView, AdminView, DepartmentsOverview,
+//                     AllProjectsView, GRCDashboard (loaded from ./views/),
+//                     ProjectForm
+//
+//    Editors          UpdatePanel — the side drawer a PM uses to push status
+//                     MilestoneGantt — the Activities-tab chart
+//                     MilestoneListEditor / RiskListEditor / IssueListEditor /
+//                     BenefitListEditor — list editors used by the forms
+//
+//    Roots            App — entry point, fetches data and routes to views
+//
+//  Data flow: SharePoint REST → src/services/sharepoint.js mappers →
+//  React state in App → props down to the views.
+//
+//  See src/utils/metrics.js for the IPI engine and src/theme.js for the
+//  Tree brand palette.
+// ============================================================================
+
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, ReferenceLine } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
@@ -461,6 +497,14 @@ const Tab = ({ tabs, active, onSelect }) => {
 };
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+//  SIDEBAR
+// ────────────────────────────────────────────────────────────────────────────
+//  The left navigation. Brand mark up top, then the nav items the current
+//  user is allowed to see (role-based). Two of the items carry live counters:
+//  My Actions (pending approvals on the user) and My Requests (the user's
+//  own open submissions). Collapses to an overlay on mobile/tablet.
+//
 const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, open, onClose }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -604,6 +648,13 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 };
 
 // ─── HEADER ──────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+//  HEADER
+// ────────────────────────────────────────────────────────────────────────────
+//  The top bar that appears above every view. Carries the breadcrumb title,
+//  global search, dark-mode toggle, and the current user's chip. On smaller
+//  screens it also exposes the hamburger that opens the Sidebar overlay.
+//
 const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClick, projects, currentUserName }) => {
   const T = useT();
   const bp = useBp();
@@ -776,6 +827,14 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
 // ─── GRC KRI DASHBOARD ───────────────────────────────────────────
 
 // ─── DEPARTMENT VIEW ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  DEPARTMENT VIEW — single department's portfolio
+// ════════════════════════════════════════════════════════════════════════════
+//  Opens when the user clicks into a department from Home or the sidebar.
+//  Shows a branded Hero (Dept IPI, status quad, top concern, budget bar),
+//  then filters and a project table/card view of every project in that
+//  department. Special case: deptId === "grc" routes to the GRC Dashboard.
+//
 const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, userDeptId = null }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -842,7 +901,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
     })
     .filter(x => x.score > 0)
     .sort((a, b) => b.score - a.score)[0] || null;
-  // Narrative — data-scientist voice for this dept
+  // One-sentence summary line under the hero header.
   let heroNarrative;
   if (total === 0) heroNarrative = "No projects in this department yet.";
   else {
@@ -1100,6 +1159,14 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 };
 
 // ─── UPDATE PANEL ────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  UPDATE PANEL — side drawer the PM uses to push a project update
+// ════════════════════════════════════════════════════════════════════════════
+//  Tabbed editor: Status, Financials, Activities, Risks, Benefits, Documents,
+//  Note. Progress is auto-derived from the Activities tab (WBS rollup) and is
+//  read-only here. Status is derived too — from IPI + dates + activities — so
+//  the field surfaces the computed value rather than letting the PM override.
+//
 const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const T = useT();
   const [tab, setTab]                 = useState("Status");
@@ -1458,6 +1525,14 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
 };
 
 // ─── MILESTONE GANTT ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  MILESTONE GANTT — the Activities-tab chart
+// ════════════════════════════════════════════════════════════════════════════
+//  Renders the project schedule as a horizontal Gantt. Milestones are diamonds,
+//  activities are bars (with their parent milestone shown via a dashed connector).
+//  Past time is faded with a soft Lichen mist; a sea-green Today marker cuts
+//  across the chart. Overdue bars turn maroon and carry an OVERDUE chip.
+//
 const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   const T = useT();
 
@@ -1652,6 +1727,16 @@ const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Activities", "Budget", 
 const PROJECT_TABS_PM    = ["Overview", "Activities", "Risks & Issues", "Benefits", "Documents"];
 const PROJECT_TABS_EXEC  = ["Exec Summary"];
 
+// ════════════════════════════════════════════════════════════════════════════
+//  PROJECT VIEW — single-project detail page
+// ════════════════════════════════════════════════════════════════════════════
+//  The deepest screen in the portal. Header carries the project name,
+//  status chip, IPI banner (Progress + IPI Score side by side with the
+//  SPI/CPI/MCI breakdown), and the action buttons (Update, Edit Fields,
+//  Print Report). Below the header is a tab strip — Exec Summary, Overview,
+//  Activities (Gantt), Budget, Risks & Issues, Benefits, Documents, Updates.
+//  Roles other than admin/PMO see a read-only version.
+//
 const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -2897,6 +2982,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
 };
 
 // ─── DEPARTMENT CRUD COMPONENT ────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  DEPARTMENT CRUD — admin-only management of department records
+// ════════════════════════════════════════════════════════════════════════════
+//  Add, rename, change icon or colour, and (safely) delete department records.
+//  Writes go straight to the PMO_Departments SP list via the SPService client.
+//  Deletion is blocked when any project is still linked to the department.
+//
 const DeptCRUD = ({ projects }) => {
   const { departments, addDept, updateDept, deleteDept } = useDepts();
   const T = useT();
@@ -3245,6 +3337,15 @@ const ApprovalLogPanel = ({ log }) => {
   );
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+//  MY REQUESTS — the user's own open submissions
+// ════════════════════════════════════════════════════════════════════════════
+//  Anything this user has submitted that's still in the workflow: new project
+//  requests, gate transition submissions, and closure submissions. Each row
+//  shows where the item is currently pending, how many days it's been there,
+//  and the full approval history. Action cards at the top link out to the
+//  native SharePoint forms for new submissions.
+//
 const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute, currentUserName, currentUserEmail, userRole }) => {
   const T = useT();
   const bp = useBp();
@@ -3517,6 +3618,16 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 };
 
 // ─── MY ACTIONS VIEW ─────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  MY ACTIONS — pending approvals routed to the current user
+// ════════════════════════════════════════════════════════════════════════════
+//  The queue this user is expected to clear: requests pending their review,
+//  gate submissions pending their sign-off, closures pending their approval.
+//  Each row carries a context panel that opens the underlying SharePoint
+//  item so the user can act in one click. Validates updates against project
+//  state before letting a PM submit (e.g. a PM can't push a Status change
+//  unless the project is in an allowed gate).
+//
 const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects, setRoute, currentUserEmail, currentUserName, userRole, validateUpdate }) => {
   const T = useT();
   const bp = useBp();
@@ -3791,6 +3902,14 @@ const Field = ({ label, field, type = "text", options, formData, setFormData, T,
   </div>
 );
 
+// ════════════════════════════════════════════════════════════════════════════
+//  ADMIN PANEL — system administration
+// ════════════════════════════════════════════════════════════════════════════
+//  Only visible to Admin and PMO Head roles. Provides project CRUD (create,
+//  edit, archive, restore, hard-delete), department management (via DeptCRUD),
+//  and a quick view of archived projects for restore. Hard-delete is gated
+//  behind a confirmation step because it removes the SP item permanently.
+//
 const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProject, deleteForever }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -4103,6 +4222,14 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
 };
 
 // ─── DEPARTMENTS OVERVIEW PAGE ───────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  DEPARTMENTS OVERVIEW — cross-department comparison
+// ════════════════════════════════════════════════════════════════════════════
+//  All departments side by side. Each card shows the department's IPI, the
+//  status mix of its projects, average progress, total budget and high-risk
+//  count. Sort options let you surface leaders or laggards instantly. Clicking
+//  a card drills into the single Department view.
+//
 const DepartmentsOverview = ({ projects, setRoute }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -4355,6 +4482,15 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
 };
 
 // ─── ALL PROJECTS VIEW ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  ALL PROJECTS — master portfolio table
+// ════════════════════════════════════════════════════════════════════════════
+//  Every project across every department in one searchable, filterable table.
+//  Filters: status, risk, type, department, gate, roadmap flag. Export to
+//  Excel for offline analysis. Inbound deep-links from the Home Hero cards
+//  pre-apply filters (e.g. clicking "Forecast Overrun" lands here with the
+//  overrun filter on).
+//
 const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -5020,6 +5156,15 @@ const BenefitListEditor = ({ items, onChange }) => {
 };
 
 // ─── PROJECT FORM ─────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  PROJECT FORM — create / edit project (Admin)
+// ════════════════════════════════════════════════════════════════════════════
+//  The single largest form in the portal. Used by Admin and PMO roles to
+//  create a new project or edit any of the system-owned fields on an
+//  existing one (PM/Sponsor/Department/Dates/Priority/Type/Budget/etc.).
+//  Validates required fields, supports milestone/risk/issue/benefit lists
+//  via the dedicated editors defined right above this component.
+//
 const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   const T = useT();
   const { departments } = useDepts();
@@ -5261,6 +5406,16 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 };
 
 // ─── APP ROOT ─────────────────────────────────────────────────────
+// ████████████████████████████████████████████████████████████████████████████
+//  APP — root component, the orchestrator
+// ████████████████████████████████████████████████████████████████████████████
+//  Owns the application's top-level state: which view is open, the loaded
+//  projects/requests/gates/closures from SharePoint, the current user, the
+//  user's role lookup, the dark-mode flag. Renders the chrome (Sidebar +
+//  Header) once and switches the main content area based on the `route`
+//  object. All write paths (submitUpdate, savePMONote, archiveProject, etc.)
+//  are defined here and passed down to the child views as props.
+//
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
   const activeT = useT();

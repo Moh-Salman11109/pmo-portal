@@ -1,3 +1,35 @@
+// ============================================================================
+//  HOME VIEW — Portfolio Overview Dashboard
+// ============================================================================
+//
+//  The first page an executive lands on after login. Built as five clearly
+//  separated tiers so the page reads top-to-bottom as a story rather than a
+//  flat dump of cards:
+//
+//    Tier 1 — Hero               Greeting, big Portfolio IPI with gauge,
+//                                three quick stats (with project names, not
+//                                just counts), composition strip
+//
+//    Tier 2 — Today's priorities Intervention Panel (8 signals), Risk
+//                                Watchlist (early warnings on projects not
+//                                already flagged)
+//
+//    Tier 3 — Workflow           Gate Pipeline (G1–G5 with bottleneck
+//                                detection that ignores G4 execution),
+//                                Pending Approvals (gates + closures merged
+//                                and sorted by age), Overdue Milestones in
+//                                aged buckets
+//
+//    Tier 4 — Performance        Department IPI bar chart, Portfolio Budget
+//
+//    Tier 5 — Inventory          Department cards with rotating accent
+//                                stripes from the Tree palette
+//
+//  Each tier label carries a one-sentence narrative subtitle computed from
+//  the data (e.g. "Gate 3 is your bottleneck with 8 projects stacked").
+//
+// ============================================================================
+
 import React, { useState, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useT, themeStore, ttStyle } from "../theme.js";
@@ -92,14 +124,12 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     return merged.sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0));
   }, [pendingGates, pendingClosures]);
 
-  // Gate pipeline — union of projects.gate AND pending workflow queues, deduped by project id.
-  // Without merging the queues we miss every project sitting in Stakeholder Review at G1
-  // (no project record yet) and every closure awaiting sign-off at G5.
-  // Match by gateNumber rather than gateLabel — SP stores labels like
-  // "Gate 1 — Project Initiation" which won't equal the GATE_DEFS short label "Gate 1".
-  // SP stores the placeholder string "0" for projectCode when a submission isn't yet
-  // linked to an official project record — treat it as missing so each row gets a
-  // unique fallback key, otherwise two unlinked closures collapse into one count.
+  // Gate pipeline counts: union of projects at that gate plus any pending
+  // gate or closure submission for it, deduped by project id. Match by
+  // gateNumber — SP stores gateLabel as the long form ("Gate 1 — Project
+  // Initiation") which won't equal GATE_DEFS' short label. SP also writes
+  // ProjectCode = "0" for unlinked submissions; realId() treats that as
+  // missing so two unlinked rows get unique fallback keys.
   const realId = (id) => (id && id !== "0") ? id : null;
   const gatePipeline = useMemo(() => GATE_DEFS.map(def => {
     const gateNum = def.id.replace("G", ""); // G1 → "1"
@@ -112,8 +142,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     return { ...def, count: ids.size };
   }), [activeProjects, pendingGates, pendingClosures]);
   const maxGateCount = Math.max(...gatePipeline.map(g => g.count), 1);
-  // Bottleneck = approval/transition gate where work piles up.
-  // Gate 4 (Execution) is excluded — projects spend months there by design, not a bottleneck signal.
+  // Gate 4 is excluded — execution gate by design holds projects for months,
+  // a high count there isn't a queue.
   const bottleneckGate = useMemo(() => {
     const approvalGates = gatePipeline.filter(g => g.id !== "G4");
     if (approvalGates.length === 0) return null;
@@ -132,8 +162,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         reasons.push(`Delayed${p.daysDelayed > 0 ? ` — ${p.daysDelayed}d behind` : ""}`);
         severity = "high";
       }
-      // Risk reasons quote the actual risk title so the exec knows WHAT to act on,
-      // not just that "a risk exists". Owner shows on click-through to the project.
+      // Quote the actual risk title in the flag — bare "Critical risk" isn't actionable.
       const openRisks = (p.risks || []).filter(r => r.status !== "Closed" && r.status !== "Mitigated");
       const critical  = openRisks.filter(r => r.level === "Critical");
       const high      = openRisks.filter(r => r.level === "High");
@@ -174,10 +203,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   }, [activeProjects]);
   const flagsHigh  = interventionFlags.filter(f => f.severity === "high").length;
   const flagsMed   = interventionFlags.length - flagsHigh;
-  // Risk Watchlist = critical/high risks on projects NOT already in the intervention panel.
-  // Each surface earns its place by adding new information — risks for flagged projects
-  // are already visible in the intervention row's reasons, so showing them again here
-  // would just repeat the same headline three times.
+  // Watchlist excludes projects already shown in the Intervention Panel —
+  // it's the early-warning list, not a duplicate of the same headlines.
   const flaggedProjectIds = useMemo(() => new Set(interventionFlags.map(f => f.project.id)), [interventionFlags]);
   const watchlistRisks    = useMemo(() => portfolioRisks.filter(r => !flaggedProjectIds.has(r.projectId)), [portfolioRisks, flaggedProjectIds]);
 
@@ -322,8 +349,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 600, lineHeight: 1.5 }}>{portfolioStory}</div>
 
-            {/* Stats row — sublines name names, not severity counts.
-                Counting is the headline; identity is what makes the stat actionable. */}
+            {/* Stats — sublines name actual projects, not severity counts. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
               {[
                 {
@@ -422,9 +448,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         </div>
       )}
 
-      {/* Risk Watchlist (collapsible) — only risks on projects NOT already flagged for intervention,
-          so the user discovers EARLY-WARNING signals here rather than re-reading the same project's
-          headline three times across the page. */}
+      {/* Watchlist — early warning, projects not yet in the intervention panel. */}
       {userRole !== ROLE_PM && watchlistRisks.length > 0 && (
         <details style={{ marginBottom: 14 }}>
           <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 22px", background: T.surface, borderLeft: "4px solid #490300", border: `1px solid ${T.border}`, borderLeftWidth: 4, borderLeftColor: "#490300", borderRadius: 12, fontSize: 14, fontWeight: 800, color: T.text, flexWrap: "wrap" }}>

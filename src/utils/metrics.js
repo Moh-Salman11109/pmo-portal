@@ -1,3 +1,28 @@
+// ============================================================================
+//  IPI ENGINE — performance metrics for projects, departments and portfolio
+// ============================================================================
+//
+//  The math that turns project data into a single 0–115 health score (IPI):
+//
+//     IPI = 0.5 · SPI + 0.25 · CPI + 0.25 · MCI
+//
+//     SPI — Schedule Performance Index (planned vs actual progress, with
+//           a 1%/day roadmap penalty if the project overshoots its roadmap
+//           deadline)
+//     CPI — Cost Performance Index (planned vs actual cost)
+//     MCI — Maturity & Compliance Index (gate-aware: only docs that are
+//           due by the current gate count)
+//
+//  Rollups (dept, portfolio) take the budget × priority weighted average of
+//  the underlying project IPIs. Today's rollups use the snapshot IPI;
+//  historical comparisons (the "vs last month" arrow on Home) use the
+//  time-weighted IPI from the project's ipiHistory.
+//
+//  Every helper is pure — no side effects, no external state — so the
+//  vitest suite in metrics.test.js (46 cases) can exercise them directly.
+//
+// ============================================================================
+
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "./dates.js";
 
@@ -315,13 +340,9 @@ export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
  */
 export function calcDeptIPI(deptId, projects) {
   const dp = projects.filter(p => p.deptId === deptId && !p.archived);
-  // Today's rollup uses the snapshot IPI (matches what each project displays in
-  // its row in the Department table). Using calcTimeWeightedIPI here created a
-  // visible contradiction — a dept with a single project at snapshot 100 would
-  // render as dept IPI 91 simply because historical readings pulled the average
-  // down. Time-weighted IPI is still available for trend/historical work via the
-  // calcTimeWeightedIPI export, and is used by calcPortfolioIPI for asOfDate
-  // comparisons (last-month delta on Home).
+  // Snapshot IPI per project, so the dept rollup matches the IPI column
+  // shown in the department's project table. Time-weighted IPI is reserved
+  // for historical comparisons (see calcPortfolioIPI's asOfDate branch).
   const measured = dp.map(p => ({ p, ipi: calcProjectIPI(p) })).filter(x => x.ipi != null);
   if (!measured.length) return null;
   const totalW = measured.reduce((s, x) => s + projectWeight(x.p), 0);
@@ -331,13 +352,10 @@ export function calcDeptIPI(deptId, projects) {
   );
 }
 
-/**
- * Portfolio IPI — budget×priority weighted across all non-archived projects.
- * Today's value uses snapshot IPI for consistency with department rollups and
- * the project tables. Historical asOfDate (e.g. 30 days ago for the trend arrow)
- * uses time-weighted IPI since that's the only way to reconstruct what each
- * project's score looked like back then.
- */
+// Portfolio IPI — budget × priority weighted across all active projects.
+// Today's call uses snapshot IPI (matches dept rollups). A historical
+// asOfDate uses time-weighted IPI, since that's the only way to reconstruct
+// a project's score on a past date.
 export function calcPortfolioIPI(projects, asOfDate = TODAY) {
   const active = projects.filter(p => !p.archived);
   const isHistorical = asOfDate !== TODAY;
@@ -467,12 +485,8 @@ export function ipiColor(score) {
   return               { color: "#991b1b", bg: "#fee2e2", label: "Critical" };
 }
 
-/**
- * Dark-mode IPI pill + gauge colours — for the Canopy gradient hero where
- * the light-mode palette returned by ipiColor() would either disappear
- * (light backgrounds on dark) or mis-signal (Watch reading as healthy
- * mint when it should read as amber caution).
- */
+// Same band mapping as ipiColor() but tuned for dark hero gradients.
+// Returns translucent pill colours and a gauge gradient pair.
 export function ipiColorDark(score) {
   const band = ipiColor(score).label;
   switch (band) {
