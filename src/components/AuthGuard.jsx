@@ -1,7 +1,7 @@
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import LoginScreen from "./LoginScreen.jsx";
 
-// ── Auth gate ────────────────────────────────────────────────────────────────
+// ── Auth gate ───────────────────────────────────────────────────────────────
 // Renders children only when a Microsoft account is confirmed.
 // Shows nothing while MSAL is processing the redirect (avoids flash of login).
 // MsalProvider handles handleRedirectPromise() automatically.
