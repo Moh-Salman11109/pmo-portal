@@ -1,7 +1,7 @@
 import { MOCK_PROJECTS, MOCK_DEPARTMENTS, MOCK_REQUESTS, MOCK_GATE_SUBMISSIONS, MOCK_CLOSURE_SUBMISSIONS, MOCK_USERS } from "../data/mockData.js";
 import { acquireSpToken } from "./auth.js";
 
-// ─── CONFIGURATION ───────────────────────────────────────────────
+// ─── CONFIGURATION ──────────────────────────────────────────────
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 
 export const SP_CONFIG = {
