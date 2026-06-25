@@ -1,6 +1,6 @@
 import { PublicClientApplication, InteractionRequiredAuthError } from "@azure/msal-browser";
 
-// ── Derive SharePoint resource origin from the site URL env var ──────────────
+// ── Derive SharePoint resource origin from the site URL env var ─────────────
 // Works for any tenant / hosting — never hardcoded.
 const spOrigin = (() => {
   try { return new URL(import.meta.env.VITE_SP_SITE_URL || "").origin; }
