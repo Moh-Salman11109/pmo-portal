@@ -7,7 +7,7 @@
 //  via a `route` object (no router library) — see the App component near the
 //  bottom for how views are switched.
 //
-//  Map of what's where (line numbers approximate, jump-by-search works):
+//  Map of what's where (line numbers approximate, jump-by search works):
 //
 //    UI helpers       RiskMatrix, AnimStyles, GateTracker, DocComplianceBar,
 //                     Tab, RequestStatusBadge, ApprovalTimeline, ApprovalLogPanel
