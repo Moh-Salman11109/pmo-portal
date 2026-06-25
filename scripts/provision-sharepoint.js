@@ -5,7 +5,7 @@
 //  1. Open your SharePoint site in the browser and log in.
 //  2. Open DevTools → Console  (F12 → Console tab).
 //  3. Paste this entire script and press Enter.
-//  4. Watch the log — green ✓ = created, ↩ = already existed, ✗ = error.
+//  4. Watch the log — green ✓ = created, ↩ = already existed, ✗ = error
 //
 //  SAFE TO RE-RUN: checks before creating; skips anything that already exists.
 //
