@@ -42,6 +42,21 @@ const IPICalculator = ({ onClose }) => {
       setError("Fill in start date, planned end, and progress to calculate.");
       return;
     }
+    // Defensive validation — guard against typed-in garbage
+    const prog = Number(progress);
+    const planned = plannedProgress !== "" ? Number(plannedProgress) : null;
+    if (isNaN(prog) || prog < 0 || prog > 100) {
+      setError("Actual progress must be between 0 and 100.");
+      return;
+    }
+    if (planned !== null && (isNaN(planned) || planned < 0 || planned > 100)) {
+      setError("Planned progress must be between 0 and 100.");
+      return;
+    }
+    if (new Date(plannedEnd) < new Date(startDate)) {
+      setError("Planned end cannot be before the start date.");
+      return;
+    }
     setError("");
     const gateNum = parseInt(currentGate.replace("Gate ", ""), 10) || 1;
     const project = {

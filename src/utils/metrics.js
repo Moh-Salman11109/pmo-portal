@@ -264,11 +264,15 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mciVal;
   const ipi = allNull ? null : Math.max(0, Math.round(ipiDecimal * 100));
 
-  const status = allNull               ? "Pending Plan"
-               : ipiDecimal >  1.00    ? "Over Achieved"
-               : ipiDecimal >= 1.00    ? "On Track"
-               : ipiDecimal >= 0.90    ? "Watch"
-               :                         "At Risk";
+  // Status follows the ROUNDED ipi so the displayed number and the band
+  // always agree. Without rounding-driven bands a project could show
+  // "IPI 100, Watch" (when ipiDecimal = 0.995, rounded to 100 but still
+  // below the 1.00 threshold) — confusing for executives reading the badge.
+  const status = allNull       ? "Pending Plan"
+               : ipi >  100    ? "Over Achieved"
+               : ipi >= 100    ? "On Track"
+               : ipi >=  90    ? "Watch"
+               :                 "At Risk";
 
   return {
     ipi,
@@ -414,7 +418,9 @@ export function calcProjectProgressFromWBS(project) {
  */
 export function effectiveProgress(project) {
   const wbs = calcProjectProgressFromWBS(project);
-  return wbs != null ? wbs : (project.progress ?? 0);
+  const raw = wbs != null ? wbs : (project.progress ?? 0);
+  // Clamp to [0, 100] — defensive against bad data (negative or >100 inputs).
+  return Math.max(0, Math.min(100, raw));
 }
 
 /**
