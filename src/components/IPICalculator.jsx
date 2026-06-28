@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useT } from "../theme.js";
 import { calcProjectIPIFull, ipiColor, ipiColorDark } from "../utils/metrics.js";
 import { TODAY } from "../utils/dates.js";
@@ -18,23 +18,31 @@ const todayISO = () => new Date().toISOString().split("T")[0];
 const IPICalculator = ({ onClose }) => {
   const T = useT();
 
-  // ── Inputs ────────────────────────────────────────────────────
-  const [startDate, setStartDate]             = useState("2026-04-04");
-  const [plannedEnd, setPlannedEnd]           = useState("2026-07-30");
-  const [roadmapDeadline, setRoadmapDeadline] = useState("2026-08-30");
+  // ── Inputs (start empty — user fills them in then clicks Calculate) ──
+  const [startDate, setStartDate]             = useState("");
+  const [plannedEnd, setPlannedEnd]           = useState("");
+  const [roadmapDeadline, setRoadmapDeadline] = useState("");
   const [asOfDate, setAsOfDate]               = useState(todayISO());
-  const [progress, setProgress]               = useState(100);
+  const [progress, setProgress]               = useState("");
   const [budget, setBudget]                   = useState("");
   const [actualCost, setActualCost]           = useState("");
   const [currentGate, setCurrentGate]         = useState("Gate 4");
   const [requiredDocs, setRequiredDocs]       = useState("");
   const [approvedDocs, setApprovedDocs]       = useState("");
 
-  // ── Compute IPI ───────────────────────────────────────────────
-  const result = useMemo(() => {
-    const gateNum = parseInt(currentGate.replace("Gate ", ""), 10) || 1;
+  // ── Result is computed ON DEMAND when the user clicks Calculate ──
+  const [result, setResult] = useState(null);
+  const [error, setError]   = useState("");
 
-    // Build a synthetic project object the engine understands.
+  const canCalculate = startDate && plannedEnd && progress !== "";
+
+  const calculate = () => {
+    if (!canCalculate) {
+      setError("Fill in start date, planned end, and progress to calculate.");
+      return;
+    }
+    setError("");
+    const gateNum = parseInt(currentGate.replace("Gate ", ""), 10) || 1;
     const project = {
       startDate, plannedEnd,
       roadmapDeadline: roadmapDeadline || null,
@@ -45,8 +53,6 @@ const IPICalculator = ({ onClose }) => {
       milestones: [],
       documents: [],
     };
-
-    // If user supplied docs counts, build a representative documents array
     const req = parseInt(requiredDocs, 10);
     const app = parseInt(approvedDocs, 10);
     if (!isNaN(req) && req > 0) {
@@ -60,12 +66,19 @@ const IPICalculator = ({ onClose }) => {
         });
       }
     }
+    setResult(calcProjectIPIFull(project, asOfDate || TODAY));
+  };
 
-    return calcProjectIPIFull(project, asOfDate || TODAY);
-  }, [startDate, plannedEnd, roadmapDeadline, asOfDate, progress, budget, actualCost, currentGate, requiredDocs, approvedDocs]);
+  const reset = () => {
+    setStartDate(""); setPlannedEnd(""); setRoadmapDeadline("");
+    setAsOfDate(todayISO()); setProgress("");
+    setBudget(""); setActualCost("");
+    setCurrentGate("Gate 4"); setRequiredDocs(""); setApprovedDocs("");
+    setResult(null); setError("");
+  };
 
-  const band     = result.ipi != null ? ipiColor(result.ipi)     : null;
-  const bandDark = result.ipi != null ? ipiColorDark(result.ipi) : null;
+  const band     = result && result.ipi != null ? ipiColor(result.ipi)     : null;
+  const bandDark = result && result.ipi != null ? ipiColorDark(result.ipi) : null;
 
   // ── Styling helpers ───────────────────────────────────────────
   const field = (label, child, hint = null) => (
@@ -150,15 +163,49 @@ const IPICalculator = ({ onClose }) => {
               {field("Approved", <input type="number" min="0" value={approvedDocs} onChange={e => setApprovedDocs(e.target.value)} placeholder="0" style={inputStyle} />)}
             </div>
             <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 4 }}>Leave empty → MCI treated as neutral (1.00)</div>
+
+            {/* Calculate + Reset buttons */}
+            {error && (
+              <div style={{ marginTop: 14, padding: "9px 12px", background: "#fef2f0", border: "1px solid #f5d4d0", borderRadius: 8, color: "#991b1b", fontSize: 12, fontWeight: 600 }}>
+                {error}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+              <button onClick={calculate} disabled={!canCalculate} style={{
+                flex: 1, padding: "12px 18px",
+                background: canCalculate ? T.primary : T.border,
+                color: canCalculate ? T.accent : T.muted,
+                border: "none", borderRadius: 10,
+                fontSize: 14, fontWeight: 800, letterSpacing: "0.3px",
+                cursor: canCalculate ? "pointer" : "not-allowed",
+                transition: "all 0.15s",
+              }}>
+                Calculate IPI →
+              </button>
+              <button onClick={reset} style={{
+                padding: "12px 18px",
+                background: "transparent",
+                color: T.muted, border: `1px solid ${T.border}`, borderRadius: 10,
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
+              }}>
+                Reset
+              </button>
+            </div>
           </div>
 
           {/* ── Result column ── */}
           <div style={{ padding: "22px 24px", background: T.bg, display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: T.primary, letterSpacing: "0.5px", textTransform: "uppercase" }}>Result</div>
 
-            {result.ipi == null ? (
+            {!result ? (
+              <div style={{ flex: 1, padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13, border: `2px dashed ${T.border}`, borderRadius: 12, display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, minHeight: 280 }}>
+                <div style={{ fontSize: 32, opacity: 0.4 }}>🧮</div>
+                <div style={{ fontWeight: 600, color: T.text }}>Awaiting input</div>
+                <div style={{ fontSize: 12, lineHeight: 1.6 }}>Fill in the parameters on the left, then press <strong style={{ color: T.primary }}>Calculate IPI</strong>.</div>
+              </div>
+            ) : result.ipi == null ? (
               <div style={{ padding: "30px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>
-                Add at least a start date, a planned end and a progress value to compute the IPI.
+                Not enough data to compute the IPI. Verify the dates and progress.
               </div>
             ) : (
               <>
