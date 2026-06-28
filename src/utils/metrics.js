@@ -197,12 +197,19 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   } else if (project.startDate && project.plannedEnd) {
     // No WBS — fall back to project-level dates + effective progress
     ev = effProgress / 100;
-    const startMs = new Date(project.startDate).getTime();
-    const endMs   = new Date(project.plannedEnd).getTime();
-    if (endMs > startMs) {
-      pv = nowMs <= startMs ? 0 : nowMs >= endMs ? 1 : (nowMs - startMs) / (endMs - startMs);
+    // Honour a user-supplied plannedProgress when present (e.g. from the
+    // IPI Calculator or from a manually-tracked plan). Otherwise derive
+    // PV linearly from start → plannedEnd at the as-of date.
+    if (project.plannedProgress != null && project.plannedProgress !== "") {
+      pv = Math.max(0, Math.min(1, Number(project.plannedProgress) / 100));
     } else {
-      pv = 0;
+      const startMs = new Date(project.startDate).getTime();
+      const endMs   = new Date(project.plannedEnd).getTime();
+      if (endMs > startMs) {
+        pv = nowMs <= startMs ? 0 : nowMs >= endMs ? 1 : (nowMs - startMs) / (endMs - startMs);
+      } else {
+        pv = 0;
+      }
     }
     spi = pv === 0 ? null : Math.min(cap, ev / pv);
   } else {

@@ -24,6 +24,7 @@ const IPICalculator = ({ onClose }) => {
   const [roadmapDeadline, setRoadmapDeadline] = useState("");
   const [asOfDate, setAsOfDate]               = useState(todayISO());
   const [progress, setProgress]               = useState("");
+  const [plannedProgress, setPlannedProgress] = useState("");
   const [budget, setBudget]                   = useState("");
   const [actualCost, setActualCost]           = useState("");
   const [currentGate, setCurrentGate]         = useState("Gate 4");
@@ -47,6 +48,7 @@ const IPICalculator = ({ onClose }) => {
       startDate, plannedEnd,
       roadmapDeadline: roadmapDeadline || null,
       progress: Number(progress) || 0,
+      plannedProgress: plannedProgress !== "" ? Number(plannedProgress) : null,
       budget:     Number(budget) || 0,
       actualCost: Number(actualCost) || 0,
       gate: currentGate,
@@ -71,7 +73,7 @@ const IPICalculator = ({ onClose }) => {
 
   const reset = () => {
     setStartDate(""); setPlannedEnd(""); setRoadmapDeadline("");
-    setAsOfDate(todayISO()); setProgress("");
+    setAsOfDate(todayISO()); setProgress(""); setPlannedProgress("");
     setBudget(""); setActualCost("");
     setCurrentGate("Gate 4"); setRequiredDocs(""); setApprovedDocs("");
     setResult(null); setError("");
@@ -140,10 +142,16 @@ const IPICalculator = ({ onClose }) => {
               {field("Roadmap deadline", <input type="date" value={roadmapDeadline} onChange={e => setRoadmapDeadline(e.target.value)} style={inputStyle} />, "Optional — penalty trigger")}
               {field("As-of date", <input type="date" value={asOfDate} onChange={e => setAsOfDate(e.target.value)} style={inputStyle} />, "Defaults to today")}
             </div>
-            {field("Progress %",
-              <input type="number" min="0" max="100" value={progress} onChange={e => setProgress(e.target.value)} style={inputStyle} />,
-              "0 = not started · 100 = complete"
-            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {field("Actual progress %",
+                <input type="number" min="0" max="100" value={progress} onChange={e => setProgress(e.target.value)} placeholder="0" style={inputStyle} />,
+                "What the project has actually achieved"
+              )}
+              {field("Planned progress %",
+                <input type="number" min="0" max="100" value={plannedProgress} onChange={e => setPlannedProgress(e.target.value)} placeholder="auto" style={inputStyle} />,
+                "Leave blank → derived from dates"
+              )}
+            </div>
 
             <div style={{ fontSize: 11, fontWeight: 800, color: T.primary, letterSpacing: "0.5px", textTransform: "uppercase", margin: "20px 0 12px" }}>Cost (optional)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 4 }}>
