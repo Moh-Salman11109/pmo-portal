@@ -16,9 +16,14 @@ export const SP_CONFIG = {
 };
 
 // ─── FORM URLs ───────────────────────────────────────────────────
+// Env vars take precedence when provided; the hardcoded fallbacks point at
+// the canonical SharePoint lists for the Tree Digital tenant so the buttons
+// still resolve on a fresh checkout. `gate1` here is the Initiation list
+// (workflow Gate 2 in the company's 5-stage process); `gate3` is the
+// Planning submission list.
 export const FORM_URLS = {
   intake:  import.meta.env.VITE_SP_INTAKE_FORM_URL  || "",
-  gate1:   import.meta.env.VITE_SP_GATE1_FORM_URL   || "",
+  gate1:   import.meta.env.VITE_SP_GATE1_FORM_URL   || "https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JAD9joAI4iNJSavgQ9HdBxTrAZJemXJ7Wst3hatKV-zSTI4?nav=YTM2NjgyMDUtMjJiYy00Y2E5LTg4YzEtNjZjZWNkMWYwYjIz",
   gate3:   import.meta.env.VITE_SP_GATE3_FORM_URL   || "",
   closure: import.meta.env.VITE_SP_CLOSURE_FORM_URL || "",
 };
@@ -690,8 +695,8 @@ export function mapSPItemToGateSubmission(item) {
     projectTitle:         item.Title                       || "",
     projectCode:          item.ProjectCode                 || "",
     projectId:            item.ProjectCode                 || "", // matched by code in UI
-    gateNumber:           "1",
-    gateLabel:            "Gate 1 — Project Initiation",
+    gateNumber:           "2",
+    gateLabel:            "Gate 2 — Initiation",
     status:               st,
     pendingWith:          pendingWithFromG1Status(st),
     pendingWithEmail:     (() => {

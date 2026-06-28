@@ -1,10 +1,10 @@
 // ─── GATE DEFINITIONS ────────────────────────────────────────────
 export const GATE_DEFS = [
-  { id: "G1", label: "Gate 1", name: "Initiation",  desc: "Project request & classification" },
-  { id: "G2", label: "Gate 2", name: "Planning",    desc: "Charter, Business Case & stakeholder alignment" },
-  { id: "G3", label: "Gate 3", name: "Plan Submit", desc: "Project plan submitted" },
-  { id: "G4", label: "Gate 4", name: "Execution",   desc: "Execution, IPI tracking & reporting" },
-  { id: "G5", label: "Gate 5", name: "Closure",     desc: "Closure document & stakeholder sign-off" },
+  { id: "G1", label: "Gate 1", name: "Project Request", desc: "Initial request submission & PMO triage" },
+  { id: "G2", label: "Gate 2", name: "Initiation",      desc: "Sponsor and stakeholder approval of the initiation" },
+  { id: "G3", label: "Gate 3", name: "Planning",        desc: "Charter, Business Case and project plan submitted for PMO approval" },
+  { id: "G4", label: "Gate 4", name: "Execution",       desc: "Execution, IPI tracking and reporting" },
+  { id: "G5", label: "Gate 5", name: "Closure",         desc: "Closure document and stakeholder sign-off" },
 ];
 
 // ─── OPTIONAL DOCUMENTS ──────────────────────────────────────────

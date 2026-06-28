@@ -106,6 +106,10 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     ).sort((a, b) => ({ Critical: 3, High: 2 }[b.level] || 0) - ({ Critical: 3, High: 2 }[a.level] || 0)),
   [activeProjects]);
 
+  // Pending new project requests (Gate 1 workflow queue)
+  const pendingRequests = useMemo(() =>
+    (requests || []).filter(r => !r.status?.startsWith("Approved") && !r.status?.startsWith("Rejected")),
+  [requests]);
   // Pending gate submissions (in workflow queue, awaiting approval)
   const pendingGates = useMemo(() =>
     (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected")),
@@ -115,14 +119,20 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     (closureSubmissions || []).filter(c => c.status !== "Closed"),
   [closureSubmissions]);
 
-  // Pending approvals — gates + closures combined, oldest first
+  // Pending approvals — requests + gates + closures combined, oldest first
   const pendingApprovals = useMemo(() => {
     const merged = [
+      ...pendingRequests.map(r => ({
+        ...r, _kind: "request",
+        gateLabel: "Gate 1 — Project Request",
+        projectTitle: r.title || r.projectTitle || "",
+        daysAtGate: r.daysInCurrentStage || 0,
+      })),
       ...pendingGates.map(g => ({ ...g, _kind: "gate" })),
       ...pendingClosures.map(c => ({ ...c, _kind: "closure", gateLabel: "Gate 5 — Closure", daysAtGate: c.daysInClosure || 0 })),
     ];
     return merged.sort((a, b) => (b.daysAtGate || 0) - (a.daysAtGate || 0));
-  }, [pendingGates, pendingClosures]);
+  }, [pendingRequests, pendingGates, pendingClosures]);
 
   // Gate pipeline counts: union of projects at that gate plus any pending
   // gate or closure submission for it, deduped by project id. Match by
@@ -136,11 +146,15 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     const ids = new Set();
     activeProjects.forEach(p => { if (p.gate === def.label) ids.add(p.id); });
     pendingGates.forEach(g => { if (String(g.gateNumber) === gateNum) ids.add(realId(g.projectId) || `gs-${g.id}`); });
+    // Gate 1 = Project Request → new-request submissions count toward it.
+    if (def.id === "G1") {
+      pendingRequests.forEach(r => ids.add(realId(r.id) || `rq-${r.id}`));
+    }
     if (def.id === "G5") {
       pendingClosures.forEach(c => ids.add(realId(c.projectId) || `cs-${c.id}`));
     }
     return { ...def, count: ids.size };
-  }), [activeProjects, pendingGates, pendingClosures]);
+  }), [activeProjects, pendingGates, pendingClosures, pendingRequests]);
   const maxGateCount = Math.max(...gatePipeline.map(g => g.count), 1);
   // Gate 4 is excluded — execution gate by design holds projects for months,
   // a high count there isn't a queue.
