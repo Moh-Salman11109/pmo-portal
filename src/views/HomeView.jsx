@@ -106,17 +106,26 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     ).sort((a, b) => ({ Critical: 3, High: 2 }[b.level] || 0) - ({ Critical: 3, High: 2 }[a.level] || 0)),
   [activeProjects]);
 
-  // Pending new project requests (Gate 1 workflow queue)
+  // A workflow item is "still pending" only while it's actually awaiting a
+  // decision. Once it carries a terminal state — Approved / Rejected / Opened
+  // (request has been converted into a project) / Closed — it has left the gate
+  // and must not count toward the pipeline anymore.
+  const isPendingStatus = (s) => {
+    const status = s || "";
+    if (status.startsWith("Approved")) return false;
+    if (status.startsWith("Rejected")) return false;
+    if (status === "Opened")           return false;
+    if (status === "Closed")           return false;
+    return true;
+  };
   const pendingRequests = useMemo(() =>
-    (requests || []).filter(r => !r.status?.startsWith("Approved") && !r.status?.startsWith("Rejected")),
+    (requests || []).filter(r => isPendingStatus(r.status)),
   [requests]);
-  // Pending gate submissions (in workflow queue, awaiting approval)
   const pendingGates = useMemo(() =>
-    (gateSubmissions || []).filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected")),
+    (gateSubmissions || []).filter(g => isPendingStatus(g.status)),
   [gateSubmissions]);
-  // Pending closure submissions (Gate 5 workflow queue)
   const pendingClosures = useMemo(() =>
-    (closureSubmissions || []).filter(c => c.status !== "Closed"),
+    (closureSubmissions || []).filter(c => isPendingStatus(c.status)),
   [closureSubmissions]);
 
   // Pending approvals — requests + gates + closures combined, oldest first
