@@ -52,6 +52,7 @@ import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
 import { KPICard } from "./components/KPICard.jsx";
+import IPICalculator from "./components/IPICalculator.jsx";
 import GRCDashboard from "./views/GRCDashboard.jsx";
 import HomeView from "./views/HomeView.jsx";
 import { DeptContext, useDepts } from "./deptContext.js";
@@ -505,7 +506,7 @@ const Tab = ({ tabs, active, onSelect }) => {
 //  My Actions (pending approvals on the user) and My Requests (the user's
 //  own open submissions). Collapses to an overlay on mobile/tablet.
 //
-const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, open, onClose }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, open, onClose, onOpenCalculator }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -605,6 +606,19 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               )}
             </button>
           ))}
+          {/* IPI Calculator — opens a modal; not a route */}
+          {!isPM && onOpenCalculator && (
+            <button onClick={() => { onOpenCalculator(); if (!isDesktop) onClose(); }} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px dashed rgba(0,255,179,0.25)",
+              background: "transparent", color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
+              marginTop: 6, marginBottom: 2, transition: "all 0.15s", textAlign: "left",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(0,255,179,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <span style={{ fontSize: 16 }}>🧮</span>
+              <span style={{ flex: 1 }}>IPI Calculator</span>
+            </button>
+          )}
           {!isPM && <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>}
           {!isPM && departments.map(d => {
             const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
@@ -5421,6 +5435,7 @@ export default function App() {
   const activeT = useT();
   const dark = themeStore.dark;
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
@@ -5788,7 +5803,8 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenCalculator={() => setCalculatorOpen(true)} />
+      {calculatorOpen && <IPICalculator onClose={() => setCalculatorOpen(false)} />}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <Header title={title} subtitle={subtitle} route={route} setRoute={setRoute} dark={dark} toggleDark={toggleDark} onMenuClick={() => setSidebarOpen(true)} projects={projects} currentUserName={currentUserName} />
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
