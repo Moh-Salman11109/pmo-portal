@@ -606,8 +606,8 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               )}
             </button>
           ))}
-          {/* IPI Calculator — opens a modal; not a route */}
-          {!isPM && onOpenCalculator && (
+          {/* IPI Calculator — opens a modal; visible only to Admin and PMO Head */}
+          {isAdmin && onOpenCalculator && (
             <button onClick={() => { onOpenCalculator(); if (!isDesktop) onClose(); }} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px dashed rgba(0,255,179,0.25)",
               background: "transparent", color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
