@@ -1211,11 +1211,6 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const ragClr     = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
   const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
   const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
-  // Inline "Add document" form state — admin/PMO can add custom docs on the fly.
-  const [newDocName, setNewDocName]   = useState("");
-  const [newDocGate, setNewDocGate]   = useState(parseGateNumber(project.gate) || 1);
-  const [newDocUrl,  setNewDocUrl]    = useState("");
-  const [newDocStatus, setNewDocStatus] = useState("Pending");
 
   // Actual Progress is derived — WBS rollup if any milestones exist, otherwise
   // the project's stored legacy progress value. Never user-edited from this panel.
@@ -1407,63 +1402,37 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
 
     if (tab === "Documents") {
+      // Update Panel is for status changes only. Adding documents, editing
+      // links, changing gates, and toggling IPI inclusion all live on the
+      // full Edit Project page (Admin / PMO only). Here all roles can move
+      // documents through the status workflow; non-admin tiers see a
+      // restricted set of statuses.
       const isPMTier = userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD;
       const docOpts  = isPMTier
         ? ["Pending", "Draft", "Submitted"]
         : ["Pending", "Draft", "Under Review", "Submitted", "Received", "Current", "Approved", "Final"];
 
-      // A doc is one of the system-managed mandatory ones (Charter / Business
-      // Case / Closure) when its id starts with "D" and required is true.
-      const isMandatoryDoc = (doc) =>
-        doc.required && doc.id && typeof doc.id === "string" && /^D\d+$/.test(doc.id);
-
-      const addCustomDoc = () => {
-        const name = newDocName.trim();
-        if (!name) return;
-        const doc = {
-          id: `CD${Date.now()}`,
-          name,
-          type: "Custom",
-          required: true,
-          requiredAtGate: newDocGate,
-          status: newDocStatus,
-          url: newDocUrl.trim(),
-          version: "",
-          lastUpdated: new Date().toISOString().split("T")[0],
-        };
-        setDocuments(prev => [...prev, doc]);
-        setNewDocName(""); setNewDocUrl("");
-        setNewDocStatus("Pending");
-      };
-
-      const removeDoc = (i) => {
-        setDocuments(prev => prev.filter((_, j) => j !== i));
-      };
-
       return (
       <div>
-        <SL>DOCUMENT STATUS & LINKS</SL>
+        <SL>DOCUMENT STATUS</SL>
         {documents.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>No documents on this project yet.</div>}
         {documents.map((doc, i) => {
           const docLocked = isPMTier && !docOpts.includes(doc.status);
-          const mandatory = isMandatoryDoc(doc);
           return (
           <div key={doc.id || i} style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.name}</div>
                 <div style={{ fontSize: 11, color: T.muted }}>
                   {doc.type}
                   {doc.required && <> · Required · <span style={{ color: T.accent, fontWeight: 700 }}>Due at Gate {doc.requiredAtGate || 1}</span></>}
                 </div>
               </div>
-              {doc.required && !isPMTier && (
-                <select value={doc.requiredAtGate || 1}
-                  title="Gate at which this document becomes mandatory for MCI"
-                  onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, requiredAtGate: parseInt(e.target.value, 10) } : d))}
-                  style={{ ...ss, width: 100, fontSize: 12 }}>
-                  {[1,2,3,4,5].map(g => <option key={g} value={g}>Gate {g}</option>)}
-                </select>
+              {doc.url && (
+                <a href={doc.url} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 12, color: T.accent, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  Open ↗
+                </a>
               )}
               <select value={doc.status || "Pending"}
                 disabled={docLocked}
@@ -1473,83 +1442,13 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
                   <option key={o} value={o}>{o}</option>
                 ))}
               </select>
-              {!isPMTier && !mandatory && (
-                <button onClick={() => removeDoc(i)} title="Remove this document"
-                  style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#dc2626", cursor: "pointer" }}>
-                  ✕
-                </button>
-              )}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="url"
-                value={doc.url || ""}
-                onChange={e => setDocuments(prev => prev.map((d, j) => j === i ? { ...d, url: e.target.value } : d))}
-                placeholder="Paste SharePoint link here…"
-                style={{ ...s, fontSize: 12, flex: 1 }}
-              />
-              {doc.url && (
-                <a href={doc.url} target="_blank" rel="noreferrer"
-                  style={{ fontSize: 12, color: T.accent, whiteSpace: "nowrap", fontWeight: 600 }}>
-                  Open ↗
-                </a>
-              )}
             </div>
           </div>
           );
         })}
-
-        {/* Add custom document — admin / PMO only */}
-        {!isPMTier && (
-          <div style={{ marginTop: 18, padding: 14, background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 10 }}>
-              + Add Document
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr", gap: 8, marginBottom: 8 }}>
-              <input
-                type="text"
-                value={newDocName}
-                onChange={e => setNewDocName(e.target.value)}
-                placeholder="Document name (e.g. BRD, Project Plan)"
-                style={{ ...s, fontSize: 13 }}
-              />
-              <select value={newDocGate}
-                onChange={e => setNewDocGate(parseInt(e.target.value, 10))}
-                style={{ ...ss, fontSize: 13 }}>
-                {[1,2,3,4,5].map(g => <option key={g} value={g}>Due at Gate {g}</option>)}
-              </select>
-              <select value={newDocStatus}
-                onChange={e => setNewDocStatus(e.target.value)}
-                style={{ ...ss, fontSize: 13 }}>
-                {docOpts.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                type="url"
-                value={newDocUrl}
-                onChange={e => setNewDocUrl(e.target.value)}
-                placeholder="SharePoint link (optional)"
-                style={{ ...s, fontSize: 12, flex: 1 }}
-              />
-              <button onClick={addCustomDoc}
-                disabled={!newDocName.trim()}
-                style={{
-                  background: newDocName.trim() ? T.btnPrimBg : T.border,
-                  color: newDocName.trim() ? T.btnPrimText : T.muted,
-                  border: "none", borderRadius: 6,
-                  padding: "8px 18px", fontSize: 13, fontWeight: 700,
-                  cursor: newDocName.trim() ? "pointer" : "not-allowed",
-                  whiteSpace: "nowrap",
-                }}>
-                + Add
-              </button>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontStyle: "italic" }}>
-              Add any document the project tracks (BRD, Project Plan, Risk Assessment, etc.). It counts toward MCI once its gate is reached.
-            </div>
-          </div>
-        )}
+        <div style={{ marginTop: 14, padding: "10px 12px", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8, fontSize: 11, color: T.muted, lineHeight: 1.5 }}>
+          To add a new document, change its SharePoint link, or change which gate it&apos;s due at — open <strong>Edit Project</strong> (Admin / PMO only).
+        </div>
       </div>
       );
     }
@@ -5335,6 +5234,46 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Inline "Add Document" form state — PMO/Admin use this in step 4 (Documents)
+  // to register any custom document (BRD, Project Plan, etc.).
+  const [newDocName,   setNewDocName]   = useState("");
+  const [newDocGate,   setNewDocGate]   = useState(1);
+  const [newDocStatus, setNewDocStatus] = useState("Pending");
+  const [newDocUrl,    setNewDocUrl]    = useState("");
+
+  // A doc is "mandatory" (system-locked) when it's one of the three default
+  // governance artefacts: Charter, Business Case, Closure. Their `required`
+  // flag and IPI contribution are non-negotiable.
+  const isMandatoryDoc = (doc) =>
+    doc.required && doc.id && typeof doc.id === "string" && /^D\d+$/.test(doc.id);
+
+  const addCustomDoc = () => {
+    const name = newDocName.trim();
+    if (!name) return;
+    const doc = {
+      id: `CD${Date.now()}`,
+      name, type: "Custom",
+      required: true,                  // default: counts in IPI; user can toggle off
+      requiredAtGate: newDocGate,
+      status: newDocStatus,
+      url: newDocUrl.trim(),
+      version: "",
+      lastUpdated: new Date().toISOString().split("T")[0],
+    };
+    set("documents", [...(form.documents || []), doc]);
+    setNewDocName(""); setNewDocUrl("");
+    setNewDocStatus("Pending");
+  };
+
+  const updateDoc = (i, patch) => {
+    const next = (form.documents || []).map((d, j) => j === i ? { ...d, ...patch } : d);
+    set("documents", next);
+  };
+  const removeDoc = (i) => {
+    const next = (form.documents || []).filter((_, j) => j !== i);
+    set("documents", next);
+  };
+
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = "Required";
@@ -5440,28 +5379,131 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     if (step === 4) return (
       <div>
         <p style={{ margin: "0 0 16px", fontSize: 13, color: T.muted }}>
-          Update document status. Required documents affect the IPI score.
+          Manage project documents. Toggle <strong>Count in IPI</strong> to include a document in the score; choose the gate by which it must be delivered, set status, and paste the SharePoint link.
         </p>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {(form.documents || []).map((doc, i) => (
-            <div key={doc.id || i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "center", background: T.bg, borderRadius: 10, padding: "12px 16px", border: `1px solid ${T.border}` }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{doc.name}</div>
-                <div style={{ fontSize: 11, color: T.muted }}>{doc.type}{doc.required ? " · ⭐ Required (affects IPI)" : " · Optional"}</div>
+          {(form.documents || []).map((doc, i) => {
+            const mandatory = isMandatoryDoc(doc);
+            return (
+            <div key={doc.id || i} style={{ background: T.bg, borderRadius: 10, padding: "12px 16px", border: `1px solid ${T.border}` }}>
+
+              {/* Row 1: name + IPI toggle + gate + status + remove */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{doc.name}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>
+                    {doc.type}
+                    {mandatory && <> · <span style={{ color: T.accent, fontWeight: 700 }}>Mandatory</span></>}
+                  </div>
+                </div>
+
+                {/* Count in IPI toggle — disabled for mandatory (always required) */}
+                <label title={mandatory ? "Mandatory document — always counts in IPI" : "Include this document in the IPI score"}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.muted, cursor: mandatory ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                  <input type="checkbox"
+                    checked={!!doc.required}
+                    disabled={mandatory}
+                    onChange={e => updateDoc(i, {
+                      required: e.target.checked,
+                      requiredAtGate: e.target.checked
+                        ? (doc.requiredAtGate || parseGateNumber(form.gate) || 1)
+                        : doc.requiredAtGate,
+                    })}
+                    style={{ cursor: mandatory ? "not-allowed" : "pointer" }}
+                  />
+                  Count in IPI
+                </label>
+
+                {/* Gate selector — only for required docs */}
+                {doc.required && (
+                  <select value={doc.requiredAtGate || 1}
+                    onChange={e => updateDoc(i, { requiredAtGate: parseInt(e.target.value, 10) })}
+                    style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, background: T.inputBg, color: T.inputText }}>
+                    {[1,2,3,4,5].map(g => <option key={g} value={g}>Due at Gate {g}</option>)}
+                  </select>
+                )}
+
+                <select value={doc.status || "Pending"}
+                  onChange={e => updateDoc(i, { status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] })}
+                  style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, background: T.inputBg, color: T.inputText, cursor: "pointer" }}>
+                  {["Pending","Draft","Submitted","Under Review","Approved","Final","Received","Current"].map(s => <option key={s}>{s}</option>)}
+                </select>
+
+                {!mandatory && (
+                  <button onClick={() => removeDoc(i)} title="Remove this document"
+                    style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#dc2626", cursor: "pointer" }}>
+                    ✕
+                  </button>
+                )}
               </div>
-              <select
-                value={doc.status || "Pending"}
-                onChange={e => {
-                  const updated = form.documents.map((d, j) => j === i ? { ...d, status: e.target.value, lastUpdated: new Date().toISOString().split("T")[0] } : d);
-                  set("documents", updated);
-                }}
-                style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, background: T.inputBg, color: T.inputText, cursor: "pointer" }}
-              >
-                {["Pending","Draft","Submitted","Under Review","Approved","Final","Received","Current"].map(s => <option key={s}>{s}</option>)}
-              </select>
-              <div style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>{doc.lastUpdated || "—"}</div>
+
+              {/* Row 2: SharePoint link */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="url"
+                  value={doc.url || ""}
+                  onChange={e => updateDoc(i, { url: e.target.value })}
+                  placeholder="Paste SharePoint link here…"
+                  style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, background: T.inputBg, color: T.inputText, outline: "none" }}
+                />
+                {doc.url && (
+                  <a href={doc.url} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 12, color: T.accent, whiteSpace: "nowrap", fontWeight: 600 }}>
+                    Open ↗
+                  </a>
+                )}
+              </div>
             </div>
-          ))}
+            );
+          })}
+        </div>
+
+        {/* Add Custom Document */}
+        <div style={{ marginTop: 18, padding: 14, background: T.surface, border: `1px dashed ${T.border}`, borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 10 }}>
+            + Add Document
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr", gap: 8, marginBottom: 8 }}>
+            <input type="text"
+              value={newDocName}
+              onChange={e => setNewDocName(e.target.value)}
+              placeholder="Document name (e.g. BRD, Project Plan)"
+              style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 12px", fontSize: 13, background: T.inputBg, color: T.inputText, outline: "none" }}
+            />
+            <select value={newDocGate}
+              onChange={e => setNewDocGate(parseInt(e.target.value, 10))}
+              style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 12px", fontSize: 13, background: T.inputBg, color: T.inputText }}>
+              {[1,2,3,4,5].map(g => <option key={g} value={g}>Due at Gate {g}</option>)}
+            </select>
+            <select value={newDocStatus}
+              onChange={e => setNewDocStatus(e.target.value)}
+              style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 12px", fontSize: 13, background: T.inputBg, color: T.inputText }}>
+              {["Pending","Draft","Submitted","Under Review","Approved","Final","Received","Current"].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="url"
+              value={newDocUrl}
+              onChange={e => setNewDocUrl(e.target.value)}
+              placeholder="SharePoint link (optional)"
+              style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 12px", fontSize: 12, background: T.inputBg, color: T.inputText, outline: "none" }}
+            />
+            <button onClick={addCustomDoc}
+              disabled={!newDocName.trim()}
+              style={{
+                background: newDocName.trim() ? T.btnPrimBg : T.border,
+                color: newDocName.trim() ? T.btnPrimText : T.muted,
+                border: "none", borderRadius: 6,
+                padding: "8px 18px", fontSize: 13, fontWeight: 700,
+                cursor: newDocName.trim() ? "pointer" : "not-allowed",
+                whiteSpace: "nowrap",
+              }}>
+              + Add
+            </button>
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontStyle: "italic" }}>
+            New documents default to <strong>Count in IPI = on</strong>. Toggle off in the row above if a document is informational only.
+          </div>
         </div>
       </div>
     );
