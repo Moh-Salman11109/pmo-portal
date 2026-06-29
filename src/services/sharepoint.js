@@ -16,14 +16,13 @@ export const SP_CONFIG = {
 };
 
 // ─── FORM URLs ───────────────────────────────────────────────────
-// Env vars take precedence when provided; the hardcoded fallbacks point at
-// the canonical SharePoint lists for the Tree Digital tenant so the buttons
-// still resolve on a fresh checkout. `gate1` here is the Initiation list
-// (workflow Gate 2 in the company's 5-stage process); `gate3` is the
-// Planning submission list.
+// `gate1` points at the Initiation list (workflow Gate 2 in the company's
+// 5-stage process). Hardcoded as the source of truth — the env var path
+// previously let a stale value on Vercel override the correct URL.
+// `intake`, `gate3`, and `closure` still accept env-var overrides for now.
 export const FORM_URLS = {
   intake:  import.meta.env.VITE_SP_INTAKE_FORM_URL  || "",
-  gate1:   import.meta.env.VITE_SP_GATE1_FORM_URL   || "https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JAD9joAI4iNJSavgQ9HdBxTrAZJemXJ7Wst3hatKV-zSTI4?nav=YTM2NjgyMDUtMjJiYy00Y2E5LTg4YzEtNjZjZWNkMWYwYjIz",
+  gate1:   "https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JAD9joAI4iNJSavgQ9HdBxTrAZJemXJ7Wst3hatKV-zSTI4?nav=YTM2NjgyMDUtMjJiYy00Y2E5LTg4YzEtNjZjZWNkMWYwYjIz",
   gate3:   import.meta.env.VITE_SP_GATE3_FORM_URL   || "",
   closure: import.meta.env.VITE_SP_CLOSURE_FORM_URL || "",
 };
