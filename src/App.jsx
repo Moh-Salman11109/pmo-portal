@@ -35,28 +35,25 @@
 //  Tree brand palette.
 // ============================================================================
 
-import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, ReferenceLine } from "recharts";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
-import { SPService, isUsingMock, FORM_URLS, mapSPItemToClosureSubmission } from "./services/sharepoint.js";
-import { acquireSpToken } from "./services/auth.js";
+import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_LOCKED } from "./roles.js";
-import { THEMES, themeStore, useT, useDark, ttStyle } from "./theme.js";
+import { themeStore, useT, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
-import { statusColor, riskColor, RAG_COLOR, trendIcon, trendColor } from "./utils/colors.js";
-import { fmt, fmtSAR } from "./utils/format.js";
+import { statusColor, riskColor } from "./utils/colors.js";
+import { fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
 import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
-import { KPICard } from "./components/KPICard.jsx";
 import IPICalculator from "./components/IPICalculator.jsx";
 import GRCDashboard from "./views/GRCDashboard.jsx";
 import HomeView from "./views/HomeView.jsx";
 import { DeptContext, useDepts } from "./deptContext.js";
-import { SectionHeader } from "./shared.jsx";
 
 // ─── THEME TOKENS ────────────────────────────────────────────────
 // ─── DEPARTMENTS CONTEXT (live CRUD) ──────────────────────────────

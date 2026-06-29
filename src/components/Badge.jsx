@@ -16,7 +16,6 @@ export const TypeBadge = ({ type }) => {
 };
 
 export const Badge = ({ status, size = "sm" }) => {
-  const T = useT();
   const c = statusColor[status] || { bg: "#f3f4f6", text: "#374151", dot: "#9ca3af" };
   return (
     <span style={{ background: c.bg, color: c.text, fontSize: size === "sm" ? 11 : 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>

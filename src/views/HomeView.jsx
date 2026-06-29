@@ -30,7 +30,7 @@
 //
 // ============================================================================
 
-import React, { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useT, themeStore, ttStyle } from "../theme.js";
 import { useBp } from "../hooks/useBp.js";

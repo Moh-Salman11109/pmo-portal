@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useT } from "../theme.js";
 import { calcProjectIPIFull, ipiColor, ipiColorDark } from "../utils/metrics.js";
 import { TODAY } from "../utils/dates.js";
