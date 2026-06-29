@@ -2,16 +2,26 @@ import { useMsal } from "@azure/msal-react";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 
+// Defence-in-depth: the localStorage override is a developer convenience for
+// flipping roles during local testing. It must NEVER influence a production
+// build — that would let any user assume any role just by editing browser
+// storage. Vite sets MODE = "development" only for `vite dev`; both
+// `vite build` and `vite preview` set MODE = "production".
+const ALLOW_LOCAL_OVERRIDE =
+  USE_MOCK && import.meta.env.MODE === "development";
+
 // In mock mode no MSAL provider is mounted, so useMsal() returns empty state.
-// We inject a fake identity from localStorage (switchable at runtime) or the
-// VITE_MOCK_EMAIL env var, falling back to the PMO admin test account.
+// We inject a fake identity from localStorage (dev only) or the VITE_MOCK_EMAIL
+// env var, falling back to the PMO admin test account.
 //
-// To switch roles in the browser console without restarting:
+// To switch roles during local dev (no effect in production builds):
 //   localStorage.setItem('pmo_mock_email', 'pm.strategy@pmo.test'); location.reload();
 //   localStorage.removeItem('pmo_mock_email');  // back to default
-const MOCK_EMAIL = typeof localStorage !== "undefined"
-  ? (localStorage.getItem("pmo_mock_email") || import.meta.env.VITE_MOCK_EMAIL || "admin@pmo.test")
-  : (import.meta.env.VITE_MOCK_EMAIL || "admin@pmo.test");
+const MOCK_EMAIL = (ALLOW_LOCAL_OVERRIDE && typeof localStorage !== "undefined"
+  ? localStorage.getItem("pmo_mock_email")
+  : null)
+  || import.meta.env.VITE_MOCK_EMAIL
+  || "admin@pmo.test";
 
 const MOCK_NAMES = {
   "admin@pmo.test":        "PMO Admin",
