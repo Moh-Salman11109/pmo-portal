@@ -1211,6 +1211,11 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const ragClr     = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
   const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
   const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
+  // Inline "Add document" form state — admin/PMO can add custom docs on the fly.
+  const [newDocName, setNewDocName]   = useState("");
+  const [newDocGate, setNewDocGate]   = useState(parseGateNumber(project.gate) || 1);
+  const [newDocUrl,  setNewDocUrl]    = useState("");
+  const [newDocStatus, setNewDocStatus] = useState("Pending");
 
   // Actual Progress is derived — WBS rollup if any milestones exist, otherwise
   // the project's stored legacy progress value. Never user-edited from this panel.
@@ -1406,12 +1411,42 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
       const docOpts  = isPMTier
         ? ["Pending", "Draft", "Submitted"]
         : ["Pending", "Draft", "Under Review", "Submitted", "Received", "Current", "Approved", "Final"];
+
+      // A doc is one of the system-managed mandatory ones (Charter / Business
+      // Case / Closure) when its id starts with "D" and required is true.
+      const isMandatoryDoc = (doc) =>
+        doc.required && doc.id && typeof doc.id === "string" && /^D\d+$/.test(doc.id);
+
+      const addCustomDoc = () => {
+        const name = newDocName.trim();
+        if (!name) return;
+        const doc = {
+          id: `CD${Date.now()}`,
+          name,
+          type: "Custom",
+          required: true,
+          requiredAtGate: newDocGate,
+          status: newDocStatus,
+          url: newDocUrl.trim(),
+          version: "",
+          lastUpdated: new Date().toISOString().split("T")[0],
+        };
+        setDocuments(prev => [...prev, doc]);
+        setNewDocName(""); setNewDocUrl("");
+        setNewDocStatus("Pending");
+      };
+
+      const removeDoc = (i) => {
+        setDocuments(prev => prev.filter((_, j) => j !== i));
+      };
+
       return (
       <div>
         <SL>DOCUMENT STATUS & LINKS</SL>
         {documents.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>No documents on this project yet.</div>}
         {documents.map((doc, i) => {
           const docLocked = isPMTier && !docOpts.includes(doc.status);
+          const mandatory = isMandatoryDoc(doc);
           return (
           <div key={doc.id || i} style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
@@ -1438,6 +1473,12 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
                   <option key={o} value={o}>{o}</option>
                 ))}
               </select>
+              {!isPMTier && !mandatory && (
+                <button onClick={() => removeDoc(i)} title="Remove this document"
+                  style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#dc2626", cursor: "pointer" }}>
+                  ✕
+                </button>
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
@@ -1457,9 +1498,58 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
           </div>
           );
         })}
-        <div style={{ marginTop: 14, fontSize: 12, color: T.muted, fontStyle: "italic" }}>
-          Paste the SharePoint file link — it will be saved and shown as a clickable link.
-        </div>
+
+        {/* Add custom document — admin / PMO only */}
+        {!isPMTier && (
+          <div style={{ marginTop: 18, padding: 14, background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 10 }}>
+              + Add Document
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr", gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                value={newDocName}
+                onChange={e => setNewDocName(e.target.value)}
+                placeholder="Document name (e.g. BRD, Project Plan)"
+                style={{ ...s, fontSize: 13 }}
+              />
+              <select value={newDocGate}
+                onChange={e => setNewDocGate(parseInt(e.target.value, 10))}
+                style={{ ...ss, fontSize: 13 }}>
+                {[1,2,3,4,5].map(g => <option key={g} value={g}>Due at Gate {g}</option>)}
+              </select>
+              <select value={newDocStatus}
+                onChange={e => setNewDocStatus(e.target.value)}
+                style={{ ...ss, fontSize: 13 }}>
+                {docOpts.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="url"
+                value={newDocUrl}
+                onChange={e => setNewDocUrl(e.target.value)}
+                placeholder="SharePoint link (optional)"
+                style={{ ...s, fontSize: 12, flex: 1 }}
+              />
+              <button onClick={addCustomDoc}
+                disabled={!newDocName.trim()}
+                style={{
+                  background: newDocName.trim() ? T.btnPrimBg : T.border,
+                  color: newDocName.trim() ? T.btnPrimText : T.muted,
+                  border: "none", borderRadius: 6,
+                  padding: "8px 18px", fontSize: 13, fontWeight: 700,
+                  cursor: newDocName.trim() ? "pointer" : "not-allowed",
+                  whiteSpace: "nowrap",
+                }}>
+                + Add
+              </button>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontStyle: "italic" }}>
+              Add any document the project tracks (BRD, Project Plan, Risk Assessment, etc.). It counts toward MCI once its gate is reached.
+            </div>
+          </div>
+        )}
       </div>
       );
     }
@@ -3952,7 +4042,13 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
 
   const openEdit = (p) => {
     setEditingProject(p.id);
-    setFormData({ ...p });
+    // Initialise the toggle state from the project's current optional documents,
+    // so the chips reflect what's already on the project (otherwise the user has
+    // to re-pick them every time, and saving would silently lose them).
+    const currentOptional = (p.documents || [])
+      .filter(d => OPTIONAL_DOCS.includes(d.name))
+      .map(d => d.name);
+    setFormData({ ...p, requiredDocs: currentOptional });
     setShowForm(true);
   };
 
@@ -3960,7 +4056,31 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
     if (!formData.name || !formData.code) { showToast("Project name and code are required", "error"); return; }
     try {
       if (editingProject) {
-        await onSaveForm(formData, "edit", formData.spId, formData.id);
+        // Reconcile requiredDocs toggle ↔ documents array. Keep any docs the
+        // user added via the Update Panel (custom names, not in OPTIONAL_DOCS),
+        // keep all mandatory docs, and add/remove optional docs to match what
+        // the user has toggled on the form right now.
+        const selected = formData.requiredDocs || [];
+        const existing = formData.documents || [];
+        const kept = existing.filter(d => {
+          // Mandatory always stays
+          if (d.required && (d.type === "Charter" || d.type === "Business Case" || d.type === "Closure")) return true;
+          // Optional preset: keep only if still toggled on
+          if (OPTIONAL_DOCS.includes(d.name)) return selected.includes(d.name);
+          // Custom doc (added via Update Panel): always keep
+          return true;
+        });
+        const existingNames = new Set(kept.map(d => d.name));
+        const additions = selected
+          .filter(name => !existingNames.has(name))
+          .map((name, i) => ({
+            id: `OD${Date.now()}${i}`,
+            name, type: name,
+            required: false, status: "Pending",
+            version: "", lastUpdated: "",
+          }));
+        const merged = { ...formData, documents: [...kept, ...additions] };
+        await onSaveForm(merged, "edit", formData.spId, formData.id);
         showToast("Project updated successfully");
       } else {
         const today = new Date().toISOString().split("T")[0];
