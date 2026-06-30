@@ -36,7 +36,7 @@
 // ============================================================================
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, ReferenceLine, ReferenceArea, CartesianGrid } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
@@ -2238,19 +2238,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
             >
               <div style={{ fontSize: 30, fontWeight: 900, color: ipiC.color, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{ipi == null ? "—" : countedIPI}</div>
-              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 6, opacity: 0.85 }}>
-                {ipiDisplay.hasHistory ? "IPI (90-day weighted)" : "IPI Score"}
-              </div>
-              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 600, marginTop: 4, opacity: 0.7 }}>{ipiC.label}</div>
-              {ipiDisplay.hasHistory && ipiDisplay.delta != null && (
-                <div style={{
-                  fontSize: 9.5, color: ipiC.color, marginTop: 4, opacity: 0.85,
-                  fontWeight: 600, fontFeatureSettings: '"tnum"',
-                }}>
-                  Latest: {ipiSnapshot} ({ipiDisplay.delta > 0 ? "+" : ""}{ipiDisplay.delta})
-                </div>
-              )}
-              <div style={{ fontSize: 8.5, color: ipiC.color, opacity: 0.6, fontWeight: 700, letterSpacing: "0.06em", marginTop: 3 }}>AUDIT ↗</div>
+              <div style={{ fontSize: 9, color: ipiC.color, opacity: 0.7, fontWeight: 700, letterSpacing: "0.1em", marginTop: 10 }}>AUDIT ↗</div>
             </button>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
               <div>
@@ -2300,6 +2288,86 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           ))}
         </div>
       </div>
+
+      {/* ── IPI TREND — one dot per recorded update ───────────────────────
+          Visualises ipiHistory so a PM/auditor can see whether today's score
+          is on a stable trajectory or a one-shot spike. The 90-day window
+          (used by the time-weighted display) is highlighted to make the
+          rolling-average period explicit. */}
+      {(() => {
+        const history = (project.ipiHistory || [])
+          .filter(h => h.date && h.ipi != null)
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const todayMs   = new Date(TODAY).getTime();
+        const windowMs  = todayMs - 90 * 86_400_000;
+        const data = history.map(h => ({
+          date:   h.date,
+          ipi:    h.ipi,
+          inWin:  new Date(h.date).getTime() >= windowMs,
+        }));
+        const dotColor = (v) => v >= 100 ? "#16a34a" : v >= 90 ? "#fbbf24" : v >= 70 ? "#f97316" : "#dc2626";
+        return (
+          <div style={{
+            background: T.surface,
+            border: `1px solid ${T.border}`,
+            borderRadius: 14,
+            padding: "16px 20px",
+            marginBottom: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.2px" }}>IPI Trend</div>
+                <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
+                  One dot per recorded update · highlighted band = 90-day weighting window
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: T.muted, display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#16a34a", borderRadius: 4, marginRight: 4 }} />On Track ≥ 100</span>
+                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fbbf24", borderRadius: 4, marginRight: 4 }} />Watch 90-99</span>
+                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#f97316", borderRadius: 4, marginRight: 4 }} />At Risk 70-89</span>
+                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#dc2626", borderRadius: 4, marginRight: 4 }} />Critical &lt; 70</span>
+              </div>
+            </div>
+            {data.length === 0 ? (
+              <div style={{
+                padding: "32px 12px", textAlign: "center",
+                background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8,
+                fontSize: 12, color: T.muted,
+              }}>
+                No IPI snapshots recorded yet. Each project update saves a snapshot — the line will populate as the PM submits weekly/monthly updates.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 2 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.muted }} tickFormatter={(d) => d?.slice(5)} />
+                  <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]} tick={{ fontSize: 10, fill: T.muted }} />
+                  <Tooltip
+                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, fontSize: 11, color: T.text, borderRadius: 8 }}
+                    labelStyle={{ color: T.text, fontWeight: 700 }}
+                    formatter={(v) => [v, "IPI"]}
+                  />
+                  <ReferenceArea x1={data.find(d => d.inWin)?.date || data[data.length - 1].date} x2={data[data.length - 1].date} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
+                  <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 3" />
+                  <ReferenceLine y={90}  stroke="#fbbf24" strokeDasharray="4 3" />
+                  <ReferenceLine y={70}  stroke="#f97316" strokeDasharray="4 3" />
+                  <Line
+                    type="monotone"
+                    dataKey="ipi"
+                    stroke="#003932"
+                    strokeWidth={2}
+                    dot={(props) => {
+                      const { cx, cy, payload } = props;
+                      return <circle key={`d-${payload.date}`} cx={cx} cy={cy} r={5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={1.5} />;
+                    }}
+                    activeDot={{ r: 7 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        );
+      })()}
 
       <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
 
