@@ -39,66 +39,123 @@ const PAL = {
   sea:      "#00FFB3",
 };
 
+// Print stylesheet — when the user clicks "Save as PDF", we trigger the
+// browser print dialog. This @media print rule strips everything except the
+// modal (no backdrop, no scrollbars, no buttons) so the saved PDF contains
+// only the audit page itself.
+const PRINT_CSS = `
+@media print {
+  body * { visibility: hidden !important; }
+  .audit-print-root, .audit-print-root * { visibility: visible !important; }
+  .audit-print-root {
+    position: absolute !important;
+    inset: 0 !important;
+    background: white !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    height: auto !important;
+    width: auto !important;
+    page-break-inside: auto !important;
+  }
+  .audit-print-noprint { display: none !important; }
+  .audit-backdrop { position: static !important; background: white !important; padding: 0 !important; }
+  @page { size: A4; margin: 12mm; }
+}
+`;
+
 // ─── Shared modal chrome ───────────────────────────────────────────────
-const Shell = ({ title, subtitle, accent, onClose, children }) => (
-  <div
-    onClick={onClose}
-    style={{
-      position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(0, 18, 14, 0.72)",
-      backdropFilter: "blur(4px)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "24px",
-    }}
-  >
+const Shell = ({ title, subtitle, accent, onClose, children }) => {
+  const print = () => {
+    // Defer so React paints the print-friendly layout first
+    setTimeout(() => window.print(), 0);
+  };
+  return (
     <div
-      onClick={(e) => e.stopPropagation()}
+      className="audit-backdrop"
+      onClick={onClose}
       style={{
-        background: PAL.surface,
-        color: PAL.text,
-        borderRadius: 14,
-        width: "min(900px, 100%)",
-        maxHeight: "92vh",
-        overflowY: "auto",
-        boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
-        border: `1px solid ${PAL.border}`,
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0, 18, 14, 0.72)",
+        backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "24px",
       }}
     >
-      <div style={{
-        background: `linear-gradient(135deg, ${PAL.brand} 0%, ${PAL.brandDk} 100%)`,
-        color: "#fff",
-        padding: "18px 22px",
-        borderRadius: "14px 14px 0 0",
-        display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-        borderBottom: `4px solid ${accent}`,
-      }}>
-        <div>
-          <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: accent, fontWeight: 800, marginBottom: 4 }}>
-            Audit Breakdown
+      <style>{PRINT_CSS}</style>
+      <div
+        className="audit-print-root"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: PAL.surface,
+          color: PAL.text,
+          borderRadius: 14,
+          width: "min(900px, 100%)",
+          maxHeight: "92vh",
+          overflowY: "auto",
+          boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+          border: `1px solid ${PAL.border}`,
+        }}
+      >
+        <div style={{
+          background: `linear-gradient(135deg, ${PAL.brand} 0%, ${PAL.brandDk} 100%)`,
+          color: "#fff",
+          padding: "18px 22px",
+          borderRadius: "14px 14px 0 0",
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+          borderBottom: `4px solid ${accent}`,
+        }}>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: accent, fontWeight: 800, marginBottom: 4 }}>
+              Audit Breakdown
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.3px" }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{subtitle}</div>}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.3px" }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{subtitle}</div>}
+          <div className="audit-print-noprint" style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={print}
+              aria-label="Save as PDF"
+              title="Save as PDF"
+              style={{
+                background: PAL.sea,
+                border: `1px solid ${PAL.sea}`,
+                borderRadius: 8,
+                color: PAL.brand,
+                height: 32,
+                padding: "0 12px",
+                fontSize: 11, fontWeight: 800,
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 6,
+                letterSpacing: "0.04em",
+              }}
+            >
+              <span style={{ fontSize: 13 }}>↓</span> SAVE PDF
+            </button>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                background: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.25)",
+                borderRadius: 8,
+                color: "#fff",
+                width: 32, height: 32,
+                fontSize: 18, fontWeight: 800,
+                cursor: "pointer",
+                display: "grid", placeItems: "center",
+              }}
+            >×</button>
+          </div>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            background: "rgba(255,255,255,0.12)",
-            border: "1px solid rgba(255,255,255,0.25)",
-            borderRadius: 8,
-            color: "#fff",
-            width: 32, height: 32,
-            fontSize: 18, fontWeight: 800,
-            cursor: "pointer",
-            display: "grid", placeItems: "center",
-          }}
-        >×</button>
-      </div>
 
-      <div style={{ padding: "20px 22px 24px", background: PAL.surface, color: PAL.text }}>{children}</div>
+        <div style={{ padding: "20px 22px 24px", background: PAL.surface, color: PAL.text }}>{children}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Small primitives — fixed palette so the modal is always legible ──
 const Section = ({ num, title, sub, accent, children }) => (
