@@ -2241,6 +2241,28 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <div style={{ fontSize: 9, color: ipiC.color, opacity: 0.7, fontWeight: 700, letterSpacing: "0.1em", marginTop: 10 }}>AUDIT ↗</div>
             </button>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
+              {/* Snapshot context — explains why the breakdown below sums to a
+                  different number than the big weighted IPI on the left. The
+                  big number is the 90-day weighted; the components are the
+                  current snapshot. Both are real; the reconciliation lives
+                  in the audit modal one click away. */}
+              <div style={{
+                fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: T.accent, opacity: 0.85, marginBottom: 4,
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span>Current Snapshot</span>
+                {ipiSnapshot != null && (
+                  <span style={{ background: "rgba(0,255,179,0.18)", color: T.accent, padding: "1px 7px", borderRadius: 8, fontSize: 9, fontWeight: 800 }}>
+                    IPI {ipiSnapshot}
+                  </span>
+                )}
+                {ipi != null && ipiSnapshot != null && ipi !== ipiSnapshot && (
+                  <span style={{ opacity: 0.6, fontSize: 9, fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>
+                    · weighted = {ipi}
+                  </span>
+                )}
+              </div>
               <div>
                 <span style={{ color: T.accent, fontWeight: 700 }}>SPI</span>
                 {" "}{ipiResult.components.spi ?? "N/A"}
@@ -4563,17 +4585,31 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
               </div>
             </div>
 
-            {/* IPI breakdown */}
-            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {/* Component averages across the dept's projects.
+                These are AVERAGES of each project's snapshot components — NOT
+                contributions to the dept IPI on the right. The dept IPI is a
+                budget×priority weighted rollup of project-level IPIs (each of
+                which already re-normalises across present components), so a
+                naive sum of these averages won't reproduce it. The previous
+                "44pts + 25pts + 25pts" labels implied a sum that wasn't real
+                and confused reviewers — removed. */}
+            <div style={{ padding: "10px 20px 4px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Snapshot averages across {d.stats.total} project{d.stats.total === 1 ? "" : "s"}
+              </span>
+              <span style={{ fontSize: 9, color: T.muted, opacity: 0.7 }}>
+                informational · dept IPI uses budget × priority weighting
+              </span>
+            </div>
+            <div style={{ padding: "4px 20px 14px", borderBottom: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               {[
-                { label: "SPI ×50%", value: d.avgSPI != null ? d.avgSPI.toFixed(2) : "—", pts: d.avgSPI != null ? Math.min(d.avgSPI, 1.20) * 50 : 0, color: d.avgSPI == null ? "#6b7280" : d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "CPI ×25%", value: d.avgCPI != null ? d.avgCPI.toFixed(2) : "—", pts: d.avgCPI != null ? Math.min(d.avgCPI, 1.20) * 25 : 0, color: d.avgCPI == null ? "#6b7280" : d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
-                { label: "MCI ×25%", value: d.avgMCI != null ? `${Math.round(d.avgMCI * 100)}%` : "—", pts: d.avgMCI != null ? d.avgMCI * 25 : 0, color: d.avgMCI == null ? "#6b7280" : d.avgMCI >= 0.8 ? "#16a34a" : "#dc2626" },
-              ].map(({ label, value, pts, color }) => (
+                { label: "Avg SPI", value: d.avgSPI != null ? d.avgSPI.toFixed(2) : "—", color: d.avgSPI == null ? "#6b7280" : d.avgSPI >= 0.9 ? "#16a34a" : "#dc2626" },
+                { label: "Avg CPI", value: d.avgCPI != null ? d.avgCPI.toFixed(2) : "—", color: d.avgCPI == null ? "#6b7280" : d.avgCPI >= 0.9 ? "#16a34a" : "#dc2626" },
+                { label: "Avg MCI", value: d.avgMCI != null ? `${Math.round(d.avgMCI * 100)}%` : "—", color: d.avgMCI == null ? "#6b7280" : d.avgMCI >= 0.8 ? "#16a34a" : "#dc2626" },
+              ].map(({ label, value, color }) => (
                 <div key={label} style={{ textAlign: "center", padding: "8px 4px", background: T.bg, borderRadius: 8 }}>
-                  <div style={{ fontSize: 16, fontWeight: 900, color }}>{value}</div>
-                  <div style={{ fontSize: 9, color: T.muted, marginBottom: 2 }}>{label}</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: T.muted }}>{pts.toFixed(0)}pts</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color }}>{value}</div>
+                  <div style={{ fontSize: 9.5, color: T.muted, marginTop: 2 }}>{label}</div>
                 </div>
               ))}
             </div>
