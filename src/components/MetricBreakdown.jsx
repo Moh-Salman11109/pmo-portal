@@ -119,30 +119,33 @@ const Shell = ({ title, subtitle, accent, onClose, children }) => {
 <title>${docTitle}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  /* EVERY reset uses !important — the cloned modal carries React inline
+     styles (maxHeight: 92vh, overflowY: auto, borderRadius, etc.) which
+     would otherwise pin the content to a single viewport. */
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body {
-    margin: 0; padding: 0; background: #ffffff;
+    margin: 0 !important; padding: 0 !important; background: #ffffff !important;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     color: #0d1f1c;
     -webkit-font-smoothing: antialiased;
+    height: auto !important; overflow: visible !important;
   }
-  body { padding: 0; }
   .audit-print-root {
-    width: 100%; max-width: none; max-height: none; height: auto;
-    box-shadow: none; border: none; border-radius: 0;
+    width: 100% !important; max-width: none !important;
+    max-height: none !important; height: auto !important;
+    box-shadow: none !important; border: none !important; border-radius: 0 !important;
     background: #ffffff !important;
-    overflow: visible;
+    overflow: visible !important;
+    position: static !important; inset: auto !important;
   }
   .audit-print-root * {
     overflow: visible !important;
     max-height: none !important;
   }
   .audit-print-root section { page-break-inside: avoid; break-inside: avoid; }
-  .audit-print-root table   { page-break-inside: auto;  break-inside: auto;  }
-  .audit-print-root tr      { page-break-inside: avoid; break-inside: avoid; }
-  /* Generous bottom padding so the page-break never crops a row mid-letter */
+  .audit-print-root table   { page-break-inside: auto !important;  break-inside: auto !important;  }
+  .audit-print-root tr      { page-break-inside: avoid !important; break-inside: avoid !important; }
   @page { size: A4; margin: 10mm; }
-  @media print { body { padding: 0; } }
 </style>
 </head>
 <body>${cloned.outerHTML}</body>
