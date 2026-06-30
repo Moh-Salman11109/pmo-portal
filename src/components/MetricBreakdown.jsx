@@ -39,29 +39,55 @@ const PAL = {
   sea:      "#00FFB3",
 };
 
-// Print stylesheet — when the user clicks "Save as PDF", we trigger the
-// browser print dialog. This @media print rule strips everything except the
-// modal (no backdrop, no scrollbars, no buttons) so the saved PDF contains
-// only the audit page itself.
+// Print stylesheet — flattens every clipping/scroll constraint that exists
+// for the on-screen modal so the printed PDF can grow naturally across as
+// many A4 pages as the audit content needs. The previous version inherited
+// the modal's `maxHeight: 92vh` + `overflowY: auto` and produced a single-
+// page screenshot with the rest of the audit truncated. Every constraint
+// here uses !important to override the React inline styles, and the
+// `overflow / max-height` reset cascades to descendants so the nested
+// time-weighted history scroller also expands.
 const PRINT_CSS = `
 @media print {
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
   body * { visibility: hidden !important; }
   .audit-print-root, .audit-print-root * { visibility: visible !important; }
-  .audit-print-root {
-    position: absolute !important;
-    inset: 0 !important;
+  .audit-backdrop {
+    position: static !important;
     background: white !important;
+    backdrop-filter: none !important;
     padding: 0 !important;
+    display: block !important;
+    height: auto !important;
     overflow: visible !important;
+    inset: auto !important;
+  }
+  .audit-print-root {
+    position: static !important;
     box-shadow: none !important;
     border: none !important;
+    border-radius: 0 !important;
     max-height: none !important;
     height: auto !important;
-    width: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
     page-break-inside: auto !important;
   }
+  .audit-print-root * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .audit-print-root section { page-break-inside: avoid; }
+  .audit-print-root table { page-break-inside: auto !important; }
+  .audit-print-root tr    { page-break-inside: avoid !important; page-break-after: auto !important; }
   .audit-print-noprint { display: none !important; }
-  .audit-backdrop { position: static !important; background: white !important; padding: 0 !important; }
   @page { size: A4; margin: 12mm; }
 }
 `;
