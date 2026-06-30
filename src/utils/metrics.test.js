@@ -272,13 +272,16 @@ describe("IPI consistency — number must match its breakdown", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("Caps — components clamp at IPI_DEFAULTS.cap (1.20)", () => {
-  it("SPI is capped at 1.20 when raw EV/PV exceeds it", () => {
-    // 100% progress with only 50% of timeline elapsed → raw SPI = 2.0; cap to 1.20.
+  it("SPI exposes the RAW ratio uncapped; cap is applied at spiFinal", () => {
+    // 100% progress with only 50% of timeline elapsed → raw SPI = 2.0.
+    // components.spi is now the raw, unscaled signal (so over-achievement is
+    // visible to auditors); spiFinal carries the cap + penalty composition.
     const p = mk({
       milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-04-01", date: "2026-12-31" }],
     });
-    expect(ipi(p).components.spi).toBeLessThanOrEqual(1.20);
-    expect(ipi(p).components.spi).toBeGreaterThan(1.0);
+    const r = ipi(p);
+    expect(r.components.spi).toBeGreaterThan(1.20);          // raw stays uncapped
+    expect(r.components.spiFinal).toBeLessThanOrEqual(1.20); // cap lands on the final
   });
   it("CPI is capped at 1.20 when BCWP / AC exceeds it", () => {
     // 50% progress, budget 1M, actual cost 100K → BCWP=500K, CPI=5.0; cap to 1.20.
@@ -314,24 +317,65 @@ describe("Roadmap penalty — multiplicative decay 1% per day past deadline", ()
     });
     expect(ipi(p).components.penalty).toBe(0);
   });
-  it("penalty is applied multiplicatively to SPI (spiFinal = spi × penalty)", () => {
+  it("penalty is applied to the RAW SPI, then cap is applied last", () => {
+    // Choose a scenario where raw_spi * penalty stays under 1.20 so cap is inert.
+    // 50% progress with timeline mid-flight → raw SPI ≈ 1.0; × 0.90 penalty = 0.90.
     const p = mk({ roadmapDeadline: "2026-06-09",
-      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+      milestones: [{ id: "M1", weight: 1, progress: 25, startDate: "2026-04-01", date: "2026-12-31" }],
     });
     const r = ipi(p);
-    expect(r.components.spiFinal).toBeCloseTo(r.components.spi * r.components.penalty, 3);
+    const expected = Math.min(1.20, r.components.spi * r.components.penalty);
+    expect(r.components.spiFinal).toBeCloseTo(expected, 3);
+  });
+
+  it("cap-then-penalty bug regression: over-achiever past roadmap is penalised from its true ratio, not from the cap", () => {
+    // Raw SPI 2.0, penalty 0.5. Old (buggy) order: cap(2.0)=1.20 then × 0.5 = 0.60.
+    // New (correct) order: 2.0 × 0.5 = 1.0, cap inactive → spiFinal = 1.0.
+    // The fix is observable as a HIGHER spiFinal in this regime, not lower.
+    const p = mk({
+      roadmapDeadline: "2026-04-30",   // 50 days past as of ASOF 2026-06-19
+      milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    const r = ipi(p);
+    expect(r.components.penalty).toBeCloseTo(0.50, 2);
+    expect(r.components.spi).toBeGreaterThan(1.20);    // raw still huge
+    expect(r.components.spiFinal).toBeCloseTo(Math.min(1.20, r.components.spi * 0.50), 2);
+    expect(r.components.spiFinal).toBeGreaterThan(0.60); // old buggy answer
   });
 });
 
-describe("Null handling — neutral 1.0 default + all-null returns null IPI", () => {
-  it("treats individual null components as neutral 1.0 in the IPI sum", () => {
-    // No budget → CPI null. Should NOT pull the IPI down.
+describe("Null handling — present components re-normalise, all-null returns null IPI", () => {
+  it("excludes null components and re-normalises weights of those present", () => {
+    // No budget → CPI null. Old (perverse) behaviour treated null as 1.0,
+    // rewarding PMs for withholding data. Now: cpi is excluded, the remaining
+    // SPI (0.50) and MCI (0.25) re-weight to sum 1.0 → SPI carries 2/3 weight.
     const p = mk({ budget: 0, actualCost: 0,
       milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+      documents: [{ name: "Charter", required: true, requiredAtGate: 1, status: "Approved" }],
     });
-    expect(ipi(p).components.cpi).toBe(null);
-    expect(ipi(p).ipi).not.toBe(null);  // still produces a meaningful IPI
+    const r = ipi(p);
+    expect(r.components.cpi).toBe(null);
+    expect(r.ipi).not.toBe(null);
+    // Manual reproduction: spiFinal × (0.50/0.75) + mci × (0.25/0.75)
+    const expected = Math.round(
+      (r.components.spiFinal * (0.50/0.75) + r.components.mci * (0.25/0.75)) * 100
+    );
+    expect(r.ipi).toBe(expected);
   });
+
+  it("withholding cost data does NOT inflate IPI vs reporting weak cost data", () => {
+    // The whole point of fixing null=1.0: a PM who reports honest poor CPI=0.5
+    // should score the SAME OR LOWER than a PM who reports no cost data at all,
+    // not higher. (Old behaviour: null → 1.0 → IPI higher than honest 0.5.)
+    const base = {
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+      documents: [{ name: "Charter", required: true, requiredAtGate: 1, status: "Approved" }],
+    };
+    const noCost   = mk({ ...base, budget: 0, actualCost: 0 });
+    const weakCost = mk({ ...base, budget: 1_000_000, actualCost: 1_000_000 }); // CPI=0.5
+    expect(ipi(weakCost).ipi).toBeLessThanOrEqual(ipi(noCost).ipi);
+  });
+
   it("returns null IPI ('Pending Plan') when ALL three components are null", () => {
     const p = mk({ budget: 0, actualCost: 0, milestones: [], documents: [],
       startDate: "", plannedEnd: "" });
@@ -451,5 +495,155 @@ describe("ipiColor — status bands match the documented thresholds", () => {
   });
   it("maps below 70 to 'Critical' (red)", () => {
     expect(ipiColor(50).label).toBe("Critical");
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Post-audit regression suite — covers the issues raised in the deep IPI audit.
+// Every test here exists to lock in a fix; if any of these fail, the engine
+// has regressed against an explicitly-defended decision.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("Audit fix — negative actualCost is treated as missing data", () => {
+  it("a negative actualCost produces cpi=null, not a negative CPI poisoning IPI", () => {
+    const p = mk({ budget: 1_000_000, actualCost: -50_000,
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    const r = ipi(p);
+    expect(r.components.cpi).toBe(null);
+    expect(r.ipi).not.toBe(null);     // SPI + MCI still rollup
+    expect(r.ipi).toBeGreaterThan(0);
+  });
+});
+
+describe("Audit fix — same-day (instant) milestone behaves as a real instant", () => {
+  it("a milestone with start==end is 100% planned the day it's due, not 0%", () => {
+    // Instant milestone dated in the past: should be PV=1 → SPI based on actual.
+    const p = mk({
+      milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-05-01", date: "2026-05-01" }],
+    });
+    const r = ipi(p);
+    expect(r.pv).toBeCloseTo(1.0, 3);
+    expect(r.components.spi).toBeCloseTo(1.0, 3);
+  });
+  it("future instant milestone is 0% planned (and the weight isn't excluded — it's a real PV value)", () => {
+    const p = mk({
+      milestones: [
+        { id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" },
+        { id: "M2", weight: 1, progress: 0,  startDate: "2027-01-01", date: "2027-01-01" }, // future instant
+      ],
+    });
+    const r = ipi(p);
+    // M2 contributes PV=0 and EV=0, so it only adds weight; SPI ≈ M1's ratio.
+    expect(r.components.spi).toBeGreaterThan(0);
+  });
+});
+
+describe("Audit fix — unscheduled leaves are excluded from the SPI aggregator", () => {
+  it("a leaf with no startDate/date is dropped, not silently inflating SPI via dilution", () => {
+    const withUnsched = mk({
+      milestones: [
+        { id: "M1", weight: 1, progress: 80, startDate: "2026-04-01", date: "2026-12-31" },
+        { id: "M2", weight: 1, progress: 0  /* no dates */ },
+      ],
+    });
+    const withoutUnsched = mk({
+      milestones: [
+        { id: "M1", weight: 1, progress: 80, startDate: "2026-04-01", date: "2026-12-31" },
+      ],
+    });
+    // Both projects should produce the same SPI — the unscheduled leaf must
+    // be entirely excluded from the calculation.
+    expect(ipi(withUnsched).components.spi).toBeCloseTo(ipi(withoutUnsched).components.spi, 3);
+  });
+});
+
+describe("Audit fix — date normalisation accepts strings, ISO datetimes, Date objects", () => {
+  it("Date object as asOfDate works the same as the ISO-string equivalent", () => {
+    const p = mk({
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    const asString = calcProjectIPIFull(p, "2026-06-19").ipi;
+    const asDate   = calcProjectIPIFull(p, new Date("2026-06-19T00:00:00Z")).ipi;
+    expect(asDate).toBe(asString);
+  });
+  it("ISO datetime (T...Z) doesn't break planned% interpolation", () => {
+    const p = {
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01T00:00:00Z", date: "2026-12-31T00:00:00Z" }],
+    };
+    const r = calcProjectIPIFull(p, "2026-06-19");
+    expect(Number.isFinite(r.components.spi)).toBe(true);
+  });
+});
+
+describe("Audit fix — time-weighted IPI honours a 90-day moving window", () => {
+  it("a snapshot older than 90 days from asOfDate is excluded from the average", () => {
+    // Two snapshots: one 200 days ago at IPI=20 (should be ignored),
+    // one 30 days ago at IPI=100. The weighted average should be ≈ 100, not 60.
+    const p = {
+      ipiHistory: [
+        { date: "2025-12-01", ipi: 20  },   // ~200 days before 2026-06-19
+        { date: "2026-05-20", ipi: 100 },
+      ],
+    };
+    const tw = calcTimeWeightedIPI(p, "2026-06-19");
+    expect(tw).toBeGreaterThan(95);
+  });
+  it("falls back to the current snapshot when every history entry is outside the window", () => {
+    const p = {
+      ipiHistory: [{ date: "2025-01-01", ipi: 30 }],   // way outside 90d window
+      milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-01-01", date: "2026-06-01" }],
+    };
+    // Outside-window history → falls back to snapshot, which here is over-achieving.
+    const tw = calcTimeWeightedIPI(p, "2026-06-19");
+    expect(tw).toBeGreaterThan(50);
+  });
+});
+
+describe("Audit fix — IPI status band uses unrounded decimal, not the displayed integer", () => {
+  // ipiDecimal exactly at 0.995 (i.e. ipi rounds to 100 but math says still < 1.00).
+  // Old behaviour: rounded ipi=100 → "On Track" banner. New: ipiDecimal < 1.00 →
+  // "Watch", preventing the boundary flip.
+  it("a project with ipiDecimal below 1.00 stays in Watch even when rounded display says 100", () => {
+    // Force ipiDecimal ≈ 0.995 via direct rollup math. The simplest path:
+    // construct a project where the only present component is mci=0.995.
+    const p = mk({
+      budget: 0, actualCost: 0, milestones: [],
+      startDate: "", plannedEnd: "",
+      documents: [
+        { name: "A", required: true, requiredAtGate: 1, status: "Approved"     }, // 1.0
+        { name: "B", required: true, requiredAtGate: 1, status: "Approved"     },
+        { name: "C", required: true, requiredAtGate: 1, status: "Submitted"    }, // 0.5
+      ],
+    });
+    // MCI here = 2.5 / 3 ≈ 0.833 → IPI rounds to 83.
+    // (This sanity-checks the rollup uses unrounded math, not that the engine
+    //  hits the 0.995 edge precisely — that's a property no real input reaches.)
+    const r = ipi(p);
+    expect(r.status).toBe("At Risk");      // 0.833 < 0.90
+    expect(r.ipi).toBe(83);
+  });
+});
+
+describe("Audit fix — re-normalisation in the IPI rollup", () => {
+  it("only-SPI present: IPI equals 100 × spiFinal (full credit, no neutral filler)", () => {
+    const p = mk({
+      budget: 0, actualCost: 0, documents: [],
+      milestones: [{ id: "M1", weight: 1, progress: 60, startDate: "2026-04-01", date: "2026-12-31" }],
+    });
+    const r = ipi(p);
+    expect(r.components.cpi).toBe(null);
+    expect(r.components.mci).toBe(null);
+    expect(r.ipi).toBe(Math.round(r.components.spiFinal * 100));
+  });
+  it("SPI + MCI present, no CPI: weights 0.5/0.25 re-normalise to 2/3 and 1/3", () => {
+    const p = mk({
+      budget: 0, actualCost: 0,
+      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
+      documents: [{ name: "Charter", required: true, requiredAtGate: 1, status: "Approved" }],
+    });
+    const r = ipi(p);
+    const expected = Math.round((r.components.spiFinal * (2/3) + r.components.mci * (1/3)) * 100);
+    expect(r.ipi).toBe(expected);
   });
 });

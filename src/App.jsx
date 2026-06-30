@@ -46,11 +46,12 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor } from "./utils/colors.js";
 import { fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
 import IPICalculator from "./components/IPICalculator.jsx";
+import { IPIBreakdownModal, ProgressBreakdownModal } from "./components/MetricBreakdown.jsx";
 import GRCDashboard from "./views/GRCDashboard.jsx";
 import HomeView from "./views/HomeView.jsx";
 import { DeptContext, useDepts } from "./deptContext.js";
@@ -1754,15 +1755,21 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const [noteEdit,   setNoteEdit]   = useState(false);
   const [noteDraft,  setNoteDraft]  = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+  // Click-to-audit modals for the headline IPI and Progress numbers
+  const [showIPIBreakdown,      setShowIPIBreakdown]      = useState(false);
+  const [showProgressBreakdown, setShowProgressBreakdown] = useState(false);
 
   // ── IPI — must run before early return so hook call count is stable.
-  // Project page shows ONE IPI: the current snapshot, so it matches the
-  // SPI/CPI/MCI breakdown displayed beside it. Time-weighted averaging is
-  // applied only in dept/portfolio rollups (calcDeptIPI / calcPortfolioIPI).
-  const ipiResult  = project ? calcProjectIPIFull(project) : { ipi: 0 };
-  const ipi        = ipiResult.ipi;
-  const ipiC       = ipiColor(ipi);
-  const countedIPI = useCountUp(ipi);
+  // Headline number is the TIME-WEIGHTED IPI (matches dept/portfolio rollups so
+  // the same project shows the same score wherever it appears). The SPI/CPI/MCI
+  // breakdown beside it is from the current snapshot — clicking the headline
+  // opens the audit modal which reconciles the two explicitly.
+  const ipiResult     = project ? calcProjectIPIFull(project) : { ipi: 0 };
+  const ipiSnapshot   = ipiResult.ipi;
+  const ipiDisplay    = project ? calcProjectIPIDisplay(project) : { primary: 0, snapshot: 0, delta: 0, hasHistory: false };
+  const ipi           = ipiDisplay.primary;
+  const ipiC          = ipiColor(ipi);
+  const countedIPI    = useCountUp(ipi);
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
 
@@ -2118,6 +2125,8 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
 
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
+      {showIPIBreakdown      && <IPIBreakdownModal      project={project} onClose={() => setShowIPIBreakdown(false)} />}
+      {showProgressBreakdown && <ProgressBreakdownModal project={project} onClose={() => setShowProgressBreakdown(false)} />}
       {/* Project Header */}
       <div style={{ background: T.headerBg, borderRadius: 16, padding: bp === "mobile" ? "16px 18px" : "24px 28px", marginBottom: 24, color: T.headerText }}>
         {/* Top toolbar row — badges left, status + action buttons right.
@@ -2179,18 +2188,28 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
         {/* Performance banner — Progress + IPI side by side, equal billing */}
         <div style={{ display: "flex", gap: 14, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "stretch", flexWrap: "wrap" }}>
-          {/* Progress block — promoted out of the corner, given equal visual weight to IPI */}
-          <div style={{
-            background: "rgba(0,184,148,0.10)",
-            border: "1px solid rgba(0,184,148,0.25)",
-            borderRadius: 10,
-            padding: "10px 16px",
-            minWidth: 180,
-            display: "flex", flexDirection: "column", justifyContent: "center",
-          }}>
+          {/* Progress block — click to open the WBS rollup audit modal */}
+          <button
+            type="button"
+            onClick={() => setShowProgressBreakdown(true)}
+            title="Click to see the full progress calculation"
+            style={{
+              background: "rgba(0,184,148,0.10)",
+              border: "1px solid rgba(0,184,148,0.25)",
+              borderRadius: 10,
+              padding: "10px 16px",
+              minWidth: 180,
+              display: "flex", flexDirection: "column", justifyContent: "center",
+              cursor: "pointer", textAlign: "left",
+              transition: "transform 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = "rgba(0,184,148,0.55)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(0,184,148,0.25)"; }}
+          >
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 30, fontWeight: 900, color: T.accent, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{effectiveProgress}%</span>
               <span style={{ fontSize: 10, color: T.accent, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.85 }}>Progress</span>
+              <span style={{ marginLeft: "auto", fontSize: 9, color: T.accent, opacity: 0.7, fontWeight: 700, letterSpacing: "0.06em" }}>AUDIT ↗</span>
             </div>
             <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${effectiveProgress}%`, background: T.accent, borderRadius: 3, transition: "width 0.4s" }} />
@@ -2198,21 +2217,41 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             <div style={{ fontSize: 10, opacity: 0.65, marginTop: 6, color: T.headerText }}>
               {wbsProgress != null ? "Auto-rolled from Activities" : "Manual entry"}
             </div>
-          </div>
+          </button>
           <div style={{ display: "flex", alignItems: "stretch", gap: 14, flex: 1 }}>
-            {/* IPI Score block — sized to match the Progress block on its left
-                so the two headline metrics carry the same visual weight. */}
-            <div style={{
-              background: ipiC.bg,
-              borderRadius: 10,
-              padding: "10px 16px",
-              minWidth: 140,
-              display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
-            }}>
+            {/* IPI Score block — click to open the full IPI audit modal */}
+            <button
+              type="button"
+              onClick={() => setShowIPIBreakdown(true)}
+              title="Click to see the full IPI calculation"
+              style={{
+                background: ipiC.bg,
+                borderRadius: 10,
+                padding: "10px 16px",
+                minWidth: 140,
+                display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+                border: "1px solid transparent",
+                cursor: "pointer",
+                transition: "transform 0.15s, box-shadow 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.25)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+            >
               <div style={{ fontSize: 30, fontWeight: 900, color: ipiC.color, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{ipi == null ? "—" : countedIPI}</div>
-              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 6, opacity: 0.85 }}>IPI Score</div>
+              <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 6, opacity: 0.85 }}>
+                {ipiDisplay.hasHistory ? "IPI (90-day weighted)" : "IPI Score"}
+              </div>
               <div style={{ fontSize: 10, color: ipiC.color, fontWeight: 600, marginTop: 4, opacity: 0.7 }}>{ipiC.label}</div>
-            </div>
+              {ipiDisplay.hasHistory && ipiDisplay.delta != null && (
+                <div style={{
+                  fontSize: 9.5, color: ipiC.color, marginTop: 4, opacity: 0.85,
+                  fontWeight: 600, fontFeatureSettings: '"tnum"',
+                }}>
+                  Latest: {ipiSnapshot} ({ipiDisplay.delta > 0 ? "+" : ""}{ipiDisplay.delta})
+                </div>
+              )}
+              <div style={{ fontSize: 8.5, color: ipiC.color, opacity: 0.6, fontWeight: 700, letterSpacing: "0.06em", marginTop: 3 }}>AUDIT ↗</div>
+            </button>
             <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
               <div>
                 <span style={{ color: T.accent, fontWeight: 700 }}>SPI</span>

@@ -115,38 +115,79 @@ export function calcAnticipatedMCI(project) {
 
 // ─── IPI Global Defaults ─────────────────────────────────────────────────────
 // These thresholds are governance-grade — change only with PMO + auditor sign-off.
+// Documented deviations from pure EVM (ANSI/EIA-748 / PMBOK) are explicit so an
+// auditor reading metrics.js once knows exactly where Tree differs from standard
+// practice and why. See IPI Methodology doc for the long-form justification.
 const IPI_DEFAULTS = {
-  // Roadmap-deadline penalty: -1% per day past the roadmap deadline (linear decay).
-  // 100 days past = penalty drives SPI to zero. The user (Product Owner) explicitly
-  // asked for "1% per day or more" — 1% is the documented minimum.
+  // Roadmap-deadline penalty: -1% per day past the roadmap deadline (linear).
+  // 100 days past = penalty drives SPI to zero. This is a TREE-INVENTED control,
+  // not part of standard EVM. Justification: prevents a runaway project that
+  // has technically finished its scope from inflating IPI past its strategic
+  // window. Decay is linear by design; an exponential alternative was rejected
+  // because executives expect proportional consequence per day.
   decayWindowDays: 100,
   // Maximum over-achievement allowed. 1.20 means a perfectly-early project can
-  // score up to IPI=115. Stops a single sandbagged plan from inflating the
-  // portfolio average to absurd levels.
+  // score up to IPI=115. NON-STANDARD: pure EVM does not cap SPI/CPI. The cap
+  // is applied AFTER the roadmap penalty (so an over-achiever that slips past
+  // the roadmap is correctly penalised from its raw ratio, not from the cap).
+  // Applied at the project level (not the rollup) so a sandbagged plan can't
+  // single-handedly inflate the portfolio average.
   cap:             1.20,
+  // Weights chosen so schedule discipline (SPI) is twice cost discipline (CPI).
+  // Rationale: at Tree, schedule slippage cascades into business commitments
+  // (regulatory deadlines, customer SLAs) whereas budget overruns are absorbed.
+  // Must be re-blessed by the CFO if reused for a different organisation.
   weights:         { spi: 0.50, cpi: 0.25, mci: 0.25 },
+  // Time-weighted moving window. Snapshots older than this are excluded from
+  // the time-weighted average so a year-old bad month can't drag today's score
+  // forever. 90 days mirrors standard trailing-performance reporting in
+  // mature EVM tools (Primavera Risk Analysis defaults to 90).
+  timeWeightedWindowDays: 90,
 };
+
+// Date normalisation — accepts ISO date strings ("2026-06-30"), ISO datetimes
+// ("2026-06-30T12:00:00Z"), or Date objects. Returns a millisecond timestamp
+// or null. Centralises a previously inconsistent contract.
+function _toMs(d) {
+  if (d == null) return null;
+  if (d instanceof Date) return d.getTime();
+  const ms = new Date(d).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
 
 /**
  * Full IPI calculation — governance-grade, regulator-auditable.
  * Returns { ipi (0–120), status, components, ev, pv }.
  *
  *   SPI  = EVM from leaf activities (weight × actual%) ÷ (weight × planned%)
- *          • Leaves = items without children in the WBS (so a milestone with
- *            activities under it counts via its children, not its own progress).
- *          • Planned% at asOfDate is LINEARLY INTERPOLATED between the leaf's
- *            startDate and endDate — partial credit while the work is in flight.
- *          • A leaf completed BEFORE its planned end pushes SPI above 1.0
- *            (over-achievement); a leaf running late pushes it below 1.0.
+ *          • Leaves = items without children in the WBS.
+ *          • Unscheduled leaves (no dates) are EXCLUDED from both EV and PV
+ *            so their weight doesn't dilute the result.
+ *          • Planned% at asOfDate is linearly interpolated between the leaf's
+ *            startDate and endDate. Known bias: real projects burn an S-curve,
+ *            not linearly — accepted simplification, documented in plannedPct.
+ *          • Same-day leaf (start == end) is treated as an instant milestone.
  *   CPI  = BCWP / actualCost = (progress × budget) / actualCost
- *   MCI  = approved required docs / total required docs
- *   penalty = roadmap-deadline linear decay (1% per day past), applied to SPI only.
+ *          • Guards: budget > 0 AND actualCost > 0 (rejects negative refunds).
+ *   MCI  = (approved + 0.5×submitted) ÷ docs due at the current gate.
+ *          • Gate-aware: future-gate docs don't count yet.
+ *          • Returns null when nothing measurable — re-normalisation excludes.
+ *   penalty = roadmap-deadline linear decay (1% per day past). Applied to
+ *             RAW SPI, then capped — so an over-achiever that slips past the
+ *             roadmap is penalised from its true ratio, not from the cap.
  *
- * Both SPI and CPI are capped at 1.20 so a single outlier can't blow up the index.
+ * Cap (1.20) is applied at the very end of the SPI pipeline, AFTER penalty.
+ * Pure EVM does not cap; Tree caps to bound the IPI to a defendable 0–120.
+ *
+ * IPI ROLLUP — RE-NORMALISED, NOT NEUTRAL-FILLED:
+ * Missing components (e.g. no actualCost → cpi=null) are EXCLUDED and the
+ * remaining weights re-normalised to sum to 1. This closes the perverse
+ * incentive where a PM could inflate IPI by withholding data; truthful
+ * partial reporting now scores honestly on what's present.
  */
 export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const { cap, weights, decayWindowDays } = IPI_DEFAULTS;
-  const nowMs = new Date(asOfDate).getTime();
+  const nowMs = _toMs(asOfDate) ?? Date.now();
 
   // ── Identify WBS leaves: items that no other item lists as its parent.
   // Legacy projects with flat milestones (no parentId on anything) → every
@@ -165,24 +206,36 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   };
 
   // Per-leaf PLANNED progress at asOfDate.
-  //   • With both startDate + date: linear interpolation between them
-  //   • With only date: step function (0 before, 1 after)
-  //   • With neither: 0 (not yet in the plan)
+  //   • With both startDate + date: linear interpolation between them.
+  //     KNOWN BIAS: this assumes uniform effort across the leaf's window.
+  //     Real projects burn an S-curve; linear PV systematically reports
+  //     SPI > 1.0 in mid-flight and SPI < 1.0 near completion. Accepted
+  //     trade-off for simplicity; an S-curve option is V2 work.
+  //   • Same-day leaf (start == end): instant milestone. 1.0 if as-of is
+  //     past the date, 0 if not yet. (Old code returned 0 in both branches,
+  //     leaving the leaf's weight in the denominator with no PV → SPI inflated.)
+  //   • With only end date: step function (0 before, 1 after).
+  //   • With neither: undefined — caller skips this leaf entirely (its
+  //     weight is excluded from the SPI aggregator) so unscheduled leaves
+  //     don't dilute PV silently.
   const plannedPct = (m) => {
-    const startMs = m.startDate ? new Date(m.startDate).getTime() : null;
-    const endMs   = m.date      ? new Date(m.date).getTime()      : null;
+    const startMs = _toMs(m.startDate);
+    const endMs   = _toMs(m.date);
     if (startMs && endMs && endMs > startMs) {
       if (nowMs <= startMs) return 0;
       if (nowMs >= endMs)   return 1;
       return (nowMs - startMs) / (endMs - startMs);
     }
+    if (startMs && endMs && endMs === startMs) {
+      // Instant milestone — done the day it happens.
+      return nowMs >= endMs ? 1 : 0;
+    }
     if (endMs) return nowMs >= endMs ? 1 : 0;
-    return 0;
+    return null;   // Unscheduled — excluded from aggregator
   };
 
   // ── SPI: EVM from leaves; fallback to project-level dates if no leaves
   let ev, pv, spi;
-  const totalW = leaves.reduce((s, m) => s + (m.weight || 1), 0);
 
   // Project progress used for both SPI fallback (no-WBS path) and CPI BCWP.
   // SOURCE OF TRUTH: effectiveProgress — prefers the WBS rollup so a stale
@@ -190,10 +243,17 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // shown in the UI. Falls back to project.progress only when no WBS exists.
   const effProgress = effectiveProgress(project);
 
-  if (leaves.length > 0 && totalW > 0) {
-    ev = leaves.reduce((s, m) => s + (m.weight || 1) * actualPct(m),  0) / totalW;
-    pv = leaves.reduce((s, m) => s + (m.weight || 1) * plannedPct(m), 0) / totalW;
-    spi = pv === 0 ? null : Math.min(cap, ev / pv);
+  // Only leaves with a defined PV contribute. Unscheduled leaves (no dates)
+  // are excluded from BOTH numerator and denominator — they don't contribute
+  // PV and their weight no longer pollutes the divisor.
+  const scheduledLeaves = leaves.filter(m => plannedPct(m) !== null);
+  const totalW = scheduledLeaves.reduce((s, m) => s + (m.weight || 1), 0);
+
+  if (scheduledLeaves.length > 0 && totalW > 0) {
+    ev = scheduledLeaves.reduce((s, m) => s + (m.weight || 1) * actualPct(m),  0) / totalW;
+    pv = scheduledLeaves.reduce((s, m) => s + (m.weight || 1) * plannedPct(m), 0) / totalW;
+    // Raw ratio first — cap is applied AFTER the roadmap penalty further down.
+    spi = pv === 0 ? null : ev / pv;
   } else if (project.startDate && project.plannedEnd) {
     // No WBS — fall back to project-level dates + effective progress
     ev = effProgress / 100;
@@ -203,15 +263,16 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     if (project.plannedProgress != null && project.plannedProgress !== "") {
       pv = Math.max(0, Math.min(1, Number(project.plannedProgress) / 100));
     } else {
-      const startMs = new Date(project.startDate).getTime();
-      const endMs   = new Date(project.plannedEnd).getTime();
-      if (endMs > startMs) {
+      const startMs = _toMs(project.startDate);
+      const endMs   = _toMs(project.plannedEnd);
+      if (startMs && endMs && endMs > startMs) {
         pv = nowMs <= startMs ? 0 : nowMs >= endMs ? 1 : (nowMs - startMs) / (endMs - startMs);
       } else {
         pv = 0;
       }
     }
-    spi = pv === 0 ? null : Math.min(cap, ev / pv);
+    // Raw ratio — capped AFTER roadmap penalty below.
+    spi = pv === 0 ? null : ev / pv;
   } else {
     // No dates at all — neutral (treated as on track for IPI rollup purposes)
     ev = 0; pv = 0; spi = null;
@@ -220,13 +281,19 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // ── CPI: auto from budget/actualCost, fallback to manual project.cpi ──────
   // BCWP uses effProgress (not project.progress) so CPI always reflects the
   // same progress number the user sees in the UI — no drift possible.
+  // SIMPLIFICATION: BCWP = budget × (progress / 100), not the strict-EVM
+  // sum-of-baseline-allocated-budgets. Works exactly when budget is uniformly
+  // distributed across scope; overstates BCWP early on front-loaded capex
+  // projects. Acceptable for Tree's IT-portfolio profile.
   const budget     = project.budget     || 0;
   const actualCost = project.actualCost || 0;
   let cpi;
   if (budget > 0 && actualCost > 0) {
+    // Strict > 0 guard: a negative actualCost (refund/credit) would yield a
+    // negative CPI and poison IPI. Treated as "no data" instead.
     const bcwp = (effProgress / 100) * budget;
     cpi = Math.min(cap, bcwp / actualCost);
-  } else if (project.cpi && project.cpi !== 0) {
+  } else if (project.cpi && project.cpi > 0) {
     cpi = Math.min(cap, project.cpi);
   } else {
     cpi = null;
@@ -240,39 +307,57 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // ── Roadmap-deadline penalty (hits SPI only) ──────────────────────────────
   const roadmapDeadline = project.roadmapDeadline;
   let penalty = 1;
-  if (roadmapDeadline) {
+  const roadmapMs = _toMs(roadmapDeadline);
+  if (roadmapMs) {
     const finishDate = project.status === "Completed"
       ? (project.actualFinishDate || project.lastUpdate || asOfDate) : null;
-    const measurementDate = finishDate || asOfDate;
-    if (measurementDate > roadmapDeadline) {
-      const daysOverdue = Math.floor(
-        (new Date(measurementDate) - new Date(roadmapDeadline)) / 86_400_000
-      );
+    const measureMs = _toMs(finishDate || asOfDate);
+    if (measureMs && measureMs > roadmapMs) {
+      const daysOverdue = Math.floor((measureMs - roadmapMs) / 86_400_000);
       penalty = Math.max(0, 1 - daysOverdue / decayWindowDays);
     }
   }
 
-  // ── Final SPI and IPI ─────────────────────────────────────────────────────
-  // Null-aware rollup: each null component is treated as neutral (1.0) so a
-  // project with no schedule data isn't artificially penalised. If ALL three
-  // are null, IPI itself is null — caller should display "Pending Plan".
-  const spiFinal = spi === null ? null : spi * penalty;
-  const allNull  = spiFinal === null && cpi === null && mci === null;
-  const spiVal = spiFinal ?? 1.0;
-  const cpiVal = cpi      ?? 1.0;
-  const mciVal = mci      ?? 1.0;
-  const ipiDecimal = weights.spi * spiVal + weights.cpi * cpiVal + weights.mci * mciVal;
+  // ── Final SPI: penalty FIRST, cap LAST ─────────────────────────────────────
+  // This order matters. If we capped the raw SPI first, an over-performing
+  // project that slipped past the roadmap would be penalised from the cap
+  // (e.g. 1.20 × 0.90 = 1.08) instead of from its real ratio (e.g. 1.8 × 0.90
+  // = 1.62, then capped at 1.20). The penalty must act on the unscaled signal.
+  const spiPenalized = spi === null ? null : spi * penalty;
+  const spiFinal     = spiPenalized === null ? null : Math.min(cap, spiPenalized);
+
+  // ── IPI rollup: re-normalise weights of present components ────────────────
+  // OLD BEHAVIOUR (PERVERSE INCENTIVE): null components were treated as a
+  // neutral 1.0, which meant a PM who refused to enter actualCost was rewarded
+  // (cpi=null → 1.0 → IPI inflated). Fixed: missing components are EXCLUDED
+  // from the rollup and the remaining weights are re-normalised to sum to 1.
+  // A project with only SPI data shows that SPI as its IPI, full credit; a
+  // PM cannot game the score by withholding inputs.
+  const parts = [];
+  if (spiFinal !== null) parts.push({ w: weights.spi, v: spiFinal });
+  if (cpi      !== null) parts.push({ w: weights.cpi, v: cpi });
+  if (mci      !== null) parts.push({ w: weights.mci, v: mci });
+
+  const allNull = parts.length === 0;
+  let ipiDecimal = 0;
+  if (!allNull) {
+    const sumW = parts.reduce((s, p) => s + p.w, 0);
+    ipiDecimal = parts.reduce((s, p) => s + p.w * p.v, 0) / sumW;
+  }
   const ipi = allNull ? null : Math.max(0, Math.round(ipiDecimal * 100));
 
-  // Status follows the ROUNDED ipi so the displayed number and the band
-  // always agree. Without rounding-driven bands a project could show
-  // "IPI 100, Watch" (when ipiDecimal = 0.995, rounded to 100 but still
-  // below the 1.00 threshold) — confusing for executives reading the badge.
-  const status = allNull       ? "Pending Plan"
-               : ipi >  100    ? "Over Achieved"
-               : ipi >= 100    ? "On Track"
-               : ipi >=  90    ? "Watch"
-               :                 "At Risk";
+  // Status follows the UNROUNDED ipiDecimal so adjacent projects whose
+  // displayed integers are 99 vs 100 don't flip into different bands purely
+  // from rounding noise (the boundary case). Decision-grade thresholds:
+  //   Over Achieved ≥ 1.001  →  IPI shows 100+ but band only fires above 100
+  //   On Track       1.000   →  IPI exactly 100
+  //   Watch          0.900   →  ≥ 90 and < 100
+  //   At Risk        < 0.900
+  const status = allNull               ? "Pending Plan"
+               : ipiDecimal >  1.0     ? "Over Achieved"
+               : ipiDecimal >= 1.0     ? "On Track"
+               : ipiDecimal >= 0.9     ? "Watch"
+               :                          "At Risk";
 
   return {
     ipi,
@@ -289,10 +374,37 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   };
 }
 
-/** Returns the 0–120 IPI score only (backward compat). May be null when the
- *  project has no schedule/cost/doc data at all ("Pending Plan"). */
-export function calcProjectIPI(project) {
+/** Snapshot IPI — what the engine computes RIGHT NOW from the project's
+ *  current state. Used by what-if tools (IPI Calculator) and as the building
+ *  block for ipiHistory. Display surfaces should prefer calcProjectIPI, which
+ *  returns the time-weighted view. */
+export function calcProjectIPISnapshot(project) {
   return calcProjectIPIFull(project).ipi;
+}
+
+/** Default display IPI — time-weighted across saved snapshots in ipiHistory.
+ *  Falls back to the current snapshot when no history exists yet. Replaces
+ *  the old snapshot-only semantics so a single good/bad period can't dominate
+ *  the displayed score across Home/Dept/Portfolio/Project. May be null
+ *  ("Pending Plan"). */
+export function calcProjectIPI(project) {
+  return calcTimeWeightedIPI(project);
+}
+
+/** Display helper — returns the weighted score (primary), the latest snapshot
+ *  (secondary), and their delta. Display sites use this to render the
+ *  "weighted N · latest M (±D)" pattern without re-computing twice. */
+export function calcProjectIPIDisplay(project) {
+  const snapshot = calcProjectIPISnapshot(project);
+  const weighted = calcTimeWeightedIPI(project);
+  const history  = project.ipiHistory || [];
+  return {
+    primary:    weighted ?? snapshot,
+    snapshot,
+    delta:      (snapshot != null && weighted != null) ? snapshot - weighted : null,
+    hasHistory: history.length > 0,
+    historyLen: history.length,
+  };
 }
 
 // Priority multiplier used in dept/portfolio weighting
@@ -316,31 +428,46 @@ function projectWeight(p) {
  * Falls back to current-snapshot IPI when no history exists yet.
  */
 export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
+  const { timeWeightedWindowDays } = IPI_DEFAULTS;
+  const asOfMs  = _toMs(asOfDate);
+  if (asOfMs == null) return calcProjectIPISnapshot(project);
+
+  // Moving-window cutoff: only snapshots DATED within the last N days count.
+  // Mirrors trailing-performance reporting in mature EVM tools (Primavera
+  // Risk Analysis defaults to 90 days). A snapshot dated before the window
+  // is excluded ENTIRELY; we don't extend its "coverage" into the window
+  // (an old IPI is stale evidence even if no newer snapshot exists).
+  const windowStartMs = asOfMs - timeWeightedWindowDays * 86_400_000;
+
   const raw = project.ipiHistory || [];
   const history = raw
-    .filter(h => h.date && h.ipi != null && h.date <= asOfDate)
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .filter(h => {
+      const hMs = _toMs(h.date);
+      return hMs != null && h.ipi != null && hMs <= asOfMs && hMs >= windowStartMs;
+    })
+    .sort((a, b) => _toMs(a.date) - _toMs(b.date));
 
-  // Acceptable approximation until history accrues for this date range
-  if (!history.length) return calcProjectIPI(project);
+  // Acceptable approximation until history accrues for this date range.
+  // Either no history at all, or every snapshot fell outside the moving
+  // window — in both cases we fall back to today's snapshot rather than
+  // returning null, so a stale project doesn't lose its score entirely.
+  // Must call the snapshot helper directly — calcProjectIPI now delegates
+  // back to this function, so calling it here would recurse.
+  if (!history.length) return calcProjectIPISnapshot(project);
 
   let totalWeighted = 0;
   let totalDays = 0;
 
   for (let i = 0; i < history.length; i++) {
-    const from = history[i].date;
-    const to   = i + 1 < history.length ? history[i + 1].date : asOfDate;
-    // min 1 day so today's snapshot is always reflected immediately
-    const days = Math.max(1, Math.floor(
-      (new Date(to) - new Date(from)) / 86_400_000
-    ));
+    const fromMs = _toMs(history[i].date);
+    const toMs   = i + 1 < history.length ? _toMs(history[i + 1].date) : asOfMs;
+    // min 1 day so today's snapshot is always reflected immediately.
+    const days = Math.max(1, Math.floor((toMs - fromMs) / 86_400_000));
     totalWeighted += history[i].ipi * days;
     totalDays     += days;
   }
 
-  return totalDays > 0
-    ? Math.round(totalWeighted / totalDays)
-    : history[history.length - 1].ipi;
+  return Math.round(totalWeighted / totalDays);
 }
 
 /**
@@ -351,9 +478,10 @@ export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
  */
 export function calcDeptIPI(deptId, projects) {
   const dp = projects.filter(p => p.deptId === deptId && !p.archived);
-  // Snapshot IPI per project, so the dept rollup matches the IPI column
-  // shown in the department's project table. Time-weighted IPI is reserved
-  // for historical comparisons (see calcPortfolioIPI's asOfDate branch).
+  // calcProjectIPI now returns the time-weighted score, so the dept rollup
+  // reflects each project's performance across its update history rather
+  // than the most recent snapshot. Matches the IPI column in tables
+  // (which also calls calcProjectIPI).
   const measured = dp.map(p => ({ p, ipi: calcProjectIPI(p) })).filter(x => x.ipi != null);
   if (!measured.length) return null;
   const totalW = measured.reduce((s, x) => s + projectWeight(x.p), 0);

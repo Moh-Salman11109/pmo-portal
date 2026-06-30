@@ -173,7 +173,7 @@ const IPICalculator = ({ onClose }) => {
               {field("Budget (SAR)", <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" style={inputStyle} />)}
               {field("Actual cost (SAR)", <input type="number" min="0" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" style={inputStyle} />)}
             </div>
-            <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 4 }}>Leave empty → CPI treated as neutral (1.00)</div>
+            <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 4 }}>Leave empty → CPI excluded · IPI re-normalises across the remaining components</div>
 
             <div style={{ fontSize: 11, fontWeight: 800, color: T.primary, letterSpacing: "0.5px", textTransform: "uppercase", margin: "20px 0 12px" }}>Artefacts (optional)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 12, marginBottom: 4 }}>
@@ -185,7 +185,7 @@ const IPICalculator = ({ onClose }) => {
               {field("Required docs", <input type="number" min="0" value={requiredDocs} onChange={e => setRequiredDocs(e.target.value)} placeholder="0" style={inputStyle} />)}
               {field("Approved", <input type="number" min="0" value={approvedDocs} onChange={e => setApprovedDocs(e.target.value)} placeholder="0" style={inputStyle} />)}
             </div>
-            <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 4 }}>Leave empty → MCI treated as neutral (1.00)</div>
+            <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 4 }}>Leave empty → MCI excluded · IPI re-normalises across the remaining components</div>
 
             {/* Calculate + Reset buttons */}
             {error && (
@@ -267,11 +267,11 @@ const IPICalculator = ({ onClose }) => {
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 8 }}>Components</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {[
-                      { k: "SPI (raw)",       v: result.components.spi,      hint: "Earned ÷ Planned" },
+                      { k: "SPI (raw)",       v: result.components.spi,      hint: "Earned ÷ Planned (uncapped)" },
                       { k: "Penalty",         v: result.components.penalty,  hint: "1 − days_past/100" },
-                      { k: "SPI × Penalty",   v: result.components.spiFinal, hint: "Used in IPI", strong: true },
+                      { k: "spiFinal",        v: result.components.spiFinal, hint: "min(cap, SPI × Penalty) · used in IPI", strong: true },
                       { k: "CPI",             v: result.components.cpi,      hint: "BCWP ÷ Actual Cost" },
-                      { k: "MCI",             v: result.components.mci,      hint: "Approved ÷ Required" },
+                      { k: "MCI",             v: result.components.mci,      hint: "Σ credit ÷ docs due at gate" },
                     ].map(r => (
                       <div key={r.k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", background: r.strong ? "#e6f9f5" : T.surface, border: `1px solid ${T.border}`, borderRadius: 6 }}>
                         <div>
@@ -279,27 +279,51 @@ const IPICalculator = ({ onClose }) => {
                           <span style={{ fontSize: 10, color: T.muted, marginLeft: 8 }}>{r.hint}</span>
                         </div>
                         <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 800, color: r.v == null ? T.muted : T.primary }}>
-                          {r.v == null ? "neutral 1.00" : r.v.toFixed(3)}
+                          {r.v == null ? "excluded" : r.v.toFixed(3)}
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Math equation */}
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", fontFamily: "ui-monospace, monospace", fontSize: 11.5, lineHeight: 1.7 }}>
-                  <div style={{ fontFamily: "inherit", fontSize: 10, color: T.muted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px" }}>Calculation</div>
-                  <div style={{ color: T.text }}>
-                    IPI = 0.50 × {(result.components.spiFinal ?? 1.0).toFixed(3)}
-                    {" + "}
-                    0.25 × {(result.components.cpi ?? 1.0).toFixed(3)}
-                    {" + "}
-                    0.25 × {(result.components.mci ?? 1.0).toFixed(3)}
-                  </div>
-                  <div style={{ color: T.primary, fontWeight: 700, marginTop: 4 }}>
-                    = {((0.5 * (result.components.spiFinal ?? 1.0) + 0.25 * (result.components.cpi ?? 1.0) + 0.25 * (result.components.mci ?? 1.0))).toFixed(4)} → <strong>{result.ipi}</strong>
-                  </div>
-                </div>
+                {/* Math equation — re-normalised across components actually present.
+                    Mirrors the engine's policy: missing inputs are excluded, not
+                    treated as a neutral 1.0 (which would have rewarded withholding
+                    data). The displayed weights below ALWAYS sum to 1.00. */}
+                {(() => {
+                  const parts = [];
+                  if (result.components.spiFinal !== null) parts.push({ name: "spiFinal", w: 0.50, v: result.components.spiFinal });
+                  if (result.components.cpi      !== null) parts.push({ name: "CPI",      w: 0.25, v: result.components.cpi      });
+                  if (result.components.mci      !== null) parts.push({ name: "MCI",      w: 0.25, v: result.components.mci      });
+                  const sumW = parts.reduce((s, p) => s + p.w, 0) || 1;
+                  const isFull = parts.length === 3;
+                  return (
+                    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", fontFamily: "ui-monospace, monospace", fontSize: 11.5, lineHeight: 1.7 }}>
+                      <div style={{ fontFamily: "inherit", fontSize: 10, color: T.muted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                        Calculation {isFull ? "(full set)" : `(${parts.length}/3 components · weights re-normalised)`}
+                      </div>
+                      {parts.length === 0 ? (
+                        <div style={{ color: T.muted }}>No components present → IPI = Pending Plan</div>
+                      ) : (
+                        <>
+                          <div style={{ color: T.text }}>
+                            IPI = (
+                            {parts.map((p, i) => (
+                              <span key={p.name}>
+                                {i > 0 ? " + " : ""}
+                                {(p.w / sumW).toFixed(3)} × {p.v.toFixed(3)}
+                              </span>
+                            ))}
+                            )
+                          </div>
+                          <div style={{ color: T.primary, fontWeight: 700, marginTop: 4 }}>
+                            = {(parts.reduce((s, p) => s + (p.w / sumW) * p.v, 0)).toFixed(4)} → <strong>{result.ipi}</strong>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>

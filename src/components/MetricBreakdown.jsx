@@ -1,0 +1,668 @@
+// Audit-quality breakdown modals for the two headline project metrics —
+// Progress % and IPI Score. Designed to be opened by clicking the metric
+// on the project hero, and to be screenshot as evidence: every number on
+// screen is traceable to a formula that's also on screen, with no hidden
+// steps. The PM, sponsor or auditor should be able to verify the result
+// by hand with nothing more than what's in the modal.
+//
+// Two exports:
+//   <IPIBreakdownModal      project … />
+//   <ProgressBreakdownModal project … />
+
+import React from "react";
+import { useT } from "../theme.js";
+import {
+  calcProjectIPIFull,
+  calcProjectIPISnapshot,
+  calcTimeWeightedIPI,
+  calcProjectIPIDisplay,
+  calcProjectProgressFromWBS,
+  effectiveProgress,
+  parseGateNumber,
+  ipiColor,
+} from "../utils/metrics.js";
+import { TODAY } from "../utils/dates.js";
+
+// ─── Shared modal chrome ───────────────────────────────────────────────
+const Shell = ({ title, subtitle, accent, onClose, children, T }) => (
+  <div
+    onClick={onClose}
+    style={{
+      position: "fixed", inset: 0, zIndex: 1000,
+      background: "rgba(0, 18, 14, 0.72)",
+      backdropFilter: "blur(4px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px",
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: T.card,
+        color: T.text,
+        borderRadius: 14,
+        width: "min(900px, 100%)",
+        maxHeight: "92vh",
+        overflowY: "auto",
+        boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+        border: `1px solid ${T.border}`,
+      }}
+    >
+      <div style={{
+        background: `linear-gradient(135deg, ${T.primary} 0%, ${T.primaryDark || "#001f1a"} 100%)`,
+        color: "#fff",
+        padding: "18px 22px",
+        borderRadius: "14px 14px 0 0",
+        display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+        borderBottom: `4px solid ${accent}`,
+      }}>
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: accent, fontWeight: 800, marginBottom: 4 }}>
+            Audit Breakdown
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.3px" }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{subtitle}</div>}
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            background: "rgba(255,255,255,0.12)",
+            border: "1px solid rgba(255,255,255,0.25)",
+            borderRadius: 8,
+            color: "#fff",
+            width: 32, height: 32,
+            fontSize: 18, fontWeight: 800,
+            cursor: "pointer",
+            display: "grid", placeItems: "center",
+          }}
+        >×</button>
+      </div>
+
+      <div style={{ padding: "20px 22px 24px" }}>{children}</div>
+    </div>
+  </div>
+);
+
+// ─── Small primitives ──────────────────────────────────────────────────
+const Section = ({ num, title, sub, accent, children, T }) => (
+  <section style={{ marginBottom: 18 }}>
+    <div style={{
+      display: "flex", alignItems: "baseline", gap: 10,
+      borderBottom: `1px solid ${T.border}`,
+      paddingBottom: 6, marginBottom: 10,
+    }}>
+      <span style={{ fontFamily: "monospace", color: accent, fontSize: 11, fontWeight: 800 }}>{num}</span>
+      <span style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.1px" }}>{title}</span>
+      {sub && <span style={{ fontSize: 10, color: T.muted, marginLeft: "auto" }}>{sub}</span>}
+    </div>
+    {children}
+  </section>
+);
+
+const KV = ({ k, v, mono, T }) => (
+  <div style={{
+    display: "grid", gridTemplateColumns: "1fr auto",
+    gap: 12, padding: "5px 0",
+    borderBottom: `1px dashed ${T.border}`,
+    fontSize: 11.5,
+  }}>
+    <span style={{ color: T.muted }}>{k}</span>
+    <span style={{
+      color: T.text, fontWeight: 600,
+      fontFamily: mono ? "'JetBrains Mono', ui-monospace, monospace" : "inherit",
+      fontFeatureSettings: '"tnum"',
+    }}>{v}</span>
+  </div>
+);
+
+const Formula = ({ children, T }) => (
+  <div style={{
+    background: T.bgAlt || "#f4f8f6",
+    color: T.text,
+    border: `1px solid ${T.border}`,
+    borderLeft: `3px solid ${T.accent}`,
+    borderRadius: 6,
+    padding: "8px 12px",
+    margin: "8px 0",
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 11,
+    lineHeight: 1.6,
+    overflowX: "auto",
+    whiteSpace: "pre",
+  }}>{children}</div>
+);
+
+const Pill = ({ children, color, bg }) => (
+  <span style={{
+    display: "inline-block",
+    padding: "1px 8px",
+    fontSize: 10,
+    fontWeight: 800,
+    borderRadius: 10,
+    color: color || "#fff",
+    background: bg || "#003932",
+    letterSpacing: "0.3px",
+  }}>{children}</span>
+);
+
+const num3 = (n) => n == null ? "—" : Number(n).toFixed(3);
+const num2 = (n) => n == null ? "—" : Number(n).toFixed(2);
+const sar  = (n) => n == null ? "—" : Number(n).toLocaleString("en-US") + " SAR";
+const pct  = (n) => n == null ? "—" : `${Math.round(n)}%`;
+
+// ═══════════════════════════════════════════════════════════════════════
+// IPI BREAKDOWN MODAL
+// ═══════════════════════════════════════════════════════════════════════
+export const IPIBreakdownModal = ({ project, onClose }) => {
+  const T = useT();
+  if (!project) return null;
+
+  const full     = calcProjectIPIFull(project);
+  const snapshot = calcProjectIPISnapshot(project);
+  const weighted = calcTimeWeightedIPI(project);
+  const display  = calcProjectIPIDisplay(project);
+  const sc       = ipiColor(display.primary);
+  const comp     = full.components || {};
+
+  // Inputs we'll surface for the audit trail
+  const startMs = project.startDate ? new Date(project.startDate).getTime() : null;
+  const endMs   = project.plannedEnd ? new Date(project.plannedEnd).getTime() : null;
+  const nowMs   = new Date(TODAY).getTime();
+  const totalDays   = (startMs && endMs && endMs > startMs)
+    ? Math.round((endMs - startMs) / 86_400_000) : null;
+  const elapsedDays = (startMs && endMs && endMs > startMs)
+    ? Math.max(0, Math.min(totalDays, Math.round((nowMs - startMs) / 86_400_000))) : null;
+
+  const eff = effectiveProgress(project);
+  const evRaw = eff / 100;
+  const pvAuto = (totalDays && totalDays > 0 && elapsedDays != null)
+    ? Math.min(1, elapsedDays / totalDays) : null;
+  const pvUsed = (project.plannedProgress != null && project.plannedProgress !== "")
+    ? Math.min(1, Number(project.plannedProgress) / 100)
+    : pvAuto;
+
+  const budget = project.budget || 0;
+  const ac     = project.actualCost || 0;
+  const bcwp   = budget > 0 ? evRaw * budget : null;
+
+  const gateNum = parseGateNumber(project.gate);
+  const allDocs = (project.documents || []);
+  const reqDocs = allDocs.filter(d => d.required);
+  const dueDocs = reqDocs.filter(d => (d.requiredAtGate || 1) <= gateNum);
+
+  const roadmapDeadline = project.roadmapDeadline || null;
+  let daysPast = 0;
+  if (roadmapDeadline) {
+    const rdMs = new Date(roadmapDeadline).getTime();
+    if (nowMs > rdMs) daysPast = Math.floor((nowMs - rdMs) / 86_400_000);
+  }
+
+  // Time-weighted history reconstruction (mirrors calcTimeWeightedIPI exactly,
+  // including the 90-day moving window — snapshots dated before today−90d are
+  // excluded entirely, not clipped, to match the engine's audit-fix policy).
+  const TIME_WINDOW_DAYS = 90;
+  const todayMsForHistory = new Date(TODAY).getTime();
+  const windowStartForHistory = todayMsForHistory - TIME_WINDOW_DAYS * 86_400_000;
+  const history = (project.ipiHistory || [])
+    .filter(h => {
+      if (!h.date || h.ipi == null) return false;
+      const hMs = new Date(h.date).getTime();
+      return hMs <= todayMsForHistory && hMs >= windowStartForHistory;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const excludedCount = (project.ipiHistory || []).filter(h => {
+    if (!h.date || h.ipi == null) return false;
+    return new Date(h.date).getTime() < windowStartForHistory;
+  }).length;
+  const rows = [];
+  let totalWeighted = 0, totalDaysHist = 0;
+  for (let i = 0; i < history.length; i++) {
+    const from = history[i].date;
+    const to   = i + 1 < history.length ? history[i + 1].date : TODAY;
+    const days = Math.max(1, Math.floor((new Date(to) - new Date(from)) / 86_400_000));
+    const w    = history[i].ipi * days;
+    totalWeighted += w;
+    totalDaysHist += days;
+    rows.push({ from, to, ipi: history[i].ipi, days, w });
+  }
+
+  return (
+    <Shell
+      title={`IPI Breakdown — ${project.name}`}
+      subtitle={`As of ${TODAY} · Project ID ${project.id || "—"}`}
+      accent="#00FFB3"
+      onClose={onClose}
+      T={T}
+    >
+      {/* Headline */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 18,
+      }}>
+        <div style={{
+          background: sc.bg, color: sc.color,
+          padding: "14px 16px", borderRadius: 10,
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
+            {display.primary ?? "—"}
+          </div>
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.1em", marginTop: 4, textTransform: "uppercase", opacity: 0.85 }}>
+            Displayed (Time-Weighted)
+          </div>
+          <div style={{ fontSize: 10, fontWeight: 600, marginTop: 2, opacity: 0.7 }}>{sc.label}</div>
+        </div>
+        <div style={{
+          background: T.bgAlt || "#f4f8f6", border: `1px solid ${T.border}`,
+          padding: "14px 16px", borderRadius: 10,
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: 26, fontWeight: 900, color: T.text, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
+            {snapshot ?? "—"}
+          </div>
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.1em", marginTop: 4, textTransform: "uppercase", color: T.muted }}>
+            Latest Snapshot
+          </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>
+            Current state of project
+          </div>
+        </div>
+        <div style={{
+          background: T.bgAlt || "#f4f8f6", border: `1px solid ${T.border}`,
+          padding: "14px 16px", borderRadius: 10,
+          textAlign: "center",
+        }}>
+          <div style={{
+            fontSize: 26, fontWeight: 900,
+            color: display.delta == null ? T.muted : display.delta > 0 ? "#16a34a" : display.delta < 0 ? "#dc2626" : T.text,
+            lineHeight: 1, fontFeatureSettings: '"tnum"',
+          }}>
+            {display.delta == null ? "—" : (display.delta > 0 ? "+" : "") + display.delta}
+          </div>
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.1em", marginTop: 4, textTransform: "uppercase", color: T.muted }}>
+            Snapshot vs Weighted
+          </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>
+            {history.length} snapshots in history
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 01 INPUTS ─── */}
+      <Section num="01" title="Inputs read from the project" accent="#00b894" T={T}>
+        <KV k="Project window" v={`${project.startDate || "—"}  →  ${project.plannedEnd || "—"}`} T={T} />
+        <KV k="Total duration" v={totalDays != null ? `${totalDays} days` : "—"} mono T={T} />
+        <KV k="As-of date (today)" v={TODAY} mono T={T} />
+        <KV k="Days elapsed" v={elapsedDays != null ? `${elapsedDays} of ${totalDays} days` : "—"} mono T={T} />
+        <KV k="Actual progress (effective)" v={`${eff}%`} mono T={T} />
+        <KV k="Planned progress source" v={project.plannedProgress != null && project.plannedProgress !== "" ? "Manual override" : "Auto from dates"} T={T} />
+        <KV k="Budget" v={budget ? sar(budget) : "—"} mono T={T} />
+        <KV k="Actual cost" v={ac ? sar(ac) : "—"} mono T={T} />
+        <KV k="Current gate" v={`Gate ${gateNum}`} T={T} />
+        <KV k="Required docs" v={`${reqDocs.length} total · ${dueDocs.length} due at Gate ${gateNum}`} mono T={T} />
+        <KV k="Roadmap deadline" v={roadmapDeadline || "(none set)"} mono T={T} />
+        <KV k="Days past roadmap" v={daysPast > 0 ? `${daysPast} days` : "Within roadmap"} mono T={T} />
+      </Section>
+
+      {/* ─── 02 SPI ─── */}
+      <Section num="02" title="SPI — Schedule Performance Index" accent="#00b894" sub="weight 50% (re-normalised when peers absent)" T={T}>
+        <Formula T={T}>{`Raw SPI  =  EV ÷ PV       (uncapped — preserves over-achievement signal)
+EV       =  ${num3(evRaw)}   ← effective progress / 100
+PV       =  ${num3(pvUsed)}${pvAuto != null && pvUsed === pvAuto ? `   ← ${elapsedDays}/${totalDays} (linear time-based)` : "   ← manual override"}
+Raw SPI  =  ${num3(evRaw)} ÷ ${num3(pvUsed)}  =  ${num3(comp.spi)}`}</Formula>
+        <Formula T={T}>{`Penalty  =  1 − (days_past ÷ 100)        ← Tree-invented, 100-day floor
+        =  1 − (${daysPast} ÷ 100)
+        =  ${num3(comp.penalty)}
+
+SPI × Penalty       =  ${num3(comp.spi)} × ${num3(comp.penalty)}  =  ${num3((comp.spi ?? 0) * (comp.penalty ?? 1))}
+spiFinal = min(cap, …)  =  min(1.20, ${num3((comp.spi ?? 0) * (comp.penalty ?? 1))})  =  ${num3(comp.spiFinal)}`}</Formula>
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 4, lineHeight: 1.6 }}>
+          Order matters: penalty hits the RAW ratio first, then the cap clamps the result.
+          The reverse order (cap-then-penalty) over-penalises an over-achiever that slips past
+          the roadmap — corrected by the post-audit regression test.
+        </div>
+        <KV k="SPI used in IPI" v={num3(comp.spiFinal ?? comp.spi)} mono T={T} />
+      </Section>
+
+      {/* ─── 03 CPI ─── */}
+      <Section num="03" title="CPI — Cost Performance Index" accent="#00b894" sub="weight 25%" T={T}>
+        {budget > 0 && ac > 0 ? (
+          <Formula T={T}>{`BCWP  =  Budget × (progress ÷ 100)
+       =  ${budget.toLocaleString()} × ${num3(evRaw)}
+       =  ${(bcwp || 0).toLocaleString()} SAR
+
+CPI   =  BCWP ÷ Actual Cost    (capped at 1.20)
+       =  ${(bcwp || 0).toLocaleString()} ÷ ${ac.toLocaleString()}
+       =  ${num3(comp.cpi)}`}</Formula>
+        ) : (
+          <Formula T={T}>{`Budget or actual cost is zero / missing / negative.
+CPI = ${comp.cpi == null ? "null  →  EXCLUDED from IPI; remaining weights re-normalise" : num3(comp.cpi)}`}</Formula>
+        )}
+        <KV k="CPI used in IPI" v={comp.cpi == null ? "excluded (re-normalised)" : num3(comp.cpi)} mono T={T} />
+      </Section>
+
+      {/* ─── 04 MCI ─── */}
+      <Section num="04" title="MCI — Artefact Compliance Index" accent="#00b894" sub="weight 25%" T={T}>
+        <KV k="All documents on project" v={`${allDocs.length}`} mono T={T} />
+        <KV k="Required documents" v={`${reqDocs.length}`} mono T={T} />
+        <KV k="Due at current gate (G≤${gateNum})" v={`${dueDocs.length}`} mono T={T} />
+        {dueDocs.length > 0 && (
+          <div style={{
+            background: T.bgAlt || "#f4f8f6", border: `1px solid ${T.border}`,
+            borderRadius: 6, padding: "8px 12px", marginTop: 8,
+            fontSize: 11,
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, color: T.muted, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              Per-doc credit
+            </div>
+            {dueDocs.map((d, i) => {
+              const status = d.status || "(no status)";
+              let credit = 0;
+              if (["Approved", "Final", "Received", "Current"].includes(status)) credit = 1.0;
+              else if (["Submitted", "Under Review"].includes(status)) credit = 0.5;
+              const c = credit === 1 ? "#16a34a" : credit === 0.5 ? "#d97706" : "#dc2626";
+              return (
+                <div key={i} style={{
+                  display: "grid", gridTemplateColumns: "1fr auto auto",
+                  gap: 10, padding: "3px 0",
+                  borderTop: i ? `1px dashed ${T.border}` : "none",
+                }}>
+                  <span style={{ color: T.text }}>{d.name || `Doc ${i+1}`}</span>
+                  <Pill bg={c} color="#fff">{status}</Pill>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: c, minWidth: 36, textAlign: "right" }}>
+                    {num3(credit)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <Formula T={T}>{`MCI  =  Σ(credit) ÷ docs_due_at_gate    (capped at 1.00)
+     =  ${num3(comp.mci)}`}</Formula>
+        <KV k="MCI used in IPI" v={comp.mci == null ? "excluded (re-normalised)" : `${num3(comp.mci)}  (${pct((comp.mci || 0) * 100)})`} mono T={T} />
+      </Section>
+
+      {/* ─── 05 SNAPSHOT IPI ─── */}
+      <Section num="05" title="Snapshot IPI — present components re-normalised" accent="#00b894" T={T}>
+        {(() => {
+          // Build the same parts array the engine uses, then walk it on screen
+          // so the audit math is reproducible by hand from this exact panel.
+          const parts = [];
+          if (comp.spiFinal !== null) parts.push({ name: "SPI (final)", w: 0.50, v: comp.spiFinal });
+          if (comp.cpi      !== null) parts.push({ name: "CPI",         w: 0.25, v: comp.cpi      });
+          if (comp.mci      !== null) parts.push({ name: "MCI",         w: 0.25, v: comp.mci      });
+          if (parts.length === 0) {
+            return <div style={{ fontSize: 11, color: T.muted }}>All three components are null → IPI is "Pending Plan".</div>;
+          }
+          const sumW = parts.reduce((s, p) => s + p.w, 0);
+          const dec  = parts.reduce((s, p) => s + p.w * p.v, 0) / sumW;
+          const isFull = parts.length === 3;
+          return (
+            <>
+              <Formula T={T}>{`IPI  =  Σ(weight × value) ÷ Σ(weights)
+${parts.map(p => `        ${p.name.padEnd(11)} (w=${p.w.toFixed(2)})  ×  ${num3(p.v)}  =  ${(p.w * p.v).toFixed(4)}`).join("\n")}
+        ─────────────────────────────────────
+        Σ(w × v)  =  ${parts.reduce((s, p) => s + p.w * p.v, 0).toFixed(4)}
+        Σ(w)      =  ${sumW.toFixed(2)}${isFull ? "  (full set — standard 0.50/0.25/0.25)" : "  (re-normalised; missing components excluded)"}
+
+IPI  =  ${parts.reduce((s, p) => s + p.w * p.v, 0).toFixed(4)} ÷ ${sumW.toFixed(2)}
+     =  ${dec.toFixed(4)}
+     × 100  =  ${snapshot ?? Math.round(dec * 100)}`}</Formula>
+              <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.6 }}>
+                Re-normalisation policy: missing components (null) are <strong>excluded</strong> from the
+                rollup; weights of present components rescale to sum to 1. Replaces an older
+                neutral-1.0 default that rewarded withholding data — fix logged in the post-audit
+                regression suite.
+              </div>
+            </>
+          );
+        })()}
+      </Section>
+
+      {/* ─── 06 TIME-WEIGHTED ─── */}
+      <Section num="06" title="Time-Weighted IPI — 90-day moving window" accent="#00b894" sub={`${history.length} snapshots in window`} T={T}>
+        {history.length === 0 ? (
+          <div style={{
+            background: T.bgAlt || "#f4f8f6", border: `1px dashed ${T.border}`,
+            borderRadius: 6, padding: "12px 14px", fontSize: 11.5, color: T.muted,
+          }}>
+            No snapshots inside the 90-day moving window
+            {excludedCount > 0 && <> · {excludedCount} older snapshot{excludedCount > 1 ? "s" : ""} excluded</>}.
+            Displayed IPI falls back to the current snapshot ({snapshot ?? "—"}).
+          </div>
+        ) : (
+          <>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ background: T.bgAlt || "#f4f8f6", color: T.muted }}>
+                  <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>From</th>
+                  <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>To</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>IPI</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Days</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>IPI × Days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "5px 10px", fontFamily: "monospace" }}>{r.from}</td>
+                    <td style={{ padding: "5px 10px", fontFamily: "monospace" }}>{r.to}</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}>{r.ipi}</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace" }}>{r.days}</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", color: T.muted }}>{r.w.toLocaleString()}</td>
+                  </tr>
+                ))}
+                <tr style={{ background: T.bgAlt || "#f4f8f6", fontWeight: 800 }}>
+                  <td colSpan={3} style={{ padding: "7px 10px", textAlign: "right", textTransform: "uppercase", fontSize: 10, letterSpacing: "0.08em" }}>Totals</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalDaysHist}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalWeighted.toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+            <Formula T={T}>{`Time-Weighted  =  Σ(IPI × days) ÷ Σ(days)
+              =  ${totalWeighted.toLocaleString()} ÷ ${totalDaysHist}
+              =  ${(totalWeighted / Math.max(1, totalDaysHist)).toFixed(2)}
+              →  ${weighted}`}</Formula>
+          </>
+        )}
+      </Section>
+
+      {/* ─── 07 FINAL ─── */}
+      <Section num="07" title="Final displayed value" accent="#00b894" T={T}>
+        <KV k="Displayed IPI (primary)" v={display.primary ?? "—"} mono T={T} />
+        <KV k="Latest snapshot (info)" v={snapshot ?? "—"} mono T={T} />
+        <KV k="Band" v={sc.label} T={T} />
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 8 }}>
+          Generated {new Date().toLocaleString("en-GB")} · Source of truth: <code style={{ fontFamily: "monospace", background: T.bgAlt }}>src/utils/metrics.js</code>
+        </div>
+      </Section>
+    </Shell>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROGRESS BREAKDOWN MODAL
+// ═══════════════════════════════════════════════════════════════════════
+export const ProgressBreakdownModal = ({ project, onClose }) => {
+  const T = useT();
+  if (!project) return null;
+
+  const items = project.milestones || [];
+  const tops  = items.filter(m => !m.parentId);
+  const wbsValue = calcProjectProgressFromWBS(project);
+  const eff      = effectiveProgress(project);
+  const source   = wbsValue != null ? "WBS rollup (Activities tab)" : "Manual project.progress field";
+  const totalW   = tops.reduce((s, m) => s + (m.weight || 1), 0);
+
+  // Per-milestone breakdown
+  const msRows = tops.map(m => {
+    const kids = items.filter(i => i.parentId === m.id);
+    let p, kidsDetail = [];
+    if (kids.length === 0) {
+      p = m.progress || 0;
+    } else {
+      const kw = kids.reduce((a, c) => a + (c.weight || 1), 0);
+      kidsDetail = kids.map(c => ({
+        name: c.name || "(unnamed)",
+        weight: c.weight || 1,
+        progress: c.progress || 0,
+        contrib: (c.weight || 1) * (c.progress || 0),
+      }));
+      p = kw ? kids.reduce((a, c) => a + (c.weight || 1) * (c.progress || 0), 0) / kw : 0;
+    }
+    return {
+      id: m.id,
+      name: m.name || "(unnamed milestone)",
+      weight: m.weight || 1,
+      progress: p,
+      kids: kidsDetail,
+      kidsW: kids.reduce((a, c) => a + (c.weight || 1), 0),
+      contrib: (m.weight || 1) * p,
+    };
+  });
+
+  const sumContrib = msRows.reduce((s, r) => s + r.contrib, 0);
+
+  return (
+    <Shell
+      title={`Progress Breakdown — ${project.name}`}
+      subtitle={`As of ${TODAY} · ${source}`}
+      accent="#00b894"
+      onClose={onClose}
+      T={T}
+    >
+      <div style={{
+        background: "rgba(0,184,148,0.10)",
+        border: "1px solid rgba(0,184,148,0.30)",
+        borderRadius: 10,
+        padding: "14px 18px",
+        marginBottom: 18,
+        display: "flex", alignItems: "center", gap: 16,
+      }}>
+        <div style={{
+          fontSize: 38, fontWeight: 900, color: T.accent,
+          lineHeight: 1, fontFeatureSettings: '"tnum"',
+        }}>
+          {eff}%
+        </div>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", color: T.accent, textTransform: "uppercase" }}>
+            Displayed Progress
+          </div>
+          <div style={{ fontSize: 11, color: T.text, marginTop: 4 }}>
+            {source}
+            {wbsValue != null && wbsValue !== eff && (
+              <span style={{ color: T.muted, marginLeft: 6 }}>· clamped to [0, 100]</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 01 SOURCE ─── */}
+      <Section num="01" title="Source of progress value" accent="#00b894" T={T}>
+        <KV k="WBS rollup available" v={wbsValue != null ? `Yes — ${wbsValue}%` : "No"} T={T} />
+        <KV k="Manual project.progress" v={project.progress != null ? `${project.progress}%` : "(not set)"} T={T} />
+        <KV k="Rule" v="WBS wins when activities exist; manual is fallback only" T={T} />
+        <KV k="Effective (displayed)" v={`${eff}%`} mono T={T} />
+      </Section>
+
+      {wbsValue == null ? (
+        <Section num="02" title="WBS detail" accent="#00b894" T={T}>
+          <div style={{
+            background: T.bgAlt || "#f4f8f6", border: `1px dashed ${T.border}`,
+            borderRadius: 6, padding: "12px 14px", fontSize: 11.5, color: T.muted,
+          }}>
+            No top-level milestones recorded on this project — nothing to roll up.
+            The displayed {eff}% comes directly from the manual progress field.
+          </div>
+        </Section>
+      ) : (
+        <>
+          {/* ─── 02 MILESTONES ─── */}
+          <Section num="02" title="Top-level milestones" accent="#00b894" sub={`${tops.length} milestones · total weight ${totalW}`} T={T}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ background: T.bgAlt || "#f4f8f6", color: T.muted }}>
+                  <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Milestone</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Weight</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Progress</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>W × P</th>
+                </tr>
+              </thead>
+              <tbody>
+                {msRows.map((r) => (
+                  <tr key={r.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "5px 10px", fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace" }}>{r.weight}</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}>{Math.round(r.progress)}%</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", color: T.muted }}>{r.contrib.toFixed(1)}</td>
+                  </tr>
+                ))}
+                <tr style={{ background: T.bgAlt || "#f4f8f6", fontWeight: 800 }}>
+                  <td colSpan={2} style={{ padding: "7px 10px", textAlign: "right", textTransform: "uppercase", fontSize: 10, letterSpacing: "0.08em" }}>Σ Weight</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalW}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{sumContrib.toFixed(1)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <Formula T={T}>{`Project Progress  =  Σ(milestone_weight × milestone_progress) ÷ Σ(weights)
+                  =  ${sumContrib.toFixed(1)} ÷ ${totalW}
+                  =  ${(sumContrib / Math.max(1, totalW)).toFixed(2)}
+                  →  ${wbsValue}%`}</Formula>
+          </Section>
+
+          {/* ─── 03 ACTIVITY DETAIL per milestone ─── */}
+          {msRows.some(r => r.kids.length > 0) && (
+            <Section num="03" title="Activities under each milestone" accent="#00b894" T={T}>
+              {msRows.filter(r => r.kids.length > 0).map((r) => (
+                <div key={r.id} style={{
+                  border: `1px solid ${T.border}`, borderRadius: 8,
+                  padding: "10px 12px", marginBottom: 10,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 12, color: T.text }}>{r.name}</span>
+                    <span style={{ fontSize: 10, color: T.muted }}>
+                      {r.kids.length} activities · weight {r.kidsW} · rolled {Math.round(r.progress)}%
+                    </span>
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10.5 }}>
+                    <thead>
+                      <tr style={{ color: T.muted, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        <th style={{ textAlign: "left",  padding: "3px 8px" }}>Activity</th>
+                        <th style={{ textAlign: "right", padding: "3px 8px" }}>W</th>
+                        <th style={{ textAlign: "right", padding: "3px 8px" }}>P</th>
+                        <th style={{ textAlign: "right", padding: "3px 8px" }}>W × P</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {r.kids.map((c, i) => (
+                        <tr key={i} style={{ borderTop: `1px dashed ${T.border}` }}>
+                          <td style={{ padding: "3px 8px" }}>{c.name}</td>
+                          <td style={{ padding: "3px 8px", textAlign: "right", fontFamily: "monospace" }}>{c.weight}</td>
+                          <td style={{ padding: "3px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}>{c.progress}%</td>
+                          <td style={{ padding: "3px 8px", textAlign: "right", fontFamily: "monospace", color: T.muted }}>{c.contrib.toFixed(0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <Formula T={T}>{`Milestone Progress  =  ${r.kids.reduce((s, c) => s + c.contrib, 0).toFixed(0)} ÷ ${r.kidsW}  =  ${Math.round(r.progress)}%`}</Formula>
+                </div>
+              ))}
+            </Section>
+          )}
+        </>
+      )}
+
+      <Section num="04" title="Verification" accent="#00b894" T={T}>
+        <div style={{ fontSize: 10.5, color: T.muted, lineHeight: 1.6 }}>
+          Every number above can be reproduced by hand. The displayed {eff}% on the project hero
+          equals the result of the rollup shown in section {wbsValue != null ? "02" : "01"} above.
+          Source of truth: <code style={{ fontFamily: "monospace", background: T.bgAlt }}>calcProjectProgressFromWBS</code> and <code style={{ fontFamily: "monospace", background: T.bgAlt }}>effectiveProgress</code> in <code style={{ fontFamily: "monospace", background: T.bgAlt }}>src/utils/metrics.js</code>.
+        </div>
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 8 }}>
+          Generated {new Date().toLocaleString("en-GB")}
+        </div>
+      </Section>
+    </Shell>
+  );
+};
