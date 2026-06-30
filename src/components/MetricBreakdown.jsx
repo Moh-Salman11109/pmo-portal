@@ -94,9 +94,75 @@ const PRINT_CSS = `
 
 // ─── Shared modal chrome ───────────────────────────────────────────────
 const Shell = ({ title, subtitle, accent, onClose, children }) => {
+  // Open a clean A4-formatted window with ONLY the audit content, then
+  // trigger that window's print dialog. Far more reliable than printing
+  // the modal in place — no fight against the modal's overflow/maxHeight
+  // constraints, no conflicting theme styles, no risk of the surrounding
+  // page bleeding into the PDF.
   const print = () => {
-    // Defer so React paints the print-friendly layout first
-    setTimeout(() => window.print(), 0);
+    const root = document.querySelector(".audit-print-root");
+    if (!root) return;
+    const cloned = root.cloneNode(true);
+    // Strip controls that don't belong in the saved PDF.
+    cloned.querySelectorAll(".audit-print-noprint").forEach(el => el.remove());
+    const docTitle = (title || "Audit Report").replace(/[<>]/g, "");
+    const w = window.open("", "_blank", "width=1000,height=1200");
+    if (!w) {
+      alert("Please allow popups for this site, then click Save PDF again.");
+      return;
+    }
+    w.document.open();
+    w.document.write(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${docTitle}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body {
+    margin: 0; padding: 0; background: #ffffff;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #0d1f1c;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 0; }
+  .audit-print-root {
+    width: 100%; max-width: none; max-height: none; height: auto;
+    box-shadow: none; border: none; border-radius: 0;
+    background: #ffffff !important;
+    overflow: visible;
+  }
+  .audit-print-root * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .audit-print-root section { page-break-inside: avoid; break-inside: avoid; }
+  .audit-print-root table   { page-break-inside: auto;  break-inside: auto;  }
+  .audit-print-root tr      { page-break-inside: avoid; break-inside: avoid; }
+  /* Generous bottom padding so the page-break never crops a row mid-letter */
+  @page { size: A4; margin: 10mm; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>${cloned.outerHTML}</body>
+</html>`);
+    w.document.close();
+    // Wait for fonts + layout before printing. Print-then-close runs from
+    // inside the new window so the original portal stays open.
+    const trigger = () => {
+      try {
+        w.focus();
+        w.print();
+        // Close after print dialog returns (user clicks Save or Cancel).
+        setTimeout(() => { try { w.close(); } catch {} }, 200);
+      } catch (e) {
+        // If anything goes sideways, leave the window open so the user can
+        // print manually from the browser menu.
+      }
+    };
+    if (w.document.readyState === "complete") setTimeout(trigger, 400);
+    else w.addEventListener("load", () => setTimeout(trigger, 400));
   };
   return (
     <div
