@@ -2289,23 +2289,60 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
       </div>
 
-      {/* ── IPI TREND — one dot per recorded update ───────────────────────
-          Visualises ipiHistory so a PM/auditor can see whether today's score
-          is on a stable trajectory or a one-shot spike. The 90-day window
-          (used by the time-weighted display) is highlighted to make the
-          rolling-average period explicit. */}
+      {/* ── IPI TREND — one immutable dot per save ─────────────────────────
+          Every save appends to ipiHistory (never overwrites), so this chart
+          is the visual audit trail. Each point carries the full datetime,
+          the author, and the component breakdown at the time of save. The
+          90-day window (which drives the displayed weighted IPI) is shaded
+          so reviewers can see exactly which snapshots feed today's score. */}
       {(() => {
         const history = (project.ipiHistory || [])
           .filter(h => h.date && h.ipi != null)
-          .sort((a, b) => a.date.localeCompare(b.date));
-        const todayMs   = new Date(TODAY).getTime();
+          .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const todayMs   = Date.now();
         const windowMs  = todayMs - 90 * 86_400_000;
-        const data = history.map(h => ({
-          date:   h.date,
+        const data = history.map((h, i) => ({
+          // X axis key — sequential to avoid same-day collapse when many
+          // snapshots share a date. Display label comes from `label`.
+          idx:    i,
+          ts:     new Date(h.date).getTime(),
+          label:  (h.day || String(h.date).slice(0, 10)),
+          fullTs: h.date,
           ipi:    h.ipi,
+          spi:    h.spiFinal != null ? h.spiFinal : h.spi,
+          cpi:    h.cpi,
+          mci:    h.mci,
+          by:     h.by || "—",
+          status: h.status || "—",
           inWin:  new Date(h.date).getTime() >= windowMs,
         }));
+        const inWindowCount = data.filter(d => d.inWin).length;
         const dotColor = (v) => v >= 100 ? "#16a34a" : v >= 90 ? "#fbbf24" : v >= 70 ? "#f97316" : "#dc2626";
+        const firstWin = data.find(d => d.inWin);
+
+        const CustomTooltip = ({ active, payload }) => {
+          if (!active || !payload || !payload.length) return null;
+          const p = payload[0].payload;
+          const dt = new Date(p.fullTs);
+          const fmtDt = isNaN(dt) ? p.label : dt.toLocaleString("en-GB", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+          const f3 = (v) => v == null ? "—" : Number(v).toFixed(3);
+          return (
+            <div style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: "#0d1f1c", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", minWidth: 200 }}>
+              <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 4, color: "#003932" }}>IPI {p.ipi} <span style={{ fontWeight: 600, color: dotColor(p.ipi), marginLeft: 6 }}>● {p.status}</span></div>
+              <div style={{ color: "#56716c", fontSize: 10, marginBottom: 6 }}>{fmtDt}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "2px 12px", fontFamily: "monospace", fontSize: 10.5 }}>
+                <span style={{ color: "#56716c" }}>SPI</span><span>{f3(p.spi)}</span>
+                <span style={{ color: "#56716c" }}>CPI</span><span>{f3(p.cpi)}</span>
+                <span style={{ color: "#56716c" }}>MCI</span><span>{f3(p.mci)}</span>
+              </div>
+              <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid #d1e8e4", fontSize: 10, color: "#56716c" }}>
+                by <strong style={{ color: "#0d1f1c" }}>{p.by}</strong>
+                {p.inWin && <span style={{ background: "#00FFB3", color: "#003932", marginLeft: 8, padding: "1px 6px", borderRadius: 4, fontWeight: 700, fontSize: 9 }}>IN 90-DAY WINDOW</span>}
+              </div>
+            </div>
+          );
+        };
+
         return (
           <div style={{
             background: T.surface,
@@ -2316,9 +2353,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.2px" }}>IPI Trend</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.2px" }}>
+                  IPI Trend
+                  <span style={{ marginLeft: 10, fontSize: 10, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    {data.length} snapshot{data.length === 1 ? "" : "s"} · {inWindowCount} in 90-day window
+                  </span>
+                </div>
                 <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
-                  One dot per recorded update · highlighted band = 90-day weighting window
+                  Every save appends an immutable record · hover any dot to see full audit metadata
                 </div>
               </div>
               <div style={{ fontSize: 10, color: T.muted, display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -2334,20 +2376,18 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8,
                 fontSize: 12, color: T.muted,
               }}>
-                No IPI snapshots recorded yet. Each project update saves a snapshot — the line will populate as the PM submits weekly/monthly updates.
+                No IPI snapshots recorded yet. Each project update creates an immutable audit record — the line will populate as the PM submits updates.
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={180}>
+              <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 2 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.muted }} tickFormatter={(d) => d?.slice(5)} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: T.muted }} interval="preserveStartEnd" />
                   <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]} tick={{ fontSize: 10, fill: T.muted }} />
-                  <Tooltip
-                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, fontSize: 11, color: T.text, borderRadius: 8 }}
-                    labelStyle={{ color: T.text, fontWeight: 700 }}
-                    formatter={(v) => [v, "IPI"]}
-                  />
-                  <ReferenceArea x1={data.find(d => d.inWin)?.date || data[data.length - 1].date} x2={data[data.length - 1].date} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
+                  <Tooltip content={<CustomTooltip />} />
+                  {firstWin && (
+                    <ReferenceArea x1={firstWin.label} x2={data[data.length - 1].label} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
+                  )}
                   <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 3" />
                   <ReferenceLine y={90}  stroke="#fbbf24" strokeDasharray="4 3" />
                   <ReferenceLine y={70}  stroke="#f97316" strokeDasharray="4 3" />
@@ -2358,7 +2398,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     strokeWidth={2}
                     dot={(props) => {
                       const { cx, cy, payload } = props;
-                      return <circle key={`d-${payload.date}`} cx={cx} cy={cy} r={5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={1.5} />;
+                      return <circle key={`d-${payload.idx}`} cx={cx} cy={cy} r={5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={1.5} />;
                     }}
                     activeDot={{ r: 7 }}
                   />
@@ -5880,25 +5920,38 @@ export default function App() {
       ? [...(project.updates || []), ...logEntries]
       : project.updates || [];
 
-    // Capture IPI snapshot for time-weighted history
+    // Capture IPI snapshot for time-weighted history.
+    // EVERY save appends a separate, immutable snapshot with a full ISO
+    // datetime, the user who saved it, and a frozen copy of the components
+    // (SPI/CPI/MCI/penalty/EV/PV). Same-day overwrites are NOT allowed —
+    // multiple updates the same day each get their own row in the audit
+    // trail. An auditor inspecting ipiHistory in SharePoint can reconstruct
+    // exactly what was reported, by whom, at what minute.
     const snapState = {
       ...project,
       status, progress, plannedProgress, startDate, plannedEnd,
       budget, actualCost, milestones,
       documents: documents ?? project.documents,
     };
-    const { ipi: snapIPI, components: snapComp } = calcProjectIPIFull(snapState);
+    const fullResult = calcProjectIPIFull(snapState);
+    const snapComp   = fullResult.components || {};
+    const nowIso     = new Date().toISOString();
     const ipiSnap = {
-      date: today,
-      ipi:  snapIPI,
-      spi:  snapComp.spiFinal,
-      cpi:  snapComp.cpi,
-      mci:  snapComp.mci,
+      date:     nowIso,            // full ISO datetime — backwards-compatible with date-only via _toMs
+      day:      today,             // YYYY-MM-DD for display grouping
+      ipi:      fullResult.ipi,
+      spi:      snapComp.spi,
+      penalty:  snapComp.penalty,
+      spiFinal: snapComp.spiFinal,
+      cpi:      snapComp.cpi,
+      mci:      snapComp.mci,
+      ev:       fullResult.ev,
+      pv:       fullResult.pv,
+      by:       currentUserName || "system",
+      status,
     };
-    const prevHistory = project.ipiHistory || [];
-    const ipiHistory  = prevHistory.some(h => h.date === today)
-      ? prevHistory.map(h => h.date === today ? ipiSnap : h)
-      : [...prevHistory, ipiSnap];
+    // Append, never overwrite. Older entries are immutable.
+    const ipiHistory = [...(project.ipiHistory || []), ipiSnap];
 
     const isPMOrDeptHead = userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD;
     const nowCompleted  = status === "Completed";

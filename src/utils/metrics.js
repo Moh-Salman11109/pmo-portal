@@ -429,8 +429,15 @@ function projectWeight(p) {
  */
 export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
   const { timeWeightedWindowDays } = IPI_DEFAULTS;
-  const asOfMs  = _toMs(asOfDate);
+  let asOfMs = _toMs(asOfDate);
   if (asOfMs == null) return calcProjectIPISnapshot(project);
+  // Date-only as-of (YYYY-MM-DD) is parsed at midnight UTC. Bump to
+  // end-of-day so snapshots saved later the same day (with full timestamps)
+  // aren't excluded as "future". Without this, TODAY-as-of would drop every
+  // snapshot saved after 00:00 UTC of the current calendar day.
+  if (typeof asOfDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) {
+    asOfMs += 86_399_999;
+  }
 
   // Moving-window cutoff: only snapshots DATED within the last N days count.
   // Mirrors trailing-performance reporting in mature EVM tools (Primavera
@@ -461,12 +468,20 @@ export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
   for (let i = 0; i < history.length; i++) {
     const fromMs = _toMs(history[i].date);
     const toMs   = i + 1 < history.length ? _toMs(history[i + 1].date) : asOfMs;
-    // min 1 day so today's snapshot is always reflected immediately.
-    const days = Math.max(1, Math.floor((toMs - fromMs) / 86_400_000));
+    // Fractional days so multiple snapshots within the same day don't each
+    // claim a full day of weight (which they would under floor()+max(1,…),
+    // letting a frenzy of same-day saves dominate the trailing average).
+    // The current (latest) snapshot still gets a 1-day floor so a just-saved
+    // value is immediately reflected even when no time has elapsed yet.
+    const isLast = i + 1 >= history.length;
+    const rawDays = Math.max(0, (toMs - fromMs) / 86_400_000);
+    const days = isLast ? Math.max(1, rawDays) : rawDays;
+    if (days === 0) continue;
     totalWeighted += history[i].ipi * days;
     totalDays     += days;
   }
 
+  if (totalDays === 0) return calcProjectIPISnapshot(project);
   return Math.round(totalWeighted / totalDays);
 }
 

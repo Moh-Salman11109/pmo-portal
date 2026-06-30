@@ -233,13 +233,22 @@ export const IPIBreakdownModal = ({ project, onClose }) => {
   const rows = [];
   let totalWeighted = 0, totalDaysHist = 0;
   for (let i = 0; i < history.length; i++) {
-    const from = history[i].date;
-    const to   = i + 1 < history.length ? history[i + 1].date : TODAY;
-    const days = Math.max(1, Math.floor((new Date(to) - new Date(from)) / 86_400_000));
-    const w    = history[i].ipi * days;
+    const fromMs = new Date(history[i].date).getTime();
+    const toMs   = i + 1 < history.length ? new Date(history[i + 1].date).getTime() : todayMsForHistory;
+    const isLast = i + 1 >= history.length;
+    const rawDays = Math.max(0, (toMs - fromMs) / 86_400_000);
+    const days = isLast ? Math.max(1, rawDays) : rawDays;
+    const w = history[i].ipi * days;
     totalWeighted += w;
     totalDaysHist += days;
-    rows.push({ from, to, ipi: history[i].ipi, days, w });
+    rows.push({
+      from:    history[i].date,
+      day:     history[i].day || String(history[i].date).slice(0, 10),
+      ipi:     history[i].ipi,
+      by:      history[i].by || "—",
+      days:    days,
+      w:       w,
+    });
   }
 
   return (
@@ -446,37 +455,49 @@ IPI  =  ${parts.reduce((s, p) => s + p.w * p.v, 0).toFixed(4)} ÷ ${sumW.toFixed
           </div>
         ) : (
           <>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-              <thead>
-                <tr style={{ background: PAL.surface2, color: PAL.muted }}>
-                  <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>From</th>
-                  <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>To</th>
-                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>IPI</th>
-                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Days</th>
-                  <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>IPI × Days</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${PAL.border}` }}>
-                    <td style={{ padding: "5px 10px", fontFamily: "monospace" }}>{r.from}</td>
-                    <td style={{ padding: "5px 10px", fontFamily: "monospace" }}>{r.to}</td>
-                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}>{r.ipi}</td>
-                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace" }}>{r.days}</td>
-                    <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", color: PAL.muted }}>{r.w.toLocaleString()}</td>
+            <div style={{ maxHeight: 280, overflowY: "auto", border: `1px solid ${PAL.border}`, borderRadius: 6 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead style={{ position: "sticky", top: 0 }}>
+                  <tr style={{ background: PAL.surface2, color: PAL.muted }}>
+                    <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Saved at</th>
+                    <th style={{ textAlign: "left",  padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>By</th>
+                    <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>IPI</th>
+                    <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Days</th>
+                    <th style={{ textAlign: "right", padding: "6px 10px", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>IPI × Days</th>
                   </tr>
-                ))}
-                <tr style={{ background: PAL.surface2, fontWeight: 800 }}>
-                  <td colSpan={3} style={{ padding: "7px 10px", textAlign: "right", textTransform: "uppercase", fontSize: 10, letterSpacing: "0.08em" }}>Totals</td>
-                  <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalDaysHist}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalWeighted.toLocaleString()}</td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const dt = new Date(r.from);
+                    const fmt = isNaN(dt) ? r.from : dt.toLocaleString("en-GB", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${PAL.border}` }}>
+                        <td style={{ padding: "5px 10px", fontFamily: "monospace", fontSize: 10 }}>{fmt}</td>
+                        <td style={{ padding: "5px 10px", fontSize: 10.5, color: PAL.muted }}>{r.by}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}>{r.ipi}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace" }}>{r.days < 1 ? r.days.toFixed(3) : r.days.toFixed(2)}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "right", fontFamily: "monospace", color: PAL.muted }}>{r.w.toFixed(1)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{ background: PAL.surface2, fontWeight: 800 }}>
+                    <td colSpan={3} style={{ padding: "7px 10px", textAlign: "right", textTransform: "uppercase", fontSize: 10, letterSpacing: "0.08em" }}>Totals</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalDaysHist.toFixed(2)}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontFamily: "monospace" }}>{totalWeighted.toFixed(1)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <Formula>{`Time-Weighted  =  Σ(IPI × days) ÷ Σ(days)
-              =  ${totalWeighted.toLocaleString()} ÷ ${totalDaysHist}
+              =  ${totalWeighted.toFixed(1)} ÷ ${totalDaysHist.toFixed(2)}
               =  ${(totalWeighted / Math.max(1, totalDaysHist)).toFixed(2)}
               →  ${weighted}`}</Formula>
+            <div style={{ fontSize: 10, color: PAL.muted, marginTop: 6, lineHeight: 1.5 }}>
+              <strong>Days</strong> here is the fraction of a day each snapshot was active before
+              being superseded by the next save. Multiple same-day saves are visible as
+              separate audit rows but each carries a fractional weight, so a frenzy of
+              saves on one day cannot dominate the trailing average.
+            </div>
           </>
         )}
       </Section>

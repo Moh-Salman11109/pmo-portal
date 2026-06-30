@@ -625,6 +625,50 @@ describe("Audit fix — IPI status band uses unrounded decimal, not the displaye
   });
 });
 
+describe("Audit fix — multi-snapshot-per-day uses fractional days", () => {
+  // Append-every-save semantics: a frenzy of 10 saves in 10 minutes must
+  // not dominate the trailing 90-day average. Each non-final snapshot now
+  // contributes its actual fractional day weight; only the final snapshot
+  // gets a 1-day floor so a just-saved value is reflected immediately.
+  it("ten same-hour snapshots all carry tiny weight; a single older snapshot still dominates", () => {
+    const sameDay = "2026-06-19";
+    const ipiHistory = [];
+    // 1 historical snapshot 30 days ago at IPI=50
+    ipiHistory.push({ date: "2026-05-20T12:00:00Z", ipi: 50 });
+    // 10 snapshots today within an hour at IPI=100
+    for (let i = 0; i < 10; i++) {
+      ipiHistory.push({ date: `${sameDay}T10:${String(i).padStart(2,"0")}:00Z`, ipi: 100 });
+    }
+    const tw = calcTimeWeightedIPI({ ipiHistory }, sameDay);
+    // 30 days at 50 + 1 day at 100 → ~52 ish, NOT a meaningful pull toward 100.
+    // Old (buggy) behaviour gave 10 days of weight to the same-hour snapshots
+    // and would have produced ≈63.
+    expect(tw).toBeLessThan(60);
+    expect(tw).toBeGreaterThan(50);
+  });
+
+  it("a single in-the-window snapshot dominates when alone, regardless of in-day frequency", () => {
+    const p = { ipiHistory: [
+      { date: "2026-06-15T09:00:00Z", ipi: 95 },
+      { date: "2026-06-15T09:10:00Z", ipi: 95 },
+      { date: "2026-06-15T09:20:00Z", ipi: 95 },
+    ] };
+    const tw = calcTimeWeightedIPI(p, "2026-06-19");
+    expect(tw).toBe(95);
+  });
+
+  it("backwards-compatible: old date-only history still computes correctly", () => {
+    const p = { ipiHistory: [
+      { date: "2026-05-20", ipi: 80 },
+      { date: "2026-06-10", ipi: 100 },
+    ] };
+    const tw = calcTimeWeightedIPI(p, "2026-06-19");
+    // 21 days at 80 + 9 days (clamped to ≥1) at 100 = 1680 + 900 = 2580 / 30 = 86
+    expect(tw).toBeGreaterThan(80);
+    expect(tw).toBeLessThan(95);
+  });
+});
+
 describe("Audit fix — re-normalisation in the IPI rollup", () => {
   it("only-SPI present: IPI equals 100 × spiFinal (full credit, no neutral filler)", () => {
     const p = mk({
