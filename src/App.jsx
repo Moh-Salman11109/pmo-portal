@@ -2321,7 +2321,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const history = (project.ipiHistory || [])
           .filter(h => h.date && h.ipi != null)
           .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-        const todayMs   = Date.now();
+        // TODAY is a module-level constant (frozen at page load) so the
+        // window boundary is deterministic per render — satisfies
+        // react-hooks/static-components purity rule.
+        const todayMs   = new Date(TODAY).getTime();
         const windowMs  = todayMs - 90 * 86_400_000;
         const data = history.map((h, i) => ({
           // X axis key — sequential to avoid same-day collapse when many
@@ -2342,7 +2345,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const dotColor = (v) => v >= 100 ? "#16a34a" : v >= 90 ? "#fbbf24" : v >= 70 ? "#f97316" : "#dc2626";
         const firstWin = data.find(d => d.inWin);
 
-        const CustomTooltip = ({ active, payload }) => {
+        // Recharts <Tooltip content={fn}> accepts a plain function that
+        // returns JSX — this avoids declaring a component TYPE during
+        // render (which would violate react-hooks/static-components).
+        const renderTooltip = ({ active, payload }) => {
           if (!active || !payload || !payload.length) return null;
           const p = payload[0].payload;
           const dt = new Date(p.fullTs);
@@ -2406,7 +2412,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: T.muted }} interval="preserveStartEnd" />
                   <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]} tick={{ fontSize: 10, fill: T.muted }} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={renderTooltip} />
                   {firstWin && (
                     <ReferenceArea x1={firstWin.label} x2={data[data.length - 1].label} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
                   )}
