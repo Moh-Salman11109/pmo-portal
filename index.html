@@ -11,6 +11,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Runtime config: served fresh (no-cache) so one image adapts per
+         environment. Must load BEFORE the app module. -->
+    <script src="/config.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

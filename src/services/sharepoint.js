@@ -1,18 +1,19 @@
 import { MOCK_PROJECTS, MOCK_DEPARTMENTS, MOCK_REQUESTS, MOCK_GATE_SUBMISSIONS, MOCK_CLOSURE_SUBMISSIONS, MOCK_USERS } from "../data/mockData.js";
 import { acquireSpToken } from "./auth.js";
+import { env } from "../config/runtimeEnv.js";
 
 // ─── CONFIGURATION ──────────────────────────────────────────────
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+const USE_MOCK = env.VITE_USE_MOCK !== "false";
 
 export const SP_CONFIG = {
-  siteUrl:               import.meta.env.VITE_SP_SITE_URL               || "",
-  projectsListName:      import.meta.env.VITE_SP_PROJECTS_LIST          || "PMO_Projects",
-  deptsListName:         import.meta.env.VITE_SP_DEPARTMENTS_LIST        || "PMO_Departments",
-  requestsListName:      import.meta.env.VITE_SP_REQUESTS_LIST          || "New Project Request",
-  gateSubmissionsListName: import.meta.env.VITE_SP_GATE_SUBMISSIONS_LIST || "G1 - Project Initiation",
-  closureListName:         import.meta.env.VITE_SP_CLOSURE_LIST          || "Project Closure - E-Signoff",
-  usersListName:           import.meta.env.VITE_SP_USERS_LIST            || "PMO_Users",
-  pageSize:              Number(import.meta.env.VITE_SP_PAGE_SIZE)       || 500,
+  siteUrl:               env.VITE_SP_SITE_URL               || "",
+  projectsListName:      env.VITE_SP_PROJECTS_LIST          || "PMO_Projects",
+  deptsListName:         env.VITE_SP_DEPARTMENTS_LIST        || "PMO_Departments",
+  requestsListName:      env.VITE_SP_REQUESTS_LIST          || "New Project Request",
+  gateSubmissionsListName: env.VITE_SP_GATE_SUBMISSIONS_LIST || "G1 - Project Initiation",
+  closureListName:         env.VITE_SP_CLOSURE_LIST          || "Project Closure - E-Signoff",
+  usersListName:           env.VITE_SP_USERS_LIST            || "PMO_Users",
+  pageSize:              Number(env.VITE_SP_PAGE_SIZE)       || 500,
 };
 
 // ─── FORM URLs ───────────────────────────────────────────────────
@@ -21,10 +22,10 @@ export const SP_CONFIG = {
 // previously let a stale value on Vercel override the correct URL.
 // `intake`, `gate3`, and `closure` still accept env-var overrides for now.
 export const FORM_URLS = {
-  intake:  import.meta.env.VITE_SP_INTAKE_FORM_URL  || "",
+  intake:  env.VITE_SP_INTAKE_FORM_URL  || "",
   gate1:   "https://treedigitalinsurance.sharepoint.com/:l:/s/PMO-2026/JAD9joAI4iNJSavgQ9HdBxTrAZJemXJ7Wst3hatKV-zSTI4?nav=YTM2NjgyMDUtMjJiYy00Y2E5LTg4YzEtNjZjZWNkMWYwYjIz",
-  gate3:   import.meta.env.VITE_SP_GATE3_FORM_URL   || "",
-  closure: import.meta.env.VITE_SP_CLOSURE_FORM_URL || "",
+  gate3:   env.VITE_SP_GATE3_FORM_URL   || "",
+  closure: env.VITE_SP_CLOSURE_FORM_URL || "",
 };
 
 // ─── FIELD MAP ───────────────────────────────────────────────────
@@ -508,10 +509,10 @@ export const SPService = {
 export const isUsingMock = () => USE_MOCK;
 
 // Emails for approval-routing — set via .env so My Actions shows the right person
-const PMO_COORDINATOR_EMAIL    = import.meta.env.VITE_PMO_COORDINATOR_EMAIL    || "";
-const FINANCE_STAGE1_EMAIL     = import.meta.env.VITE_FINANCE_STAGE1_EMAIL     || "";
-const FINANCE_FINAL_EMAIL      = import.meta.env.VITE_FINANCE_FINAL_EMAIL      || "";
-const STRATEGY_EMAIL           = import.meta.env.VITE_STRATEGY_EMAIL           || "";
+const PMO_COORDINATOR_EMAIL    = env.VITE_PMO_COORDINATOR_EMAIL    || "";
+const FINANCE_STAGE1_EMAIL     = env.VITE_FINANCE_STAGE1_EMAIL     || "";
+const FINANCE_FINAL_EMAIL      = env.VITE_FINANCE_FINAL_EMAIL      || "";
+const STRATEGY_EMAIL           = env.VITE_STRATEGY_EMAIL           || "";
 
 // ─── REQUESTS FIELD MAP ──────────────────────────────────────────
 // Maps app field names → actual SharePoint internal column names.

@@ -31,3 +31,11 @@ yarn-error.log*
 
 .vercel
 .env*
+
+# Local agent skills (installed via `npx skills add`)
+.claude/skills/
+.agents/skills/
+skills-lock.json
+
+# Personal, per-machine Claude Code settings (permissions etc.)
+.claude/settings.local.json

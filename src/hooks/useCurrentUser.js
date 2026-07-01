@@ -1,6 +1,7 @@
 import { useMsal } from "@azure/msal-react";
+import { env } from "../config/runtimeEnv.js";
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+const USE_MOCK = env.VITE_USE_MOCK !== "false";
 
 // Defence-in-depth: the localStorage override is a developer convenience for
 // flipping roles during local testing. It must NEVER influence a production
@@ -20,7 +21,7 @@ const ALLOW_LOCAL_OVERRIDE =
 const MOCK_EMAIL = (ALLOW_LOCAL_OVERRIDE && typeof localStorage !== "undefined"
   ? localStorage.getItem("pmo_mock_email")
   : null)
-  || import.meta.env.VITE_MOCK_EMAIL
+  || env.VITE_MOCK_EMAIL
   || "admin@pmo.test";
 
 const MOCK_NAMES = {

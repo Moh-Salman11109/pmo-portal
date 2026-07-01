@@ -1,0 +1,12 @@
+# Code owners — auto-requested as reviewers on matching PRs.
+# Replace the placeholder team/handles with your real owners, then enable
+# "Require review from Code Owners" in branch protection for main/dev.
+
+# Deployment & CI surface — infra owners must review.
+/Dockerfile                @TreeDigitalInsurance/devops
+/.dockerignore             @TreeDigitalInsurance/devops
+/docker/                   @TreeDigitalInsurance/devops
+/.github/                  @TreeDigitalInsurance/devops
+
+# Everything else — app maintainers.
+*                          @TreeDigitalInsurance/pmo-portal-maintainers

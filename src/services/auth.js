@@ -1,9 +1,10 @@
 import { PublicClientApplication, InteractionRequiredAuthError } from "@azure/msal-browser";
+import { env } from "../config/runtimeEnv.js";
 
 // ── Derive SharePoint resource origin from the site URL env var ─────────────
 // Works for any tenant / hosting — never hardcoded.
 const spOrigin = (() => {
-  try { return new URL(import.meta.env.VITE_SP_SITE_URL || "").origin; }
+  try { return new URL(env.VITE_SP_SITE_URL || "").origin; }
   catch { return ""; }
 })();
 
@@ -12,9 +13,9 @@ const spOrigin = (() => {
 // any internal server, Azure SWA, or IIS without rebuilding.
 export const msalConfig = {
   auth: {
-    clientId:    import.meta.env.VITE_AZURE_CLIENT_ID  || "",
-    authority:   `https://login.microsoftonline.com/${import.meta.env.VITE_AZURE_TENANT_ID || "common"}`,
-    redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin,
+    clientId:    env.VITE_AZURE_CLIENT_ID  || "",
+    authority:   `https://login.microsoftonline.com/${env.VITE_AZURE_TENANT_ID || "common"}`,
+    redirectUri: env.VITE_AZURE_REDIRECT_URI || window.location.origin,
   },
   cache: {
     cacheLocation:          "sessionStorage", // cleared on tab close

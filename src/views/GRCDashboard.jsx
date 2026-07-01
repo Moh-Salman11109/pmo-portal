@@ -5,8 +5,9 @@ import { useBp } from "../hooks/useBp.js";
 import { isUsingMock } from "../services/sharepoint.js";
 import { acquireSpToken } from "../services/auth.js";
 import { RAG_COLOR, trendIcon, trendColor } from "../utils/colors.js";
+import { env } from "../config/runtimeEnv.js";
 
-const GRC_SP_SITE = import.meta.env.VITE_GRC_SP_SITE_URL || "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
+const GRC_SP_SITE = env.VITE_GRC_SP_SITE_URL || "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
 
 // ── GRC shared modal wrapper ──────────────────────────────────────
 const GRCModal = ({ title, onClose, children }) => {

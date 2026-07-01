@@ -1,0 +1,21 @@
+# Keep the build context small and free of secrets / local cruft.
+node_modules
+dist
+dist-ssr
+.git
+.gitignore
+.github
+.vscode
+.idea
+.claude
+docs
+*.md
+.env
+.env.*
+!.env.example
+skills-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+Dockerfile
+.dockerignore

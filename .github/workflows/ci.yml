@@ -1,0 +1,37 @@
+name: CI
+
+# Build-Once-Deploy-Many via the shared platform workflow. Runs the SPA quality
+# gate (lint/test/build) and pushes ONE immutable image to Artifact Registry as
+# sha-<git-sha>. Deployment is manual — point the target gitops overlay's image
+# newTag at the pushed tag. See docs/deploy.md.
+
+on:
+  push:
+    branches: [main]
+
+# Least privilege by default; the reusable workflow's image job needs id-token.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Pinned to the merged commit: build-node-pmo.yml is on tree-platform-workflows
+    # `main` but NOT yet in the `@v0` release (main is 50 commits ahead of v0.3.1,
+    # incl. a breaking change — moving @v0 would ship all of that org-wide).
+    # Switch back to `@v0` once the platform team cuts a release including this workflow.
+    uses: TreeDigitalInsurance/tree-platform-workflows/.github/workflows/build-node-pmo.yml@f162206657bb4df47a903b0b072411b836994c87
+    with:
+      service_name: pmo-portal
+      gcp_region: me-central2
+      artifact_registry_repo: artifact-app-bus-fe
+      artifact_registry_image: img-fe-pmo-portal
+      node_version: "20"
+      # This repo has no Prettier / format:check script yet.
+      run_format_check: false
+      # 8 pre-existing react-hooks/set-state-in-effect errors are non-blocking
+      # for now (unrelated to the deploy work). Flip to false once they're fixed.
+      lint_soft_fail: true
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write               # keyless GCP auth (WIF) in the image job
