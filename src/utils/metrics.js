@@ -187,7 +187,15 @@ function _toMs(d) {
  */
 export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const { cap, weights, decayWindowDays } = IPI_DEFAULTS;
-  const nowMs = _toMs(asOfDate) ?? Date.now();
+  const asOfMs = _toMs(asOfDate) ?? Date.now();
+  // The MEASUREMENT date for SPI: if the project has already been marked
+  // Completed and we have an actualFinishDate, freeze the clock at that
+  // moment. Otherwise use as-of. This lets a project finished on time keep
+  // SPI = 1.0 even when someone reviews it months later.
+  const finishMs = project.status === "Completed"
+    ? _toMs(project.actualFinishDate || project.lastUpdate)
+    : null;
+  const nowMs = finishMs && finishMs > 0 ? finishMs : asOfMs;
 
   // ── Identify WBS leaves: items that no other item lists as its parent.
   // Legacy projects with flat milestones (no parentId on anything) → every
@@ -207,23 +215,27 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
 
   // Per-leaf PLANNED progress at asOfDate.
   //   • With both startDate + date: linear interpolation between them.
-  //     KNOWN BIAS: this assumes uniform effort across the leaf's window.
-  //     Real projects burn an S-curve; linear PV systematically reports
-  //     SPI > 1.0 in mid-flight and SPI < 1.0 near completion. Accepted
-  //     trade-off for simplicity; an S-curve option is V2 work.
+  //     PV IS NOT CAPPED AT 1.0. When as-of is past the planned end, PV
+  //     keeps growing (Earned Schedule). This is what lets a completed
+  //     project that finished late score SPI < 1.0. Capping PV at 1.0
+  //     used to give a 100%-done-but-2-months-late project SPI = 1.0 —
+  //     completely wrong and the reason we fixed it.
+  //   • KNOWN BIAS: linear interpolation assumes uniform effort. Real work
+  //     is S-curve; linear PV systematically reports SPI > 1.0 mid-flight
+  //     and SPI < 1.0 near completion. Accepted trade-off for simplicity.
   //   • Same-day leaf (start == end): instant milestone. 1.0 if as-of is
-  //     past the date, 0 if not yet. (Old code returned 0 in both branches,
-  //     leaving the leaf's weight in the denominator with no PV → SPI inflated.)
+  //     past the date, 0 if not yet.
   //   • With only end date: step function (0 before, 1 after).
-  //   • With neither: undefined — caller skips this leaf entirely (its
-  //     weight is excluded from the SPI aggregator) so unscheduled leaves
-  //     don't dilute PV silently.
+  //   • With neither: undefined — caller skips this leaf entirely so
+  //     unscheduled leaves don't dilute PV silently.
   const plannedPct = (m) => {
     const startMs = _toMs(m.startDate);
     const endMs   = _toMs(m.date);
     if (startMs && endMs && endMs > startMs) {
       if (nowMs <= startMs) return 0;
-      if (nowMs >= endMs)   return 1;
+      // No upper cap — PV can exceed 1.0 when the as-of date has passed
+      // the planned end. This is the fix for the "completed late but
+      // shows SPI=1.0" bug.
       return (nowMs - startMs) / (endMs - startMs);
     }
     if (startMs && endMs && endMs === startMs) {
@@ -259,14 +271,19 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     ev = effProgress / 100;
     // Honour a user-supplied plannedProgress when present (e.g. from the
     // IPI Calculator or from a manually-tracked plan). Otherwise derive
-    // PV linearly from start → plannedEnd at the as-of date.
+    // PV linearly from start → plannedEnd at the as-of date. PV is NOT
+    // capped at 1.0 — see the plannedPct comment above; a project past
+    // its planned end must show its lateness in the SPI, not hide it
+    // behind a cap.
     if (project.plannedProgress != null && project.plannedProgress !== "") {
-      pv = Math.max(0, Math.min(1, Number(project.plannedProgress) / 100));
+      pv = Math.max(0, Number(project.plannedProgress) / 100);
     } else {
       const startMs = _toMs(project.startDate);
       const endMs   = _toMs(project.plannedEnd);
       if (startMs && endMs && endMs > startMs) {
-        pv = nowMs <= startMs ? 0 : nowMs >= endMs ? 1 : (nowMs - startMs) / (endMs - startMs);
+        // No upper cap: (nowMs > endMs) yields PV > 1, which correctly
+        // reduces SPI for late-completing projects.
+        pv = nowMs <= startMs ? 0 : (nowMs - startMs) / (endMs - startMs);
       } else {
         pv = 0;
       }

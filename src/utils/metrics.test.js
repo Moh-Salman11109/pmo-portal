@@ -625,6 +625,55 @@ describe("Audit fix — IPI status band uses unrounded decimal, not the displaye
   });
 });
 
+describe("Audit fix — PV is NOT capped at 1.0 (completed-late bug)", () => {
+  // The scenario the user caught in the IPI Calculator on 2026-07-01:
+  //   Start Nov 1 2025, Planned End Jan 30 2026, As-of Apr 1 2026,
+  //   Actual Progress 100%. Old engine returned SPI = 1.0 (PV capped).
+  //   That is nonsense: the project finished 2 months late.
+  //   With the fix, PV = 151/90 ≈ 1.678 and SPI ≈ 0.596.
+  it("100%-done project past planned end returns SPI << 1.0, NOT 1.0", () => {
+    // The exact Calculator scenario the user caught. Budget/AC zero so CPI
+    // is excluded and re-normalisation leaves IPI = spiFinal × 100 for a
+    // clean assertion.
+    const p = mk({
+      startDate: "2025-11-01", plannedEnd: "2026-01-30",
+      progress: 100,
+      budget: 0, actualCost: 0, milestones: [], documents: [],
+    });
+    const r = calcProjectIPIFull(p, "2026-04-01");
+    // Planned duration: 90 days. Actual duration to as-of: 151 days.
+    // Raw SPI = 1.0 / (151/90) ≈ 0.596.
+    expect(r.components.spi).toBeGreaterThan(0.55);
+    expect(r.components.spi).toBeLessThan(0.65);
+    // With SPI as the only component, IPI = round(spi × 100) ≈ 60.
+    expect(r.ipi).toBeGreaterThan(55);
+    expect(r.ipi).toBeLessThan(65);
+  });
+
+  it("in-progress project past planned end shows the shortfall (80% at 130% of plan)", () => {
+    const p = mk({
+      startDate: "2026-01-01", plannedEnd: "2026-04-10",   // 99 days planned
+      progress: 80,
+      budget: 0, actualCost: 0, milestones: [], documents: [],
+    });
+    const r = calcProjectIPIFull(p, "2026-05-15");   // 134 days elapsed
+    // PV = 134/99 ≈ 1.353; SPI = 0.80 / 1.353 ≈ 0.591.
+    expect(r.components.spi).toBeGreaterThan(0.55);
+    expect(r.components.spi).toBeLessThan(0.65);
+  });
+
+  it("Completed project with actualFinishDate on time keeps SPI = 1.0 even reviewed later", () => {
+    const p = mk({
+      startDate: "2025-11-01", plannedEnd: "2026-01-30",
+      progress: 100,
+      status: "Completed", actualFinishDate: "2026-01-30",
+      budget: 0, actualCost: 0, milestones: [], documents: [],
+    });
+    const r = calcProjectIPIFull(p, "2026-08-01");
+    expect(r.components.spi).toBeCloseTo(1.0, 1);
+  });
+});
+
 describe("Audit fix — multi-snapshot-per-day uses fractional days", () => {
   // Append-every-save semantics: a frenzy of 10 saves in 10 minutes must
   // not dominate the trailing 90-day average. Each non-final snapshot now
