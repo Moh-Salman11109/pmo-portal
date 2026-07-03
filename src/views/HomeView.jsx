@@ -341,7 +341,10 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
 
           {/* IPI block */}
           <div>
-            <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 6 }}>Portfolio IPI</div>
+            <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 2 }}>Portfolio IPI</div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 500, letterSpacing: "0.3px", marginBottom: 8 }}>
+              90-day weighted average · {allProjects.filter(p => !p.archived).length} active project{allProjects.filter(p => !p.archived).length === 1 ? "" : "s"}
+            </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
               <div style={{ fontSize: bp === "mobile" ? 78 : 110, fontWeight: 900, color: "white", lineHeight: 0.85, letterSpacing: "-5px" }}>
                 {portfolioIPI ?? "—"}

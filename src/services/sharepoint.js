@@ -555,7 +555,7 @@ const REQUESTS_SELECT = [
   "EstimatedTotalCost_x0028_SAR_x00","ProjectDuration_x0028_Execution_",
   "ReturnNotes","ProjectCode",
   "Author/Title","Author/EMail",
-  "Created",
+  "Created","Modified",
 ].join(",");
 const REQUESTS_EXPAND = "ProjectManager,ProjectOwner_x002f_Manager,Author";
 
@@ -602,6 +602,15 @@ export function mapSPItemToRequest(item) {
     requestDate:     safeDate(item[f.requestDate]),
     approvalHistory: buildApprovalHistory(item),
     linkedProjectId: "",
+    // Days in current stage — proxy from Modified. SharePoint updates
+    // Modified whenever an approval status flips, so this reflects "how long
+    // since the last state transition". Used by the intake bottleneck
+    // urgency signal (>7d amber, >14d red).
+    daysInCurrentStage: (() => {
+      const modMs = item.Modified ? new Date(item.Modified).getTime() : null;
+      if (!modMs || isNaN(modMs)) return 0;
+      return Math.max(0, Math.floor((Date.now() - modMs) / 86_400_000));
+    })(),
   };
 }
 

@@ -1037,7 +1037,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
               <div>
                 <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>Budget · {utilPct}% used</div>
                 <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min(100, utilPct)}%`, background: utilPct > 90 ? "#FF5000" : "#00FFB3", borderRadius: 4 }} />
+                  <div style={{ height: "100%", width: `${Math.min(100, utilPct)}%`, background: utilPct > 90 ? "#dc2626" : utilPct > 75 ? "#f59e0b" : "#00FFB3", borderRadius: 4 }} />
                 </div>
                 <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
                   <strong style={{ color: "white", fontWeight: 800 }}>{fmtSAR(totalCost)}</strong> of <strong style={{ color: "white", fontWeight: 800 }}>{fmtSAR(totalBudget)}</strong>
@@ -2141,7 +2141,35 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>🗺 Roadmap</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <Badge status={project.status} />
+            {(() => {
+              // Show the stored status as the badge, but if the auto-derived
+              // status disagrees (e.g. PM manually flagged "On Track" while
+              // IPI says "At Risk"), surface a small caution chip so an
+              // auditor doesn't hit a silent contradiction.
+              const derived = deriveProjectStatus(project);
+              const disagrees = derived && derived.status && project.status && derived.status !== project.status;
+              return (
+                <>
+                  <Badge status={project.status} />
+                  {disagrees && (
+                    <span
+                      title={`Math-derived status: ${derived.status}. Reason: ${derived.reason || "based on IPI + gate + progress"}`}
+                      style={{
+                        background: "rgba(217,119,6,0.18)",
+                        color: "#fef3c7",
+                        border: "1px solid rgba(217,119,6,0.55)",
+                        fontSize: 10, fontWeight: 700,
+                        padding: "2px 8px", borderRadius: 10,
+                        letterSpacing: "0.3px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ⚠ derived: {derived.status}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
             {(() => {
               const H = 36;
               const baseBtn = {
@@ -6011,13 +6039,22 @@ export default function App() {
       ...(documents ? { documents } : {}),
       updates: newUpdates, lastUpdate: today,
       ipiHistory,
-      // PM submission: flag for PMO validation; other roles leave pmoStatus unchanged
-      ...(userRole === ROLE_PM ? { pmoStatus: "Submitted", lastSubmittedBy: currentUserName, lastSubmittedDate: today } : {}),
+      // PM submission: flag for PMO validation; other roles leave pmoStatus unchanged.
+      // Also clear the previous PMOValidationNote on resubmit — otherwise the
+      // Returned banner keeps showing the stale feedback after the PM has fixed
+      // the issue, confusing which note is current.
+      ...(userRole === ROLE_PM ? {
+        pmoStatus: "Submitted",
+        lastSubmittedBy: currentUserName,
+        lastSubmittedDate: today,
+        pmoValidationNote: "",
+      } : {}),
     };
     if (!isUsingMock() && project.spId) {
-      // PMOValidationNote/By/Date are PMO-only writes — never overwrite from PM/dept_head save
-      // PMOStatus is intentionally NOT protected: PM sets it to "Submitted" above
-      const PMO_PROTECTED = ["PMOValidationNote", "PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline"];
+      // PMO-authored fields never overwritten from a PM/dept_head save —
+      // EXCEPT pmoValidationNote, which PM is allowed to clear on resubmit
+      // so the returned banner stops surfacing stale feedback.
+      const PMO_PROTECTED = ["PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline"];
       const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
       await SPService.updateProject(project.spId, updated, omit);
     }
