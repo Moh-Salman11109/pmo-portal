@@ -89,14 +89,18 @@ describe("MCI — gate-aware document compliance", () => {
     expect(ipi(p).components.mci).toBe(null);
   });
 
-  it("returns 1.0 when docs exist but none are required", () => {
+  it("returns null when docs exist but none are required (governance not measurable)", () => {
+    // Old behaviour returned 1.0 (assumed full compliance) — a PM could
+    // uncheck every "required" flag and get free MCI credit. Post-audit
+    // change: return null so the component is excluded from the rollup
+    // instead of falsely rewarded.
     const p = mk({
       gate: "Gate 4",
       documents: [
         { name: "Optional Note", required: false, status: "Pending" },
       ],
     });
-    expect(ipi(p).components.mci).toBe(1.0);
+    expect(ipi(p).components.mci).toBe(null);
   });
 
   it("returns null when there are no documents at all", () => {
@@ -299,48 +303,77 @@ describe("Caps — components clamp at IPI_DEFAULTS.cap (1.20)", () => {
   });
 });
 
-describe("Roadmap penalty — multiplicative decay 1% per day past deadline", () => {
-  it("penalty is 1.0 (no effect) when project is within roadmap", () => {
-    const p = mk({ roadmapDeadline: "2027-01-01" });
+describe("Roadmap-anchored SPI — measure vs Roadmap Deadline, not plannedEnd", () => {
+  // The old model applied a 1%-per-day penalty on top of plannedEnd-derived
+  // SPI. That let a PM pad plannedEnd to always look ahead, and the penalty
+  // could not fully claw back the padding advantage. Now roadmap is used as
+  // the SPI denominator directly and the explicit penalty is retired.
+  // Legacy: `components.penalty` still exists and always reads 1.0 so old
+  // audit modals don't break; new callers should ignore it.
+  it("penalty field is always 1.0 (retired — kept for legacy modal compat)", () => {
+    const p = mk({ roadmapDeadline: "2026-06-09" });
     expect(ipi(p).components.penalty).toBe(1.0);
-  });
-  it("penalty is 0.90 when 10 days past roadmap deadline", () => {
-    // ASOF is 2026-06-19. Set roadmap to 2026-06-09 → 10 days overdue.
-    const p = mk({ roadmapDeadline: "2026-06-09",
-      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
-    });
-    expect(ipi(p).components.penalty).toBeCloseTo(0.90, 2);
-  });
-  it("penalty floors at 0 (never negative) when 100+ days past deadline", () => {
-    const p = mk({ roadmapDeadline: "2025-01-01",
-      milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
-    });
-    expect(ipi(p).components.penalty).toBe(0);
-  });
-  it("penalty is applied to the RAW SPI, then cap is applied last", () => {
-    // Choose a scenario where raw_spi * penalty stays under 1.20 so cap is inert.
-    // 50% progress with timeline mid-flight → raw SPI ≈ 1.0; × 0.90 penalty = 0.90.
-    const p = mk({ roadmapDeadline: "2026-06-09",
-      milestones: [{ id: "M1", weight: 1, progress: 25, startDate: "2026-04-01", date: "2026-12-31" }],
-    });
-    const r = ipi(p);
-    const expected = Math.min(1.20, r.components.spi * r.components.penalty);
-    expect(r.components.spiFinal).toBeCloseTo(expected, 3);
+    const q = mk({ roadmapDeadline: "2025-01-01" });   // way past
+    expect(ipi(q).components.penalty).toBe(1.0);
   });
 
-  it("cap-then-penalty bug regression: over-achiever past roadmap is penalised from its true ratio, not from the cap", () => {
-    // Raw SPI 2.0, penalty 0.5. Old (buggy) order: cap(2.0)=1.20 then × 0.5 = 0.60.
-    // New (correct) order: 2.0 × 0.5 = 1.0, cap inactive → spiFinal = 1.0.
-    // The fix is observable as a HIGHER spiFinal in this regime, not lower.
-    const p = mk({
-      roadmapDeadline: "2026-04-30",   // 50 days past as of ASOF 2026-06-19
-      milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-04-01", date: "2026-12-31" }],
+  it("SPI uses roadmap as denominator when set, plannedEnd otherwise", () => {
+    // No roadmap → falls back to plannedEnd (2026-12-31). PV = 79/275 ≈ 0.29.
+    // Progress 50 → EV = 0.5. Raw SPI ≈ 0.5 / 0.29 = 1.72 → capped 1.20.
+    const noRoadmap = mk({
+      startDate: "2026-04-01", plannedEnd: "2026-12-31",
+      progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [],
     });
-    const r = ipi(p);
-    expect(r.components.penalty).toBeCloseTo(0.50, 2);
-    expect(r.components.spi).toBeGreaterThan(1.20);    // raw still huge
-    expect(r.components.spiFinal).toBeCloseTo(Math.min(1.20, r.components.spi * 0.50), 2);
-    expect(r.components.spiFinal).toBeGreaterThan(0.60); // old buggy answer
+    expect(ipi(noRoadmap).components.spiFinal).toBeCloseTo(1.20, 2);
+
+    // Same project with a roadmap that predates plannedEnd. PV should now
+    // measure against roadmap (2026-06-30), producing a lower SPI because
+    // the strategic window is tighter than the operational plan.
+    const withRoadmap = mk({
+      ...noRoadmap, roadmapDeadline: "2026-06-30",
+    });
+    expect(ipi(withRoadmap).components.spi).toBeLessThan(ipi(noRoadmap).components.spi);
+  });
+
+  it("finishing after roadmap correctly shows SPI < 1 (no explicit penalty needed)", () => {
+    // Start May 1, roadmap Jun 30, as-of Jul 15, 100% done.
+    // Old model: raw SPI = 1.20 (early vs plannedEnd), penalty 0.85 → spiFinal 1.02 → IPI 101 "Over Achieved" (bug).
+    // New model: PV vs roadmap = 75/60 = 1.25, EV = 1.0, SPI = 0.80, IPI ≈ 90 "Watch".
+    const p = mk({
+      startDate: "2026-05-01", plannedEnd: "2026-07-30",
+      roadmapDeadline: "2026-06-30",
+      progress: 100, milestones: [],
+      budget: 1500, actualCost: 1500,
+      documents: [
+        { name: "D1", required: true, requiredAtGate: 1, status: "Approved" },
+        { name: "D2", required: true, requiredAtGate: 2, status: "Approved" },
+        { name: "D3", required: true, requiredAtGate: 3, status: "Approved" },
+      ],
+    });
+    const r = calcProjectIPIFull(p, "2026-07-15");
+    expect(r.components.spi).toBeGreaterThan(0.75);
+    expect(r.components.spi).toBeLessThan(0.85);
+    expect(r.ipi).toBeGreaterThan(85);
+    expect(r.ipi).toBeLessThan(95);
+    // The "Over Achieved" band is impossible when past roadmap — verify.
+    expect(r.ipi).toBeLessThan(100);
+  });
+
+  it("padded plannedEnd does not inflate SPI when roadmap is set", () => {
+    // Same real work, two projects. A has honest plannedEnd matching roadmap;
+    // B pads plannedEnd 2× beyond roadmap. Their SPIs must be identical when
+    // roadmap is used as the denominator.
+    const honest = mk({
+      startDate: "2026-01-01", plannedEnd: "2026-06-30",
+      roadmapDeadline: "2026-06-30",
+      progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [],
+    });
+    const padded = mk({
+      startDate: "2026-01-01", plannedEnd: "2026-12-31",     // 2× padded
+      roadmapDeadline: "2026-06-30",
+      progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [],
+    });
+    expect(ipi(padded).components.spi).toBeCloseTo(ipi(honest).components.spi, 3);
   });
 });
 
@@ -474,6 +507,64 @@ describe("effectiveProgress — single source of truth for progress%", () => {
   it("falls back to project.progress when no WBS", () => {
     const p = mk({ progress: 35, milestones: [] });
     expect(effectiveProgress(p)).toBe(35);
+  });
+});
+
+describe("Audit fix — Data reliability guards refuse to score bad inputs", () => {
+  it("Impossible dates (end before start) → IPI is null and dataReliability = 'invalid_dates'", () => {
+    // Even with a healthy CPI and MCI, an IPI must not be published on a
+    // project whose dates cannot possibly be right. Previously this
+    // shipped IPI = 100 silently. Now: no score at all, and a machine-
+    // readable flag so the UI can render a red caution chip.
+    const p = mk({
+      startDate: "2026-06-01", plannedEnd: "2026-01-01",   // reversed
+      progress: 50, budget: 100_000, actualCost: 50_000,
+      milestones: [],
+      documents: [{ name: "D1", required: true, requiredAtGate: 1, status: "Approved" }],
+    });
+    const r = ipi(p);
+    expect(r.ipi).toBe(null);
+    expect(r.dataReliability).toBe("invalid_dates");
+    expect(r.status).toBe("Data Invalid");
+    expect(r.components.spi).toBe(null);
+  });
+
+  it("Baseline forming (<7 days elapsed) → IPI is null and dataReliability = 'baseline_forming'", () => {
+    // A project started less than a week ago cannot produce a meaningful
+    // schedule ratio (EV/PV both approach zero). Refuse to score rather
+    // than emit a misleading number.
+    const p = mk({
+      startDate: "2026-06-17", plannedEnd: "2026-12-31",   // 2 days before ASOF 2026-06-19
+      progress: 20, budget: 100_000, actualCost: 10_000,
+      milestones: [],
+      documents: [{ name: "D1", required: true, requiredAtGate: 1, status: "Approved" }],
+    });
+    const r = ipi(p);
+    expect(r.ipi).toBe(null);
+    expect(r.dataReliability).toBe("baseline_forming");
+    expect(r.status).toBe("Baseline Forming");
+  });
+
+  it("MCI = null (not 1.0) when documents exist but none marked required", () => {
+    // Closes the "uncheck required to game MCI" vector. See computeMCI
+    // for the full rationale.
+    const p = mk({
+      gate: "Gate 4",
+      documents: [
+        { name: "Optional Note", required: false, status: "Draft" },
+      ],
+    });
+    expect(ipi(p).components.mci).toBe(null);
+  });
+
+  it("scheduleAnchor reports which deadline drove SPI (roadmap vs plannedEnd)", () => {
+    // Governance-facing signal so a reviewer knows whether the SPI they're
+    // reading was measured against the strategic (roadmap) or operational
+    // (plannedEnd) window.
+    const withRoadmap    = mk({ roadmapDeadline: "2026-12-31" });
+    const withoutRoadmap = mk({ roadmapDeadline: null });
+    expect(ipi(withRoadmap).scheduleAnchor).toBe("roadmap");
+    expect(ipi(withoutRoadmap).scheduleAnchor).toBe("plannedEnd");
   });
 });
 

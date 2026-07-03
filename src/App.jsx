@@ -2294,10 +2294,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <div>
                 <span style={{ color: T.accent, fontWeight: 700 }}>SPI</span>
                 {" "}{ipiResult.components.spi ?? "N/A"}
-                {ipiResult.components.penalty < 1 && (
-                  <span style={{ color: "#f87171", fontWeight: 700 }}> × {ipiResult.components.penalty} penalty</span>
-                )}
                 {" "}→ <strong style={{ color: T.accent }}>{ipiResult.components.spiFinal ?? "N/A"}</strong> × 50%
+                {ipiResult.scheduleAnchor === "roadmap" && (
+                  <span style={{ fontSize: 9.5, opacity: 0.65, marginLeft: 6 }}>(vs roadmap)</span>
+                )}
               </div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {ipiResult.components.cpi ?? "N/A"} × 25%</div>
               <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {ipiResult.components.mci == null ? "N/A (no docs)" : `${Math.round(ipiResult.components.mci * 100)}% docs`} × 25%</div>
@@ -2313,11 +2313,32 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   </div>
                 );
               })()}
-              {project.roadmapDeadline && (
-                <div style={{ color: ipiResult.components.penalty < 1 ? "#f87171" : "#86efac", marginTop: 2 }}>
-                  {ipiResult.components.penalty < 1
-                    ? `⚠ ${Math.round((1 - ipiResult.components.penalty) * 100)}d past roadmap (${project.roadmapDeadline})`
-                    : `✓ Within roadmap (${project.roadmapDeadline})`}
+              {project.roadmapDeadline && (() => {
+                // Direct date compare — the roadmap penalty is retired, but
+                // the user still wants a clear "past deadline" chip. Uses
+                // actualFinishDate when completed so a project that finished
+                // on time doesn't keep flagging months later.
+                const rd = new Date(project.roadmapDeadline).getTime();
+                const measure = project.status === "Completed"
+                  ? new Date(project.actualFinishDate || project.lastUpdate || TODAY).getTime()
+                  : new Date(TODAY).getTime();
+                const daysPast = measure > rd ? Math.floor((measure - rd) / 86_400_000) : 0;
+                return (
+                  <div style={{ color: daysPast > 0 ? "#f87171" : "#86efac", marginTop: 2 }}>
+                    {daysPast > 0
+                      ? `⚠ ${daysPast}d past roadmap (${project.roadmapDeadline})`
+                      : `✓ Within roadmap (${project.roadmapDeadline})`}
+                  </div>
+                );
+              })()}
+              {ipiResult.dataReliability === "invalid_dates" && (
+                <div style={{ color: "#f87171", marginTop: 2, fontWeight: 700 }}>
+                  ⚠ Data invalid: planned end is on/before start date
+                </div>
+              )}
+              {ipiResult.dataReliability === "baseline_forming" && (
+                <div style={{ color: "#fbbf24", marginTop: 2 }}>
+                  ⏳ Baseline forming — IPI available after 7 days of activity
                 </div>
               )}
             </div>

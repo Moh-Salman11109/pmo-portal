@@ -154,7 +154,7 @@ const IPICalculator = ({ onClose }) => {
               {field("Planned end", <input type="date" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} style={inputStyle} />)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              {field("Roadmap deadline", <input type="date" value={roadmapDeadline} onChange={e => setRoadmapDeadline(e.target.value)} style={inputStyle} />, "Optional — penalty trigger")}
+              {field("Roadmap deadline", <input type="date" value={roadmapDeadline} onChange={e => setRoadmapDeadline(e.target.value)} style={inputStyle} />, "Optional — used as SPI reference when set (strategic anchor)")}
               {field("As-of date", <input type="date" value={asOfDate} onChange={e => setAsOfDate(e.target.value)} style={inputStyle} />, "Defaults to today")}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -267,9 +267,8 @@ const IPICalculator = ({ onClose }) => {
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 8 }}>Components</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {[
-                      { k: "SPI (raw)",       v: result.components.spi,      hint: "Earned ÷ Planned (uncapped)" },
-                      { k: "Penalty",         v: result.components.penalty,  hint: "1 − days_past/100" },
-                      { k: "spiFinal",        v: result.components.spiFinal, hint: "min(cap, SPI × Penalty) · used in IPI", strong: true },
+                      { k: "SPI (raw)",       v: result.components.spi,      hint: `Earned ÷ Planned (vs ${result.scheduleAnchor === "roadmap" ? "Roadmap" : "Planned End"})` },
+                      { k: "spiFinal",        v: result.components.spiFinal, hint: "min(1.20, SPI) · used in IPI", strong: true },
                       { k: "CPI",             v: result.components.cpi,      hint: "BCWP ÷ Actual Cost" },
                       { k: "MCI",             v: result.components.mci,      hint: "Σ credit ÷ docs due at gate" },
                     ].map(r => (

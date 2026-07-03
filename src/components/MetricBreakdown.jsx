@@ -481,20 +481,19 @@ export const IPIBreakdownModal = ({ project, onClose }) => {
 
       {/* ─── 02 SPI ─── */}
       <Section num="02" title="SPI — Schedule Performance Index" accent="#00b894" sub="weight 50% (re-normalised when peers absent)">
-        <Formula>{`Raw SPI  =  EV ÷ PV       (uncapped — preserves over-achievement signal)
-EV       =  ${num3(evRaw)}   ← effective progress / 100
-PV       =  ${num3(pvUsed)}${pvAuto != null && pvUsed === pvAuto ? `   ← ${elapsedDays}/${totalDays} (linear time-based)` : "   ← manual override"}
-Raw SPI  =  ${num3(evRaw)} ÷ ${num3(pvUsed)}  =  ${num3(comp.spi)}`}</Formula>
-        <Formula>{`Penalty  =  1 − (days_past ÷ 100)        ← Tree-invented, 100-day floor
-        =  1 − (${daysPast} ÷ 100)
-        =  ${num3(comp.penalty)}
+        <Formula>{`Reference deadline: ${project.roadmapDeadline ? "Roadmap (" + project.roadmapDeadline + ")" : "Planned End (" + (project.plannedEnd || "—") + ")"}
+${project.roadmapDeadline ? "                    ↑ Roadmap wins over Planned End when set —\n                    strategic commitment cannot be gamed by padding the plan." : ""}
 
-SPI × Penalty       =  ${num3(comp.spi)} × ${num3(comp.penalty)}  =  ${num3((comp.spi ?? 0) * (comp.penalty ?? 1))}
-spiFinal = min(cap, …)  =  min(1.20, ${num3((comp.spi ?? 0) * (comp.penalty ?? 1))})  =  ${num3(comp.spiFinal)}`}</Formula>
+SPI      =  EV ÷ PV        (uncapped — PV > 1 when past reference deadline)
+EV       =  ${num3(evRaw)}   ← effective progress / 100
+PV       =  ${num3(pvUsed)}${pvAuto != null && pvUsed === pvAuto ? `   ← elapsed / duration` : "   ← manual override"}
+SPI      =  ${num3(comp.spi)}
+
+spiFinal = min(1.20, SPI)  =  ${num3(comp.spiFinal)}`}</Formula>
         <div style={{ fontSize: 10, color: PAL.muted, marginTop: 4, lineHeight: 1.6 }}>
-          Order matters: penalty hits the RAW ratio first, then the cap clamps the result.
-          The reverse order (cap-then-penalty) over-penalises an over-achiever that slips past
-          the roadmap — corrected by the post-audit regression test.
+          The explicit roadmap penalty is retired — PV measured against the Roadmap
+          Deadline (when set) already reflects any strategic slip via PV &gt; 1 → SPI &lt; 1.
+          Adding a penalty on top would be double-punishment.
         </div>
         <KV k="SPI used in IPI" v={num3(comp.spiFinal ?? comp.spi)} mono />
       </Section>

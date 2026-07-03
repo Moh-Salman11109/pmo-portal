@@ -81,7 +81,11 @@ export function computeMCI(documents, atGate) {
   const allDocs = documents ?? [];
   if (allDocs.length === 0) return null;
   const reqDocs = allDocs.filter(d => d.required);
-  if (reqDocs.length === 0) return 1;
+  // Zero required documents used to return 1.0 (assumed full compliance)
+  // — this let a PM inflate MCI to full green just by unchecking every
+  // "required" flag. Now returns null (compliance not measurable) so the
+  // component is excluded from the IPI rollup instead of falsely rewarded.
+  if (reqDocs.length === 0) return null;
   const dueDocs = reqDocs.filter(d => (d.requiredAtGate || 1) <= atGate);
   if (dueDocs.length === 0) return null;
   const credit = dueDocs.reduce((s, d) => {
@@ -186,7 +190,7 @@ function _toMs(d) {
  * partial reporting now scores honestly on what's present.
  */
 export function calcProjectIPIFull(project, asOfDate = TODAY) {
-  const { cap, weights, decayWindowDays } = IPI_DEFAULTS;
+  const { cap, weights } = IPI_DEFAULTS;
   const asOfMs = _toMs(asOfDate) ?? Date.now();
   // The MEASUREMENT date for SPI: if the project has already been marked
   // Completed and we have an actualFinishDate, freeze the clock at that
@@ -196,6 +200,23 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     ? _toMs(project.actualFinishDate || project.lastUpdate)
     : null;
   const nowMs = finishMs && finishMs > 0 ? finishMs : asOfMs;
+
+  // ── Data-reliability guards (applied to project-level SPI paths) ──────────
+  // The engine is defensively skeptical of its own inputs. Two conditions
+  // make SPI mathematically meaningless and are refused rather than reported:
+  //   1. Impossible dates — end at or before start. Anything the engine
+  //      returns from bad dates would be misleading; return null.
+  //   2. Baseline still forming — fewer than 7 days since start. A single-
+  //      day EV/PV ratio has no signal (both approach zero); refuse to guess.
+  const projectStartMs = _toMs(project.startDate);
+  // Reference deadline for SPI: prefer the strategic Roadmap Deadline (set
+  // by PMO, protected from PM edits) over the operational plannedEnd (which
+  // PM controls and can pad). Falls back to plannedEnd when roadmap missing.
+  // This is what closes the "pad plannedEnd → cheap SPI wins" gaming vector.
+  const scheduleEndMs = _toMs(project.roadmapDeadline) || _toMs(project.plannedEnd);
+  const datesInvalid = !!(projectStartMs && scheduleEndMs && scheduleEndMs <= projectStartMs);
+  const elapsedMs = projectStartMs && nowMs > projectStartMs ? nowMs - projectStartMs : 0;
+  const tooEarly = projectStartMs && elapsedMs < 7 * 86_400_000;
 
   // ── Identify WBS leaves: items that no other item lists as its parent.
   // Legacy projects with flat milestones (no parentId on anything) → every
@@ -261,37 +282,30 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const scheduledLeaves = leaves.filter(m => plannedPct(m) !== null);
   const totalW = scheduledLeaves.reduce((s, m) => s + (m.weight || 1), 0);
 
-  if (scheduledLeaves.length > 0 && totalW > 0) {
+  if (datesInvalid || tooEarly) {
+    // Refuse to compute SPI when the inputs are meaningless. Component gets
+    // excluded from the IPI rollup via re-normalisation, and the caller can
+    // read `dataReliability` off the result to warn the user.
+    ev = 0; pv = 0; spi = null;
+  } else if (scheduledLeaves.length > 0 && totalW > 0) {
     ev = scheduledLeaves.reduce((s, m) => s + (m.weight || 1) * actualPct(m),  0) / totalW;
     pv = scheduledLeaves.reduce((s, m) => s + (m.weight || 1) * plannedPct(m), 0) / totalW;
-    // Raw ratio first — cap is applied AFTER the roadmap penalty further down.
     spi = pv === 0 ? null : ev / pv;
-  } else if (project.startDate && project.plannedEnd) {
-    // No WBS — fall back to project-level dates + effective progress
+  } else if (projectStartMs && scheduleEndMs) {
+    // No WBS — fall back to project-level dates + effective progress.
+    // Reference deadline is Roadmap when set, else plannedEnd (see
+    // scheduleEndMs above). PV is uncapped — a project past its reference
+    // deadline correctly shows PV > 1 and SPI < 1.
     ev = effProgress / 100;
-    // Honour a user-supplied plannedProgress when present (e.g. from the
-    // IPI Calculator or from a manually-tracked plan). Otherwise derive
-    // PV linearly from start → plannedEnd at the as-of date. PV is NOT
-    // capped at 1.0 — see the plannedPct comment above; a project past
-    // its planned end must show its lateness in the SPI, not hide it
-    // behind a cap.
     if (project.plannedProgress != null && project.plannedProgress !== "") {
+      // Manual override still respected (used mainly by the IPI Calculator).
       pv = Math.max(0, Number(project.plannedProgress) / 100);
     } else {
-      const startMs = _toMs(project.startDate);
-      const endMs   = _toMs(project.plannedEnd);
-      if (startMs && endMs && endMs > startMs) {
-        // No upper cap: (nowMs > endMs) yields PV > 1, which correctly
-        // reduces SPI for late-completing projects.
-        pv = nowMs <= startMs ? 0 : (nowMs - startMs) / (endMs - startMs);
-      } else {
-        pv = 0;
-      }
+      pv = nowMs <= projectStartMs ? 0 : (nowMs - projectStartMs) / (scheduleEndMs - projectStartMs);
     }
-    // Raw ratio — capped AFTER roadmap penalty below.
     spi = pv === 0 ? null : ev / pv;
   } else {
-    // No dates at all — neutral (treated as on track for IPI rollup purposes)
+    // No usable dates at all — SPI unmeasurable.
     ev = 0; pv = 0; spi = null;
   }
 
@@ -321,27 +335,16 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // gate; calcAnticipatedMCI projects the same logic at a future gate.
   const mci = computeMCI(project.documents, parseGateNumber(project.gate));
 
-  // ── Roadmap-deadline penalty (hits SPI only) ──────────────────────────────
-  const roadmapDeadline = project.roadmapDeadline;
-  let penalty = 1;
-  const roadmapMs = _toMs(roadmapDeadline);
-  if (roadmapMs) {
-    const finishDate = project.status === "Completed"
-      ? (project.actualFinishDate || project.lastUpdate || asOfDate) : null;
-    const measureMs = _toMs(finishDate || asOfDate);
-    if (measureMs && measureMs > roadmapMs) {
-      const daysOverdue = Math.floor((measureMs - roadmapMs) / 86_400_000);
-      penalty = Math.max(0, 1 - daysOverdue / decayWindowDays);
-    }
-  }
-
-  // ── Final SPI: penalty FIRST, cap LAST ─────────────────────────────────────
-  // This order matters. If we capped the raw SPI first, an over-performing
-  // project that slipped past the roadmap would be penalised from the cap
-  // (e.g. 1.20 × 0.90 = 1.08) instead of from its real ratio (e.g. 1.8 × 0.90
-  // = 1.62, then capped at 1.20). The penalty must act on the unscaled signal.
-  const spiPenalized = spi === null ? null : spi * penalty;
-  const spiFinal     = spiPenalized === null ? null : Math.min(cap, spiPenalized);
+  // ── Final SPI: only the cap remains ───────────────────────────────────────
+  // The old Tree-invented "roadmap penalty" is retired. Its whole purpose
+  // was to reduce SPI when a project slipped past the strategic deadline —
+  // now that PV is measured against roadmapDeadline directly, that slip is
+  // already captured (PV > 1 → SPI < 1). Applying the penalty on top would
+  // be double-punishment. The `penalty` field is still exposed on the
+  // result (always 1) so old audit modals don't break; new modals should
+  // explain the roadmap-anchored PV instead.
+  const penalty = 1;
+  const spiFinal = spi === null ? null : Math.min(cap, spi);
 
   // ── IPI rollup: re-normalise weights of present components ────────────────
   // OLD BEHAVIOUR (PERVERSE INCENTIVE): null components were treated as a
@@ -361,20 +364,35 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     const sumW = parts.reduce((s, p) => s + p.w, 0);
     ipiDecimal = parts.reduce((s, p) => s + p.w * p.v, 0) / sumW;
   }
-  const ipi = allNull ? null : Math.max(0, Math.round(ipiDecimal * 100));
+
+  // Data-reliability short-circuit — if the schedule inputs are broken, we
+  // refuse to publish a composite score even when CPI and MCI look fine.
+  // Otherwise a project with impossible dates or a day-old baseline would
+  // ship a green IPI on the strength of its cost & doc numbers alone,
+  // which is exactly the "false-positive green" case the audit flagged.
+  const scheduleBad = datesInvalid || tooEarly;
+  const ipi = allNull            ? null
+            : scheduleBad         ? null
+            :                       Math.max(0, Math.round(ipiDecimal * 100));
 
   // Status follows the UNROUNDED ipiDecimal so adjacent projects whose
   // displayed integers are 99 vs 100 don't flip into different bands purely
-  // from rounding noise (the boundary case). Decision-grade thresholds:
-  //   Over Achieved ≥ 1.001  →  IPI shows 100+ but band only fires above 100
-  //   On Track       1.000   →  IPI exactly 100
-  //   Watch          0.900   →  ≥ 90 and < 100
-  //   At Risk        < 0.900
-  const status = allNull               ? "Pending Plan"
-               : ipiDecimal >  1.0     ? "Over Achieved"
-               : ipiDecimal >= 1.0     ? "On Track"
-               : ipiDecimal >= 0.9     ? "Watch"
-               :                          "At Risk";
+  // from rounding noise. Data-reliability failures get their own statuses.
+  const status = allNull            ? "Pending Plan"
+               : datesInvalid        ? "Data Invalid"
+               : tooEarly            ? "Baseline Forming"
+               : ipiDecimal >  1.0   ? "Over Achieved"
+               : ipiDecimal >= 1.0   ? "On Track"
+               : ipiDecimal >= 0.9   ? "Watch"
+               :                       "At Risk";
+
+  // Data-reliability signal — surfaced to callers so the UI can render a
+  // caution chip when the SPI computation was refused for a data-quality
+  // reason (versus normal "no schedule data" cases).
+  const dataReliability =
+      datesInvalid ? "invalid_dates"
+    : tooEarly     ? "baseline_forming"
+    :                "ok";
 
   return {
     ipi,
@@ -388,6 +406,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     },
     ev: +ev.toFixed(3),
     pv: +pv.toFixed(3),
+    scheduleAnchor: _toMs(project.roadmapDeadline) ? "roadmap" : "plannedEnd",
+    dataReliability,
   };
 }
 
