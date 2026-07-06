@@ -507,7 +507,7 @@ const Tab = ({ tabs, active, onSelect }) => {
 //  My Actions (pending approvals on the user) and My Requests (the user's
 //  own open submissions). Collapses to an overlay on mobile/tablet.
 //
-const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, open, onClose, onOpenWhatIf }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, userDeptId, open, onClose, onOpenWhatIf }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -626,8 +626,25 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               <span style={{ flex: 1 }}>What-If Tools</span>
             </button>
           )}
-          {!isPM && <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Departments</div>}
-          {!isPM && departments.map(d => {
+          {/* Dept Heads see only their own department(s) — their project data
+              is scoped server-side, so foreign-department links would open
+              empty (0-project) views: the same dead-end shape as the old PM
+              bug. Everyone else sees the full list. */}
+          {(() => {
+            if (isPM) return null;
+            let visibleDepts = departments;
+            if (userRole === ROLE_DEPT_HEAD && userDeptId) {
+              const ids = userDeptId.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+              if (ids.length && !ids.includes("all")) {
+                const scoped = departments.filter(d => ids.includes((d.id || "").toLowerCase()));
+                if (scoped.length) visibleDepts = scoped;
+              }
+            }
+            return (<>
+          <div style={{ margin: "16px 0 8px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {userRole === ROLE_DEPT_HEAD && visibleDepts.length < departments.length ? "My Department" : "Departments"}
+          </div>
+          {visibleDepts.map(d => {
             const stats = getDeptStats(d.id, projects.filter(p => !p.archived));
             const del = projects.filter(p => !p.archived && p.deptId === d.id && p.status === "Delayed").length;
             return (
@@ -652,6 +669,8 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               </button>
             );
           })}
+            </>);
+          })()}
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: `1px solid rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", gap: 10 }}>
@@ -6354,7 +6373,17 @@ export default function App() {
   }, []);
 
   const getTitle = () => {
-    if (route.view === "home")        return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
+    if (route.view === "home") {
+      // Dept Heads see the same dashboard but computed from THEIR projects
+      // only (visibleProjects is dept-scoped). Calling it "Enterprise" while
+      // showing one department's numbers was misleading — label it honestly.
+      if (userRole === ROLE_DEPT_HEAD && userDeptId && !userDeptId.toLowerCase().includes("all")) {
+        const ids = userDeptId.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+        const names = departments.filter(d => ids.includes((d.id || "").toLowerCase())).map(d => d.name);
+        if (names.length) return [`${names.join(" · ")} Portfolio`, `Overview scoped to your department${names.length > 1 ? "s" : ""}`];
+      }
+      return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
+    }
     if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${departments.length} departments`];
     if (route.view === "projects")    return userRole === ROLE_PM
       ? ["My Projects", "Projects where you are the assigned PM"]
@@ -6440,7 +6469,7 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} />
+      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} />
       {whatIfView === "picker" && <WhatIfPicker  onClose={() => setWhatIfView(null)} onPick={(k) => setWhatIfView(k)} />}
       {whatIfView === "ipi"    && <IPICalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
       {whatIfView === "cost"   && <CostCalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
