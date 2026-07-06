@@ -604,6 +604,51 @@ export function effectiveProgress(project) {
 }
 
 /**
+ * PLANNED progress (0–100) the baseline expected at a given date — the
+ * "Planned" curve on the Progress Planned-vs-Actual chart.
+ *
+ * DISPLAY-GRADE, not scoring-grade: unlike the SPI engine's PV this caps at
+ * 100 (a plan never exceeds "done") and the no-WBS fallback anchors on
+ * plannedEnd, NOT the Roadmap Deadline — the chart shows what the team
+ * planned; the roadmap-anchored judgement lives in SPI.
+ *
+ *   With activities: Σ(weight × per-leaf planned%) ÷ Σ(weight), where each
+ *   leaf interpolates linearly between its startDate and date.
+ *   Without: linear from startDate → plannedEnd.
+ *   Returns null when there is nothing to plan against (no usable dates).
+ */
+export function plannedProgressAt(project, asOfDate = TODAY) {
+  const nowMs = _toMs(asOfDate);
+  if (nowMs == null) return null;
+
+  const items = project.milestones || [];
+  const parentIds = new Set(items.filter(m => m.parentId).map(m => m.parentId));
+  const leaves = items.filter(m => !parentIds.has(m.id));
+
+  const leafPct = (m) => {
+    const s = _toMs(m.startDate), e = _toMs(m.date);
+    if (s && e && e > s) return nowMs <= s ? 0 : nowMs >= e ? 1 : (nowMs - s) / (e - s);
+    if (e) return nowMs >= e ? 1 : 0;
+    return null;   // unscheduled — excluded
+  };
+
+  const scheduled = leaves.filter(m => leafPct(m) !== null);
+  const totalW = scheduled.reduce((s, m) => s + (m.weight || 1), 0);
+  if (scheduled.length > 0 && totalW > 0) {
+    const pv = scheduled.reduce((s, m) => s + (m.weight || 1) * leafPct(m), 0) / totalW;
+    return Math.round(Math.min(1, pv) * 100);
+  }
+
+  const startMs = _toMs(project.startDate);
+  const endMs   = _toMs(project.plannedEnd);
+  if (startMs && endMs && endMs > startMs) {
+    const pv = nowMs <= startMs ? 0 : Math.min(1, (nowMs - startMs) / (endMs - startMs));
+    return Math.round(pv * 100);
+  }
+  return null;
+}
+
+/**
  * Derive the project's status from its current performance signals.
  * Returns { status, reason } so callers can both render the chip and
  * show the user WHY the derivation landed where it did.

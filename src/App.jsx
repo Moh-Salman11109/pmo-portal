@@ -46,7 +46,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor } from "./utils/colors.js";
 import { fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, plannedProgressAt } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -2429,68 +2429,211 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           );
         };
 
-        return (
-          <div style={{
-            background: T.surface,
-            border: `1px solid ${T.border}`,
-            borderRadius: 14,
-            padding: "16px 20px",
-            marginBottom: 16,
-          }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.2px" }}>
-                  IPI Trend
-                  <span style={{ marginLeft: 10, fontSize: 10, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                    {data.length} snapshot{data.length === 1 ? "" : "s"} · {inWindowCount} in 90-day window
-                  </span>
-                </div>
-                <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
-                  Every save appends an immutable record · hover any dot to see full audit metadata
-                </div>
-              </div>
-              <div style={{ fontSize: 10, color: T.muted, display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#16a34a", borderRadius: 4, marginRight: 4 }} />On Track ≥ 100</span>
-                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fbbf24", borderRadius: 4, marginRight: 4 }} />Watch 90-99</span>
-                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#f97316", borderRadius: 4, marginRight: 4 }} />At Risk 70-89</span>
-                <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#dc2626", borderRadius: 4, marginRight: 4 }} />Critical &lt; 70</span>
-              </div>
+        // ── Progress · Planned vs Actual — sibling chart to the IPI trend.
+        // Planned curve: plannedProgressAt() sampled ~weekly across the plan
+        // window (milestone-weighted when activities exist, linear fallback).
+        // Actual curve: the ev recorded in each ipiHistory snapshot, plus a
+        // synthetic 0% at start and today's effectiveProgress as the live tip.
+        const startMs = project.startDate  ? new Date(project.startDate).getTime()  : null;
+        const planEndMs = project.plannedEnd ? new Date(project.plannedEnd).getTime() : null;
+        const chartEndMs = Math.max(planEndMs || 0, todayMs);
+        const hasPlan = plannedProgressAt(project, TODAY) != null;
+
+        const progressData = (() => {
+          if (!hasPlan || !startMs) return [];
+          const pts = new Map(); // ts → { ts, planned?, actual? }
+          const put = (ts, patch) => pts.set(ts, { ts, ...(pts.get(ts) || {}), ...patch });
+          // Planned samples — enough resolution for a smooth curve.
+          const STEPS = 40;
+          const span = Math.max(1, chartEndMs - startMs);
+          for (let i = 0; i <= STEPS; i++) {
+            const ts = startMs + (span * i) / STEPS;
+            const v = plannedProgressAt(project, new Date(ts));
+            if (v != null) put(ts, { planned: v });
+          }
+          // Actual — snapshots that recorded ev (post-v3 history) + anchors.
+          // NOTE: `effectiveProgress` is shadowed in this component by a local
+          // NUMBER of the same name (the hero's progress value) — use it
+          // directly rather than calling the imported function.
+          put(startMs, { actual: 0 });
+          history.filter(h => h.ev != null).forEach(h => {
+            const ts = new Date(h.date).getTime();
+            if (ts >= startMs) put(ts, { actual: Math.min(100, Math.round(h.ev * 100)) });
+          });
+          put(todayMs, { actual: effectiveProgress });
+          return [...pts.values()].sort((a, b) => a.ts - b.ts);
+        })();
+
+        const plannedToday = plannedProgressAt(project, TODAY);
+        const actualToday  = effectiveProgress;
+        const variance     = plannedToday != null ? actualToday - plannedToday : null;
+        const monthFmt = (ts) => new Date(ts).toLocaleDateString("en-GB", { month: "short" });
+
+        const renderProgressTooltip = ({ active, payload, label }) => {
+          if (!active || !payload || !payload.length) return null;
+          const row = payload[0].payload;
+          return (
+            <div style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#0d1f1c", boxShadow: "0 8px 24px rgba(0,0,0,0.15)" }}>
+              <div style={{ color: "#56716c", fontSize: 10, marginBottom: 4 }}>{new Date(label).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
+              {row.planned != null && <div><span style={{ color: "#00b894", fontWeight: 700 }}>Planned</span> {row.planned}%</div>}
+              {row.actual  != null && <div><span style={{ color: "#003932", fontWeight: 700 }}>Actual</span> {row.actual}%</div>}
             </div>
-            {data.length === 0 ? (
-              <div style={{
-                padding: "32px 12px", textAlign: "center",
-                background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8,
-                fontSize: 12, color: T.muted,
-              }}>
-                No IPI snapshots recorded yet. Each project update creates an immutable audit record — the line will populate as the PM submits updates.
+          );
+        };
+
+        const cardStyle = {
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          borderRadius: 14,
+          padding: "16px 20px",
+          display: "flex", flexDirection: "column",
+        };
+
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 16, marginBottom: 16 }}>
+
+            {/* ── Card 1 · IPI Trend ── */}
+            <div style={cardStyle}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.2px" }}>
+                    IPI Trend
+                    <span style={{ marginLeft: 10, fontSize: 10, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      {data.length} snapshot{data.length === 1 ? "" : "s"} · {inWindowCount} in window
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
+                    Immutable record per save · hover a dot for audit metadata
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: T.muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#16a34a", borderRadius: 4, marginRight: 4 }} />≥ 100</span>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fbbf24", borderRadius: 4, marginRight: 4 }} />90-99</span>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#f97316", borderRadius: 4, marginRight: 4 }} />70-89</span>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#dc2626", borderRadius: 4, marginRight: 4 }} />&lt; 70</span>
+                </div>
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 2 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: T.muted }} interval="preserveStartEnd" />
-                  <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]} tick={{ fontSize: 10, fill: T.muted }} />
-                  <Tooltip content={renderTooltip} />
-                  {firstWin && (
-                    <ReferenceArea x1={firstWin.label} x2={data[data.length - 1].label} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
-                  )}
-                  <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 3" />
-                  <ReferenceLine y={90}  stroke="#fbbf24" strokeDasharray="4 3" />
-                  <ReferenceLine y={70}  stroke="#f97316" strokeDasharray="4 3" />
-                  <Line
-                    type="monotone"
-                    dataKey="ipi"
-                    stroke="#003932"
-                    strokeWidth={2}
-                    dot={(props) => {
-                      const { cx, cy, payload } = props;
-                      return <circle key={`d-${payload.idx}`} cx={cx} cy={cy} r={5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={1.5} />;
-                    }}
-                    activeDot={{ r: 7 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+              {data.length === 0 ? (
+                <div style={{
+                  padding: "32px 12px", textAlign: "center", flex: 1,
+                  background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8,
+                  fontSize: 12, color: T.muted,
+                }}>
+                  No IPI snapshots recorded yet. Each project update creates an immutable audit record — the line will populate as the PM submits updates.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={210}>
+                  <LineChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 2 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: T.muted }} interval="preserveStartEnd" />
+                    <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]} tick={{ fontSize: 10, fill: T.muted }} />
+                    <Tooltip content={renderTooltip} />
+                    {firstWin && (
+                      <ReferenceArea x1={firstWin.label} x2={data[data.length - 1].label} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
+                    )}
+                    <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 3" />
+                    <ReferenceLine y={90}  stroke="#fbbf24" strokeDasharray="4 3" />
+                    <ReferenceLine y={70}  stroke="#f97316" strokeDasharray="4 3" />
+                    <Line
+                      type="monotone"
+                      dataKey="ipi"
+                      stroke="#003932"
+                      strokeWidth={2}
+                      dot={(props) => {
+                        const { cx, cy, payload } = props;
+                        return <circle key={`d-${payload.idx}`} cx={cx} cy={cy} r={5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 7 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* ── Card 2 · Progress — Planned vs Actual ── */}
+            <div style={cardStyle}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: "-0.2px" }}>
+                    Progress · Planned vs Actual
+                    {variance != null && (
+                      <span style={{
+                        marginLeft: 10, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 8,
+                        background: variance >= 0 ? "rgba(22,163,74,0.12)" : "rgba(220,38,38,0.10)",
+                        color: variance >= 0 ? "#15803d" : "#dc2626",
+                      }}>
+                        {variance >= 0 ? "▲" : "▼"} {Math.abs(variance)} pts vs plan
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
+                    Baseline S-curve from {project.milestones?.length ? "activity dates" : "project window"} · actuals from saved updates
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: T.muted, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <span><span style={{ display: "inline-block", width: 14, height: 2, background: "#003932", marginRight: 5, verticalAlign: "middle" }} />Actual</span>
+                  <span><span style={{ display: "inline-block", width: 14, height: 2, background: "repeating-linear-gradient(90deg, #00b894 0 3px, transparent 3px 6px)", marginRight: 5, verticalAlign: "middle" }} />Planned</span>
+                </div>
+              </div>
+              {progressData.length === 0 ? (
+                <div style={{
+                  padding: "32px 12px", textAlign: "center", flex: 1,
+                  background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8,
+                  fontSize: 12, color: T.muted,
+                }}>
+                  No plan dates yet. Set a start date and planned end (or add dated activities) and the planned curve will appear here.
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={182}>
+                    <LineChart data={progressData} margin={{ top: 10, right: 12, left: -10, bottom: 2 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                      <XAxis dataKey="ts" type="number" domain={[startMs, chartEndMs]} scale="time"
+                        tickFormatter={monthFmt} tick={{ fontSize: 10, fill: T.muted }} tickCount={7} />
+                      <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={{ fontSize: 10, fill: T.muted }} tickFormatter={(v) => `${v}%`} />
+                      <Tooltip content={renderProgressTooltip} />
+                      <ReferenceLine x={todayMs} stroke={T.text} strokeDasharray="4 3" strokeOpacity={0.4}
+                        label={{ value: "Today", position: "top", fontSize: 9, fill: T.muted }} />
+                      <Line type="monotone" dataKey="planned" stroke="#00b894" strokeWidth={2}
+                        strokeDasharray="5 4" dot={false} connectNulls />
+                      <Line type="monotone" dataKey="actual" stroke="#003932" strokeWidth={2.5}
+                        connectNulls
+                        dot={(props) => {
+                          const { cx, cy, payload } = props;
+                          if (payload.actual == null) return null;
+                          const isTip = payload.ts === todayMs;
+                          return (
+                            <g key={`p-${payload.ts}`}>
+                              {isTip && <circle cx={cx} cy={cy} r={9} fill="#00b894" opacity={0.18} />}
+                              <circle cx={cx} cy={cy} r={isTip ? 5.5 : 3.5} fill="#003932" stroke="#fff" strokeWidth={1.5} />
+                            </g>
+                          );
+                        }}
+                        activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    paddingTop: 10, marginTop: 2, borderTop: `1px solid ${T.border}`,
+                    fontSize: 11, color: T.muted, flexWrap: "wrap", gap: 8,
+                  }}>
+                    <div style={{ display: "flex", gap: 16 }}>
+                      <span>Planned <strong style={{ color: T.text }}>{plannedToday}%</strong></span>
+                      <span>Actual <strong style={{ color: T.text }}>{actualToday}%</strong></span>
+                      <span>Variance <strong style={{ color: variance >= 0 ? "#15803d" : "#dc2626" }}>{variance >= 0 ? "+" : ""}{variance} pts</strong></span>
+                    </div>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 7,
+                      background: variance >= 0 ? "rgba(22,163,74,0.12)" : "rgba(217,119,6,0.14)",
+                      color: variance >= 0 ? "#15803d" : "#b45309",
+                    }}>
+                      {variance >= 0 ? "On / ahead of plan" : `Behind plan · ${Math.abs(variance)} pts`}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
           </div>
         );
       })()}

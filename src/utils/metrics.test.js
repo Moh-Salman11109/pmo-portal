@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcTimeWeightedIPI, effectiveProgress, ipiColor } from "./metrics.js";
+import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcTimeWeightedIPI, effectiveProgress, ipiColor, plannedProgressAt } from "./metrics.js";
 
 // Convenience: build a minimal project that calcProjectIPIFull will accept.
 // asOfDate frozen so the time-based PV piece is deterministic across runs.
@@ -831,3 +831,62 @@ describe("Audit fix — re-normalisation in the IPI rollup", () => {
     expect(r.ipi).toBe(expected);
   });
 });
+describe("My first test", () => {
+  it("brand new project has no IPI yet", () => {
+    const p = mk({
+      startDate: "2026-06-19",
+      plannedEnd: "2026-12-31",
+      progress: 0,
+      milestones: [],
+      documents: [],
+    });
+    const r = ipi(p);
+    expect(r.ipi).toBe(null);
+  });
+});
+
+describe("plannedProgressAt — display-grade Planned curve for the progress chart", () => {
+  it("linear fallback: midway through start→plannedEnd reads ~50%", () => {
+    const p = mk({ startDate: "2026-01-01", plannedEnd: "2026-12-31", milestones: [] });
+    expect(plannedProgressAt(p, "2026-07-02")).toBeGreaterThanOrEqual(49);
+    expect(plannedProgressAt(p, "2026-07-02")).toBeLessThanOrEqual(51);
+  });
+
+  it("caps at 100 past plannedEnd (a plan never exceeds done) — unlike scoring PV", () => {
+    const p = mk({ startDate: "2026-01-01", plannedEnd: "2026-06-30", milestones: [] });
+    expect(plannedProgressAt(p, "2026-12-01")).toBe(100);
+  });
+
+  it("uses milestone weights when activities exist", () => {
+    // Two equal-weight leaves: one fully past (planned 100%), one not started
+    // yet at the as-of date → planned = 50%.
+    const p = mk({
+      startDate: "2026-01-01", plannedEnd: "2026-12-31",
+      milestones: [
+        { id: "M1", weight: 1, progress: 0, startDate: "2026-01-01", date: "2026-03-01" },
+        { id: "M2", weight: 1, progress: 0, startDate: "2026-09-01", date: "2026-12-01" },
+      ],
+    });
+    expect(plannedProgressAt(p, "2026-06-01")).toBe(50);
+  });
+
+  it("returns null when there are no usable dates", () => {
+    const p = mk({ startDate: "", plannedEnd: "", milestones: [] });
+    expect(plannedProgressAt(p, "2026-06-01")).toBe(null);
+  });
+
+  it("anchors the fallback on plannedEnd, NOT the roadmap deadline", () => {
+    // Roadmap is earlier than plannedEnd. The scoring PV would anchor on the
+    // roadmap; the DISPLAY curve must show the team's plan (plannedEnd).
+    const p = mk({
+      startDate: "2026-01-01", plannedEnd: "2026-12-31",
+      roadmapDeadline: "2026-06-30", milestones: [],
+    });
+    // Midway through the FULL plan (not past-100% vs the roadmap).
+    expect(plannedProgressAt(p, "2026-07-02")).toBeLessThanOrEqual(51);
+  });
+});
+
+
+
+
