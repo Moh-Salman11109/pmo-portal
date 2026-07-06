@@ -300,6 +300,13 @@ const AnimStyles = () => (
       to   { opacity:1; transform:translateY(0);   }
     }
     .pmo-tab-content { animation: pmo-fadein 0.22s cubic-bezier(0.4,0,0.2,1); }
+    /* Sidebar scrollbar — thin and translucent so the default chunky white
+       Windows bar doesn't slice through the dark green panel. */
+    .pmo-sidebar nav { scrollbar-width: thin; scrollbar-color: rgba(0,255,179,0.18) transparent; }
+    .pmo-sidebar nav::-webkit-scrollbar { width: 5px; }
+    .pmo-sidebar nav::-webkit-scrollbar-track { background: transparent; }
+    .pmo-sidebar nav::-webkit-scrollbar-thumb { background: rgba(0,255,179,0.18); border-radius: 3px; }
+    .pmo-sidebar nav::-webkit-scrollbar-thumb:hover { background: rgba(0,255,179,0.32); }
   `}</style>
 );
 
@@ -681,9 +688,13 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
                 <span style={{ fontSize: 14 }}>{d.icon}</span>
                 <span style={{ flex: 1 }}>{d.name}</span>
                 <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-                  <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>
-                    {stats.total}
-                  </span>
+                  {/* A "0" badge says "nothing here" — that doesn't earn a
+                      pixel. Render the count only when there is one. */}
+                  {stats.total > 0 && (
+                    <span style={{ background: "rgba(255,255,255,0.1)", color: T.light, fontSize: 10, padding: "1px 6px", borderRadius: 10 }}>
+                      {stats.total}
+                    </span>
+                  )}
                   {del > 0 && (
                     <span className="pmo-pulse-dot" style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: "#dc2626" }} />
                   )}
