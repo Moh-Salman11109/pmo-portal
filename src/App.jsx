@@ -514,6 +514,44 @@ const Tab = ({ tabs, active, onSelect }) => {
 //  My Actions (pending approvals on the user) and My Requests (the user's
 //  own open submissions). Collapses to an overlay on mobile/tablet.
 //
+// Monochrome line icons for the sidebar — stroke follows currentColor so
+// each icon inherits its row's state colour (mint when active, moss idle).
+// Replaced the coloured emojis, which each dragged their own palette into
+// the dark panel and read as prototype rather than product.
+const NavIcon = ({ name, size = 16 }) => {
+  const paths = {
+    home:     <><path d="M3 7.5 8 3l5 4.5"/><path d="M4.5 6.8V13h7V6.8"/></>,
+    grid:     <><rect x="3" y="3" width="4.2" height="4.2" rx="1"/><rect x="8.8" y="3" width="4.2" height="4.2" rx="1"/><rect x="3" y="8.8" width="4.2" height="4.2" rx="1"/><rect x="8.8" y="8.8" width="4.2" height="4.2" rx="1"/></>,
+    list:     <><path d="M5.5 4.5H13"/><path d="M5.5 8H13"/><path d="M5.5 11.5H13"/><circle cx="3.2" cy="4.5" r="0.5"/><circle cx="3.2" cy="8" r="0.5"/><circle cx="3.2" cy="11.5" r="0.5"/></>,
+    send:     <><path d="M13.5 2.5 2.5 7l4.2 1.8L8.5 13z"/><path d="M13.5 2.5 6.7 8.8"/></>,
+    check:    <><circle cx="8" cy="8" r="5.5"/><path d="m5.7 8.2 1.6 1.6 3-3.4"/></>,
+    gear:     <><circle cx="8" cy="8" r="2"/><path d="M8 2.8v1.4M8 11.8v1.4M2.8 8h1.4M11.8 8h1.4M4.3 4.3l1 1M10.7 10.7l1 1M11.7 4.3l-1 1M5.3 10.7l-1 1"/></>,
+    sliders:  <><path d="M3 5h10M3 11h10"/><circle cx="6" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="10" cy="11" r="1.6" fill="currentColor" stroke="none"/></>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      {paths[name] || paths.list}
+    </svg>
+  );
+};
+
+// Two-letter tile for departments — one visual family instead of a random
+// emoji per row. Initials from the first two words ("Strategy & PMO" → SP).
+const DeptGlyph = ({ name }) => {
+  const letters = (name || "?")
+    .split(/[\s&/-]+/).filter(Boolean).slice(0, 2)
+    .map(w => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+  return (
+    <span style={{
+      width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+      background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.06)",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", color: "inherit", opacity: 0.9,
+    }}>{letters}</span>
+  );
+};
+
 const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, userDeptId, open, onClose, onOpenWhatIf }) => {
   const { departments } = useDepts();
   const T = useT();
@@ -575,12 +613,12 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
   // so the same view naturally becomes "My Projects" — hiding the link (the
   // old behaviour) left PMs with no way to reach their own project at all.
   const navItems = [
-    ...(!isPM ? [{ icon: "🏠", label: "Portfolio Overview", route: "home" }] : []),
-    ...(!isPM ? [{ icon: "📁", label: "Departments IPI",     route: "departments" }] : []),
-    { icon: "📋", label: isPM ? "My Projects" : "All Projects", route: "projects", badge: attnCount },
-    { icon: "📨", label: "New Request",          route: "requests"},
-    { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
-    ...(isAdmin ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
+    ...(!isPM ? [{ icon: "home", label: "Portfolio Overview", route: "home" }] : []),
+    ...(!isPM ? [{ icon: "grid", label: "Departments IPI",     route: "departments" }] : []),
+    { icon: "list", label: isPM ? "My Projects" : "All Projects", route: "projects", badge: attnCount },
+    { icon: "send", label: "New Request",          route: "requests"},
+    { icon: "check", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
+    ...(isAdmin ? [{ icon: "gear", label: "Admin Panel", route: "admin" }] : []),
   ];
 
   const sidebarStyle = isDesktop
@@ -614,7 +652,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               color: route.view === item.route ? T.accent : T.secondary, cursor: "pointer", fontSize: 13, fontWeight: route.view === item.route ? 600 : 400,
               marginBottom: 2, transition: "all 0.15s", textAlign: "left"
             }}>
-              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              <NavIcon name={item.icon} />
               <span style={{ flex: 1 }}>{item.label}</span>
               {item.badge > 0 && (
                 <span style={{ background: item.badgeColor || "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 10, lineHeight: "18px" }}>{item.badge}</span>
@@ -650,7 +688,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
                   e.currentTarget.style.background = "rgba(0,0,0,0.22)";
                   e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)";
                 }}>
-                <span style={{ fontSize: 16 }}>🧮</span>
+                <NavIcon name="sliders" />
                 <span style={{ flex: 1 }}>What-If Tools</span>
               </button>
             </>
@@ -685,7 +723,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
                 color: route.deptId === d.id ? T.accent : T.secondary, cursor: "pointer", fontSize: 12, fontWeight: 400,
                 marginBottom: 1, transition: "all 0.15s", textAlign: "left"
               }}>
-                <span style={{ fontSize: 14 }}>{d.icon}</span>
+                <DeptGlyph name={d.name} />
                 <span style={{ flex: 1 }}>{d.name}</span>
                 <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
                   {/* A "0" badge says "nothing here" — that doesn't earn a
