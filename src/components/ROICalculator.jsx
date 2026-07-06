@@ -21,10 +21,17 @@ const fmt = (n) =>
 const fmt2 = (n) =>
   Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// NPV of an annuity — sum of discounted annual cash flows over `years`.
+// NPV of an annuity — sum of discounted annual cash flows over `years`,
+// INCLUDING the fractional final year. The old integer-only loop silently
+// dropped the fraction (e.g. 2.75yr counted as 2yr), understating NPV by a
+// full ~0.75 × annual ÷ (1+r)^3 — enough to flip a positive project to
+// negative on screen. Caught by the product owner comparing NPV to ROI.
 const npv = (annual, years, rate) => {
   let s = 0;
-  for (let y = 1; y <= years; y++) s += annual / Math.pow(1 + rate, y);
+  const full = Math.floor(years);
+  for (let y = 1; y <= full; y++) s += annual / Math.pow(1 + rate, y);
+  const frac = years - full;
+  if (frac > 0) s += (annual * frac) / Math.pow(1 + rate, full + 1);
   return s;
 };
 
