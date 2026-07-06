@@ -673,6 +673,8 @@ export const MOCK_CLOSURE_SUBMISSIONS = [];
 //   localStorage.setItem('pmo_mock_email', 'pm.strategy@pmo.test'); location.reload();
 export const MOCK_USERS = [
   { email: "admin@pmo.test",        role: "pmo_admin",  deptId: null },
+  { email: "head@pmo.test",         role: "pmo_head",   deptId: null },
+  { email: "staff@pmo.test",        role: "pmo_staff",  deptId: null },
   { email: "pm.strategy@pmo.test",  role: "pm",         deptId: "strategy" },
   { email: "pm.digital@pmo.test",   role: "pm",         deptId: "digital" },
   { email: "head.digital@pmo.test", role: "dept_head",  deptId: "digital" },

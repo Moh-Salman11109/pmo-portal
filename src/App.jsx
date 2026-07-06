@@ -559,6 +559,9 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 
   const isPM   = userRole === ROLE_PM;
   const isAdmin = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD;
+  // What-If tools are planning aids, not admin surface — PMO Staff do the
+  // day-to-day estimation work, so they get them too (role-audit finding).
+  const canWhatIf = isAdmin || userRole === ROLE_PMO_STAFF;
 
   // The projects route is visible to EVERY role. For a PM the projects prop
   // is already server-filtered to their own projects (getProjects role=pm),
@@ -614,7 +617,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
           {/* What-If Hub — single sidebar entry that opens a picker with
               IPI / Cost / ROI calculators. Replaces the two separate sidebar
               buttons; keeps the sidebar clean as we add more planning tools. */}
-          {isAdmin && onOpenWhatIf && (
+          {canWhatIf && onOpenWhatIf && (
             <button onClick={() => { onOpenWhatIf(); if (!isDesktop) onClose(); }} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px dashed rgba(0,255,179,0.25)",
               background: "transparent", color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
@@ -902,7 +905,9 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 
   if (deptId === "grc") {
     const isGRCDeptHead = userRole === ROLE_DEPT_HEAD && (userDeptId || "").split(",").map(s => s.trim().toLowerCase()).includes("grc");
-    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN || userRole === ROLE_EXEC || isGRCDeptHead;
+    // PMO Head/Staff included: they oversee governance — blocking them while
+    // executives could see it was an inconsistency caught in the role audit.
+    const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN || userRole === ROLE_EXEC || isGRCDeptHead;
     if (!canViewGRC) return (
       <div style={{ padding: 64, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
