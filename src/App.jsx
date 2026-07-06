@@ -560,10 +560,14 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
   const isPM   = userRole === ROLE_PM;
   const isAdmin = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD;
 
+  // The projects route is visible to EVERY role. For a PM the projects prop
+  // is already server-filtered to their own projects (getProjects role=pm),
+  // so the same view naturally becomes "My Projects" — hiding the link (the
+  // old behaviour) left PMs with no way to reach their own project at all.
   const navItems = [
     ...(!isPM ? [{ icon: "🏠", label: "Portfolio Overview", route: "home" }] : []),
     ...(!isPM ? [{ icon: "📁", label: "Departments IPI",     route: "departments" }] : []),
-    ...(!isPM ? [{ icon: "📋", label: "All Projects",        route: "projects", badge: attnCount }] : []),
+    { icon: "📋", label: isPM ? "My Projects" : "All Projects", route: "projects", badge: attnCount },
     { icon: "📨", label: "New Request",          route: "requests"},
     { icon: "✅", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
     ...(isAdmin ? [{ icon: "⚙️", label: "Admin Panel", route: "admin" }] : []),
@@ -4840,8 +4844,14 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
     <div style={{ padding: pad, maxWidth: 1400 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>All Projects</h1>
-          <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Complete portfolio · {active.length} active projects across all departments</p>
+          <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 20 : 24, fontWeight: 900, color: T.text }}>
+            {userRole === ROLE_PM ? "My Projects" : "All Projects"}
+          </h1>
+          <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>
+            {userRole === ROLE_PM
+              ? `Projects where you are the assigned PM · ${active.length} active`
+              : `Complete portfolio · ${active.length} active projects across all departments`}
+          </p>
         </div>
         {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
           <button onClick={() => setRoute({ view: "form", mode: "create" })}
@@ -4916,6 +4926,19 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
             })}
           </tr></thead>
           <tbody>
+            {sorted.length === 0 && (
+              <tr><td colSpan={99} style={{ padding: "48px 20px", textAlign: "center" }}>
+                <div style={{ fontSize: 28, opacity: 0.35, marginBottom: 10 }}>📭</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+                  {userRole === ROLE_PM && active.length === 0 ? "No projects assigned to you yet" : "No projects match the current filters"}
+                </div>
+                <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.7, maxWidth: 460, margin: "0 auto" }}>
+                  {userRole === ROLE_PM && active.length === 0
+                    ? "A project appears here when its PM Email field matches the email you sign in with. If you expect to see a project, ask the PMO to verify the PM Email on that project."
+                    : "Try clearing the search box or resetting the filters above."}
+                </div>
+              </td></tr>
+            )}
             {sorted.map((p, i) => {
               const dept = departments.find(d => d.id === p.deptId);
               const ipi = calcProjectIPI(p);
@@ -5908,9 +5931,12 @@ export default function App() {
     return () => { cancelled = true; };
   }, [roleResolved, userRole, userDeptId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── PM default landing: redirect to actions on first load ────
+  // ── PM default landing: their own projects, not the actions queue.
+  // A PM opening the portal expects to see their project first — landing
+  // on an (often empty) approvals queue made it look like the portal had
+  // nothing for them. Actions stays one click away with its badge.
   useEffect(() => {
-    if (userRole === ROLE_PM) setRoute({ view: "actions" });
+    if (userRole === ROLE_PM) setRoute({ view: "projects" });
   }, [userRole]);
 
   const addDept = useCallback(async (d) => {
@@ -6149,7 +6175,9 @@ export default function App() {
   const getTitle = () => {
     if (route.view === "home")        return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
     if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${departments.length} departments`];
-    if (route.view === "projects")    return ["All Projects", "Complete project portfolio"];
+    if (route.view === "projects")    return userRole === ROLE_PM
+      ? ["My Projects", "Projects where you are the assigned PM"]
+      : ["All Projects", "Complete project portfolio"];
     if (route.view === "admin")       return ["Admin Panel", "System data management"];
     if (route.view === "requests")    return ["New Request", "Submit a new project request or track existing ones"];
     if (route.view === "actions")     return ["My Actions", "Items pending your review or approval"];
@@ -6243,7 +6271,7 @@ export default function App() {
           {/* Portfolio-level views — blocked for PM role */}
           {route.view === "home"        && userRole !== ROLE_PM && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
           {route.view === "departments" && userRole !== ROLE_PM && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
-          {route.view === "projects"    && userRole !== ROLE_PM && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
+          {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
           {route.view === "department"  && userRole !== ROLE_PM && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
           {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
           {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} savePMONote={savePMONote} userRole={userRole} />}
