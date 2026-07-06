@@ -11,8 +11,9 @@ import { useT } from "../theme.js";
 //  Nothing is persisted; this is a planning-conversation tool.
 // ============================================================================
 
-// Discount rate for NPV. 8% is a reasonable default for internal-return
-// analysis at a Saudi insurer; adjust here if PMO adopts a different WACC.
+// Discount rate default for NPV. 8% is used as an initial placeholder only;
+// the field is editable at runtime and the intended rate is a decision for
+// PMO/CFO to set explicitly rather than something the tool prescribes.
 const DEFAULT_DISCOUNT = 0.08;
 
 const fmt = (n) =>
@@ -204,7 +205,7 @@ const ROICalculator = ({ onClose, onBack }) => {
               {field("Discount rate (%) for NPV",
                 <input type="number" min="0" max="100" step="0.5" value={discount}
                        onChange={e => setDiscount(e.target.value)} style={inputStyle} />,
-                "Default 8% (Tree internal rate)"
+                "Default 8%"
               )}
             </div>
 
