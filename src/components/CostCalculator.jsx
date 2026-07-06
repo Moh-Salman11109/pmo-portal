@@ -163,8 +163,13 @@ const CostCalculator = ({ onClose }) => {
                 onChange={(e) => updateRow(r.id, { level: e.target.value })}
                 style={inputStyle}
               >
-                {Object.entries(RATES).map(([lvl, rate]) => (
-                  <option key={lvl} value={lvl}>{lvl} — {fmt(rate)}/hr</option>
+                {/* Rates are intentionally NOT shown in the dropdown — the
+                    calculator is often opened next to other people during
+                    planning conversations and rate/salary bands are
+                    confidential. Rates still live in the RATES map above
+                    and drive the row total; they're just not surfaced in UI. */}
+                {Object.keys(RATES).map((lvl) => (
+                  <option key={lvl} value={lvl}>{lvl}</option>
                 ))}
               </select>
               <div style={{
