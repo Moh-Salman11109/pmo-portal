@@ -34,7 +34,7 @@ const newRow = () => ({
   level: "Management",
 });
 
-const CostCalculator = ({ onClose }) => {
+const CostCalculator = ({ onClose, onBack }) => {
   const T = useT();
   const [rows, setRows] = useState([newRow()]);
 
@@ -94,15 +94,24 @@ const CostCalculator = ({ onClose }) => {
           color: "white", padding: "18px 24px", borderBottom: "3px solid #00FFB3",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
-          <div>
-            <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 4 }}>
-              Planning Tool
-            </div>
-            <h2 style={{ fontSize: 19, fontWeight: 800, color: "white", letterSpacing: "-0.3px", margin: 0 }}>
-              Cost Calculator
-            </h2>
-            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11.5, marginTop: 3 }}>
-              Add activities, choose the role, and get a total effort cost. Rates in SAR/hour.
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {onBack && (
+              <button onClick={onBack} title="Back to What-If tools" style={{
+                background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)",
+                color: "white", width: 32, height: 32, borderRadius: 8, fontSize: 15,
+                cursor: "pointer", display: "grid", placeItems: "center",
+              }}>←</button>
+            )}
+            <div>
+              <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 4 }}>
+                What-if Tool
+              </div>
+              <h2 style={{ fontSize: 19, fontWeight: 800, color: "white", letterSpacing: "-0.3px", margin: 0 }}>
+                Cost Calculator
+              </h2>
+              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11.5, marginTop: 3 }}>
+                Add activities, choose the role, and get a total effort cost. Rates in SAR/hour.
+              </div>
             </div>
           </div>
           <button onClick={onClose} style={{

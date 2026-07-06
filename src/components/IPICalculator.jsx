@@ -15,7 +15,7 @@ import { TODAY } from "../utils/dates.js";
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
-const IPICalculator = ({ onClose }) => {
+const IPICalculator = ({ onClose, onBack }) => {
   const T = useT();
 
   // ── Inputs (start empty — user fills them in then clicks Calculate) ──
@@ -134,10 +134,19 @@ const IPICalculator = ({ onClose }) => {
           borderBottom: "3px solid #00FFB3",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
-          <div>
-            <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 4 }}>What-if Tool</div>
-            <h2 style={{ fontSize: 19, fontWeight: 800, color: "white", letterSpacing: "-0.3px", margin: 0 }}>IPI Calculator</h2>
-            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11.5, marginTop: 3 }}>Enter parameters for a project not yet registered. The same engine used across the portal.</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {onBack && (
+              <button onClick={onBack} title="Back to What-If tools" style={{
+                background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)",
+                color: "white", width: 32, height: 32, borderRadius: 8, fontSize: 15,
+                cursor: "pointer", display: "grid", placeItems: "center",
+              }}>←</button>
+            )}
+            <div>
+              <div style={{ color: "#00FFB3", fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 4 }}>What-if Tool</div>
+              <h2 style={{ fontSize: 19, fontWeight: 800, color: "white", letterSpacing: "-0.3px", margin: 0 }}>IPI Calculator</h2>
+              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11.5, marginTop: 3 }}>Enter parameters for a project not yet registered. The same engine used across the portal.</div>
+            </div>
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "white", width: 32, height: 32, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>✕</button>
         </div>
