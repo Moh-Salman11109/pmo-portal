@@ -618,13 +618,15 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               IPI / Cost / ROI calculators. Replaces the two separate sidebar
               buttons; keeps the sidebar clean as we add more planning tools. */}
           {canWhatIf && onOpenWhatIf && (
+            /* Tree brand Orange (#FF5000 · Pantone 172) with Canopy text
+               (#003932 · Pantone 4189) — per the official palette pairing. */
             <button onClick={() => { onOpenWhatIf(); if (!isDesktop) onClose(); }} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px dashed rgba(0,255,179,0.25)",
-              background: "transparent", color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
+              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "none",
+              background: "#FF5000", color: "#003932", cursor: "pointer", fontSize: 13, fontWeight: 800,
               marginTop: 6, marginBottom: 2, transition: "all 0.15s", textAlign: "left",
             }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(0,255,179,0.08)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              onMouseEnter={e => { e.currentTarget.style.background = "#e64800"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#FF5000"; e.currentTarget.style.transform = "translateY(0)"; }}>
               <span style={{ fontSize: 16 }}>🎛</span>
               <span style={{ flex: 1 }}>What-If Tools</span>
             </button>
