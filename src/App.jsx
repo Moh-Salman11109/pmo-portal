@@ -618,35 +618,35 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               IPI / Cost / ROI calculators. Replaces the two separate sidebar
               buttons; keeps the sidebar clean as we add more planning tools. */}
           {canWhatIf && onOpenWhatIf && (
-            /* iOS-26 "Liquid Glass" treatment: frosted translucent fill with
-               backdrop blur + saturation, a specular top rim, soft depth
-               shadow, and a wet sheen that brightens on hover. Capsule-ish
-               radius sells the liquid look on the dark sidebar. */
-            <button onClick={() => { onOpenWhatIf(); if (!isDesktop) onClose(); }} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.28)",
-              background: "linear-gradient(160deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 45%, rgba(0,255,179,0.10) 100%)",
-              backdropFilter: "blur(16px) saturate(180%)",
-              WebkitBackdropFilter: "blur(16px) saturate(180%)",
-              color: "#EFFFFA", cursor: "pointer", fontSize: 13, fontWeight: 700,
-              marginTop: 6, marginBottom: 2, transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)", textAlign: "left",
-              boxShadow: "inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -1px 1px rgba(0,0,0,0.12), 0 6px 20px rgba(0,0,0,0.25)",
-              textShadow: "0 1px 2px rgba(0,0,0,0.2)",
-            }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = "linear-gradient(160deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.12) 45%, rgba(0,255,179,0.16) 100%)";
-                e.currentTarget.style.boxShadow = "inset 0 1px 1px rgba(255,255,255,0.45), inset 0 -1px 1px rgba(0,0,0,0.10), 0 8px 28px rgba(0,255,179,0.18)";
-                e.currentTarget.style.transform = "translateY(-1px) scale(1.01)";
+            /* Designed INTO the sidebar's own language instead of imported
+               from elsewhere: a micro section header (same idiom as
+               "DEPARTMENTS" below) and a quietly recessed tool tray — one
+               step darker than the sidebar with a mint hairline, so it
+               reads as a built-in instrument rather than a marketing
+               button. Hover simply raises the hairline and warms the tray. */
+            <>
+              <div style={{ margin: "14px 0 6px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Planning
+              </div>
+              <button onClick={() => { onOpenWhatIf(); if (!isDesktop) onClose(); }} style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
+                border: "1px solid rgba(0,255,179,0.16)",
+                background: "rgba(0,0,0,0.22)",
+                color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                marginBottom: 2, transition: "all 0.18s", textAlign: "left",
               }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = "linear-gradient(160deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 45%, rgba(0,255,179,0.10) 100%)";
-                e.currentTarget.style.boxShadow = "inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -1px 1px rgba(0,0,0,0.12), 0 6px 20px rgba(0,0,0,0.25)";
-                e.currentTarget.style.transform = "translateY(0) scale(1)";
-              }}>
-              <span style={{ fontSize: 16, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.25))" }}>🎛</span>
-              <span style={{ flex: 1 }}>What-If Tools</span>
-              <span style={{ fontSize: 11, opacity: 0.55 }}>→</span>
-            </button>
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "rgba(0,255,179,0.10)";
+                  e.currentTarget.style.borderColor = "rgba(0,255,179,0.40)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "rgba(0,0,0,0.22)";
+                  e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)";
+                }}>
+                <span style={{ fontSize: 16 }}>🧮</span>
+                <span style={{ flex: 1 }}>What-If Tools</span>
+              </button>
+            </>
           )}
           {/* Dept Heads see only their own department(s) — their project data
               is scoped server-side, so foreign-department links would open
