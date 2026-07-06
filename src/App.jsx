@@ -3605,6 +3605,11 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
   const completed      = myRequests.filter(r =>  isClosedReq(r));
   const pendingGates   = myGates.filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
   const pendingClosures = myClosures.filter(c => c.status !== "Closed");
+  // Fully signed-off closures — the "opened" list's natural counterpart.
+  // Sorted newest-first so the most recent closure sits on top.
+  const closedProjects = myClosures
+    .filter(c => c.status === "Closed")
+    .sort((a, b) => (b.submissionDate || "").localeCompare(a.submissionDate || ""));
 
   // ── Request Card ─────────────────────────────────────────────────
   const RequestCard = ({ req }) => {
@@ -3719,7 +3724,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
           <div style={{ fontSize: 20 }}>📋</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 1 — Project Request</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit a new project idea for PMO review and approval</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit a new project idea for PMO review and Strategy alignment</div>
           </div>
           <button onClick={() => window.open(FORM_URLS.intake, "_blank")}
             style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -3732,7 +3737,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
           <div style={{ fontSize: 20 }}>🚀</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 2 — Initiation</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the initiation gate once the project request is approved</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Charter for PMO review and stakeholder alignment</div>
           </div>
           <button onClick={() => window.open(FORM_URLS.gate1, "_blank")}
             style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -3745,7 +3750,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
           <div style={{ fontSize: 20 }}>📎</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 3 — Planning</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the project plan (Charter, Business Case) for PMO review</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Plan and Resource Plan for PMO review</div>
           </div>
           <button onClick={() => window.open(FORM_URLS.gate3, "_blank")}
             style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -3839,10 +3844,43 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
       {/* ── Completed ── */}
       {completed.length > 0 && (
-        <div>
+        <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Completed</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {completed.map(req => <RequestCard key={req.id} req={req} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ── Closed Projects — fully signed-off closures. The counterpart of
+             Active Requests: that list shows what's opening; this shows what
+             has formally closed, with the e-signoff trail expandable. ── */}
+      {closedProjects.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Closed Projects
+            <span style={{ background: "#f0fdf4", color: "#15803d", padding: "1px 8px", borderRadius: 10, marginLeft: 8, fontSize: 11 }}>{closedProjects.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {closedProjects.map(cl => (
+              <div key={cl.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cl.projectTitle}</span>
+                      {cl.projectCode && <span style={{ fontSize: 11, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px" }}>{cl.projectCode}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: T.muted }}>
+                      {cl.submissionDate && <span>Closed {cl.submissionDate} · </span>}
+                      PM: {cl.projectManager}
+                      {cl.department && <span> · {cl.department}</span>}
+                    </div>
+                  </div>
+                  <span style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, whiteSpace: "nowrap" }}>✓ Closed</span>
+                </div>
+                <ApprovalLogPanel log={cl.approvalLog} />
+              </div>
+            ))}
           </div>
         </div>
       )}
