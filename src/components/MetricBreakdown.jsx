@@ -659,7 +659,7 @@ IPI  =  ${parts.reduce((s, p) => s + p.w * p.v, 0).toFixed(4)} ÷ ${sumW.toFixed
         <KV k="Latest snapshot (info)" v={snapshot ?? "—"} mono />
         <KV k="Band" v={sc.label} />
         <div style={{ fontSize: 10, color: PAL.muted, marginTop: 8 }}>
-          Generated {new Date().toLocaleString("en-GB")} · Source of truth: <code style={{ fontFamily: "monospace", background: PAL.surface2 }}>src/utils/metrics.js</code>
+          Generated {new Date().toLocaleString("en-GB")}
         </div>
       </Section>
     </Shell>
@@ -841,7 +841,6 @@ export const ProgressBreakdownModal = ({ project, onClose }) => {
         <div style={{ fontSize: 10.5, color: PAL.muted, lineHeight: 1.6 }}>
           Every number above can be reproduced by hand. The displayed {eff}% on the project hero
           equals the result of the rollup shown in section {wbsValue != null ? "02" : "01"} above.
-          Source of truth: <code style={{ fontFamily: "monospace", background: PAL.surface2 }}>calcProjectProgressFromWBS</code> and <code style={{ fontFamily: "monospace", background: PAL.surface2 }}>effectiveProgress</code> in <code style={{ fontFamily: "monospace", background: PAL.surface2 }}>src/utils/metrics.js</code>.
         </div>
         <div style={{ fontSize: 10, color: PAL.muted, marginTop: 8 }}>
           Generated {new Date().toLocaleString("en-GB")}
