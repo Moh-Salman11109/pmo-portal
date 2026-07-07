@@ -27,3 +27,28 @@ export const RAG_COLOR = {
 
 export const trendIcon  = t => t === "Improving" ? "↑" : t === "Worsening" ? "↓" : "→";
 export const trendColor = t => t === "Improving" ? "#15803d" : t === "Worsening" ? "#dc2626" : "#d97706";
+
+// Department identity colours — every shade derived from the Tree brand
+// palette (Canopy, Sea, Orange, Maroon, Moss, Lichen). This map is the
+// single source of truth for dept colour: it OVERRIDES whatever is stored
+// in mock data or the SP DeptColor column so brand compliance can't drift.
+export const DEPT_COLORS = {
+  strategy:    "#003932",   // Canopy
+  digital:     "#00b894",   // Sea, darkened for contrast on light surfaces
+  it:          "#0a5448",   // Deep canopy-teal
+  operations:  "#3a5547",   // Moss, dark
+  finance:     "#7a9485",   // Moss, mid
+  grc:         "#490300",   // Maroon
+  hr:          "#FF5000",   // Orange
+  quality:     "#b23800",   // Orange, deep
+  performance: "#7a2620",   // Maroon, warm
+};
+const DEPT_FALLBACKS = ["#003932", "#490300", "#FF5000", "#3a5547", "#0a5448", "#7a9485"];
+export const deptColor = (id) => {
+  const key = (id || "").toLowerCase();
+  if (DEPT_COLORS[key]) return DEPT_COLORS[key];
+  // Unknown dept (added later in SP): stable pick from the brand family
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) % 997;
+  return DEPT_FALLBACKS[h % DEPT_FALLBACKS.length];
+};

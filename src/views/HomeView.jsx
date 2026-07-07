@@ -42,6 +42,8 @@ import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark } f
 import { fmtSAR } from "../utils/format.js";
 import { Progress } from "../components/Progress.jsx";
 import { RiskBadge } from "../components/Badge.jsx";
+import { Ico, DeptTile } from "../components/Icon.jsx";
+import { deptColor } from "../utils/colors.js";
 
 const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, setRoute, loadedAt, userRole }) => {
   const bp = useBp();
@@ -435,7 +437,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
 
       {interventionFlags.length === 0 && (
         <div style={{ background: dark ? "rgba(22,163,74,0.08)" : "#f0fdf4", border: `1px solid ${dark ? "rgba(22,163,74,0.3)" : "#86efac"}`, borderRadius: 14, padding: "14px 24px", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 15 }}>✅</span>
+          <Ico name="check" size={15} color="#16a34a" strokeWidth={2} />
           <span style={{ fontWeight: 700, fontSize: 13, color: "#16a34a" }}>All clear</span>
           <span style={{ fontSize: 12, color: T.muted }}>— No projects flagged for intervention</span>
         </div>
@@ -443,7 +445,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       {interventionFlags.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: "4px solid #FF5000", borderRadius: 12, padding: "18px 22px", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 16 }}>🚨</span>
+            <Ico name="siren" size={15} color="#FF5000" />
             <span style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Requires Attention</span>
             <span style={{ fontSize: 12, color: T.muted, marginLeft: "auto" }}>{interventionFlags.length} flagged across 8 signals</span>
           </div>
@@ -462,7 +464,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                 onMouseEnter={e => e.currentTarget.style.transform = "translateX(2px)"}
                 onMouseLeave={e => e.currentTarget.style.transform = "translateX(0)"}
               >
-                <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{severity === "high" ? "🔴" : "🟡"}</span>
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: severity === "high" ? "#dc2626" : "#eab308", flexShrink: 0, marginTop: 4, display: "inline-block" }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.code} — {p.name}</div>
                   <div style={{ fontSize: 11, color: T.muted }}>{reasons.map((r, i) => (<span key={i}>{i > 0 && <span style={{ margin: "0 4px", opacity: 0.4 }}>·</span>}{r}</span>))}</div>
@@ -478,7 +480,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       {userRole !== ROLE_PM && watchlistRisks.length > 0 && (
         <details style={{ marginBottom: 14 }}>
           <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 22px", background: T.surface, borderLeft: "4px solid #490300", border: `1px solid ${T.border}`, borderLeftWidth: 4, borderLeftColor: "#490300", borderRadius: 12, fontSize: 14, fontWeight: 800, color: T.text, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 16 }}>👁</span>
+            <Ico name="eye" size={15} color="#490300" />
             <span>Risk Watchlist</span>
             {watchlistRisks.filter(r => r.level === "Critical").length > 0 && (
               <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "Critical").length} Critical</span>
@@ -557,7 +559,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Pending Approvals</h3>
           <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>Awaiting decision · oldest first</p>
           {pendingApprovals.length === 0 ? (
-            <div style={{ fontSize: 13, color: T.muted, padding: "8px 0" }}>✅ No pending approvals</div>
+            <div style={{ fontSize: 13, color: T.muted, padding: "8px 0", display: "flex", alignItems: "center", gap: 6 }}><Ico name="check" size={13} color="#16a34a" strokeWidth={2} /> No pending approvals</div>
           ) : (
             <>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -671,7 +673,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
               <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: stripe }} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 38, height: 38, background: T.bg, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{d.icon}</div>
+                  <DeptTile name={d.fullName || d.name} color={deptColor(d.id)} size={38} />
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{d.name}</div>
                     <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{stats.total} projects</div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useT } from "../theme.js";
+import { Ico } from "./Icon.jsx";
 import { calcProjectIPIFull, ipiColor, ipiColorDark } from "../utils/metrics.js";
 import { TODAY } from "../utils/dates.js";
 
@@ -231,7 +232,7 @@ const IPICalculator = ({ onClose, onBack }) => {
 
             {!result ? (
               <div style={{ flex: 1, padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13, border: `2px dashed ${T.border}`, borderRadius: 12, display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, minHeight: 280 }}>
-                <div style={{ fontSize: 32, opacity: 0.4 }}>🧮</div>
+                <div style={{ opacity: 0.4, display: "flex", justifyContent: "center" }}><Ico name="calc" size={30} /></div>
                 <div style={{ fontWeight: 600, color: T.text }}>Awaiting input</div>
                 <div style={{ fontSize: 12, lineHeight: 1.6 }}>Fill in the parameters on the left, then press <strong style={{ color: T.primary }}>Calculate IPI</strong>.</div>
               </div>

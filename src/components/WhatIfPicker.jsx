@@ -1,4 +1,5 @@
 import { useT } from "../theme.js";
+import { Ico } from "./Icon.jsx";
 
 // ============================================================================
 //  WHAT-IF PICKER — sidebar entry point for the What-If tool hub
@@ -15,7 +16,7 @@ import { useT } from "../theme.js";
 const TOOLS = [
   {
     key: "ipi",
-    icon: "🧮",
+    icon: "calc",
     title: "IPI Calculator",
     subtitle: "Simulate a project's IPI score",
     body:
@@ -25,7 +26,7 @@ const TOOLS = [
   },
   {
     key: "cost",
-    icon: "💰",
+    icon: "coins",
     title: "Cost Calculator",
     subtitle: "Total effort cost by role",
     body:
@@ -35,12 +36,12 @@ const TOOLS = [
   },
   {
     key: "roi",
-    icon: "📊",
+    icon: "trend",
     title: "ROI Calculator",
     subtitle: "Payback, break-even, and NPV",
     body:
       "Given total cost and expected annual benefit, get payback in months, " +
-      "cumulative ROI, and NPV over 3–10 years. Discounted at Tree's internal rate.",
+      "cumulative ROI, and NPV over 3–10 years at a discount rate you choose.",
     tag: "Business case",
   },
 ];
@@ -120,7 +121,7 @@ const WhatIfPicker = ({ onClose, onPick }) => {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 28 }}>{t.icon}</span>
+                <span style={{ display: "inline-flex", color: T.primary }}><Ico name={t.icon} size={26} strokeWidth={1.3} /></span>
                 <span style={{
                   fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase",
                   color: T.muted, background: T.bg, padding: "3px 8px", borderRadius: 6,

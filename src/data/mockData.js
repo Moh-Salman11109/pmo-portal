@@ -1,14 +1,14 @@
 // ─── MOCK DEPARTMENTS ─────────────────────────────────────────────
 export const MOCK_DEPARTMENTS = [
-  { id: "strategy",    name: "Strategy & PMO", icon: "⚡", color: "#003932" },
-  { id: "digital",     name: "Digital",        icon: "💻", color: "#0066cc" },
-  { id: "operations",  name: "Operations",     icon: "⚙️", color: "#7c3aed" },
-  { id: "grc",         name: "GRC",            icon: "🛡️", color: "#dc2626" },
-  { id: "hr",          name: "HR",             icon: "👥", color: "#d97706" },
-  { id: "it",          name: "IT",             icon: "🖥️", color: "#059669" },
-  { id: "finance",     name: "Finance",        icon: "💰", color: "#0891b2" },
-  { id: "quality",     name: "Quality",        icon: "✅", color: "#7c3aed" },
-  { id: "performance", name: "Performance",    icon: "📈", color: "#db2777" },
+  { id: "strategy",    name: "Strategy & PMO", color: "#003932" },
+  { id: "digital",     name: "Digital",        color: "#00b894" },
+  { id: "operations",  name: "Operations",     color: "#3a5547" },
+  { id: "grc",         name: "GRC",            color: "#490300" },
+  { id: "hr",          name: "HR",             color: "#FF5000" },
+  { id: "it",          name: "IT",             color: "#0a5448" },
+  { id: "finance",     name: "Finance",        color: "#7a9485" },
+  { id: "quality",     name: "Quality",        color: "#b23800" },
+  { id: "performance", name: "Performance",    color: "#7a2620" },
 ];
 
 // ─── MOCK PROJECTS ────────────────────────────────────────────────

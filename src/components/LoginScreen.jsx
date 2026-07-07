@@ -49,9 +49,10 @@ export default function LoginScreen() {
           <div style={{
             width: 64, height: 64, borderRadius: 16,
             background: "#003932", display: "flex", alignItems: "center",
-            justifyContent: "center", fontSize: 30, margin: "0 auto 16px",
+            justifyContent: "center", margin: "0 auto 16px",
+            color: "#00FFB3", fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px",
           }}>
-            📊
+            tree
           </div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#003932", letterSpacing: -0.5 }}>
             PMO Portal

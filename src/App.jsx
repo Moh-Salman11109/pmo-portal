@@ -37,18 +37,19 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, ReferenceLine, ReferenceArea, CartesianGrid } from "recharts";
-import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES, ICON_OPTIONS } from "./data/constants.js";
+import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_LOCKED } from "./roles.js";
 import { themeStore, useT, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
-import { statusColor, riskColor } from "./utils/colors.js";
+import { statusColor, riskColor, deptColor } from "./utils/colors.js";
 import { fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
 import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, plannedProgressAt, trackMilestoneDateChanges } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
+import { Ico, DeptTile } from "./components/Icon.jsx";
 import { Progress } from "./components/Progress.jsx";
 import IPICalculator from "./components/IPICalculator.jsx";
 import CostCalculator from "./components/CostCalculator.jsx";
@@ -428,9 +429,9 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
               <span style={{ background: s.border, color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, alignSelf: "flex-start" }}>{g.status}</span>
             </div>
             <div style={{ display: "flex", gap: 24, fontSize: 12, color: s.text }}>
-              {g.date     && <div>📅 Date: <strong>{g.date}</strong></div>}
-              {g.approver && <div>👤 Approver: <strong>{g.approver}</strong></div>}
-              {g.notes    && <div>💬 Notes: <strong>{g.notes}</strong></div>}
+              {g.date     && <div>Date: <strong>{g.date}</strong></div>}
+              {g.approver && <div>Approver: <strong>{g.approver}</strong></div>}
+              {g.notes    && <div>Notes: <strong>{g.notes}</strong></div>}
             </div>
             {(() => {
               const formUrl = def.id === "G1" ? FORM_URLS.intake
@@ -865,7 +866,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
           <div style={{ width: "min(600px, 90vw)", background: T.surface, borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", overflow: "hidden" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", padding: "14px 20px", borderBottom: `1px solid ${T.border}`, gap: 10 }}>
-              <span style={{ fontSize: 18, color: T.muted }}>🔍</span>
+              <span style={{ color: T.muted, display: "inline-flex" }}><Ico name="search" size={16} /></span>
               <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search projects by name, code, PM, or department…"
                 style={{ flex: 1, border: "none", outline: "none", fontSize: 15, background: "transparent", color: T.text }} />
@@ -883,7 +884,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
                       <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{p.name}</div>
                       <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
                         <span style={{ color: T.primary, fontWeight: 700 }}>{p.code}</span>
-                        {dept && <> · {dept.icon} {dept.name}</>}
+                        {dept && <> · {dept.name}</>}
                         {p.pm && <> · {p.pm}</>}
                       </div>
                     </div>
@@ -914,7 +915,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
         {/* Search Button */}
         <button onClick={() => setSearchOpen(true)} title="Search projects (Ctrl+K)"
           style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: isMobile ? "6px 10px" : "6px 12px", fontSize: 16, cursor: "pointer", color: T.muted, lineHeight: 1, display: "flex", alignItems: "center", gap: 4 }}>
-          🔍{!isMobile && <span style={{ fontSize: 12, color: T.muted }}>Search</span>}
+          <Ico name="search" size={14} />{!isMobile && <span style={{ fontSize: 12, color: T.muted }}>Search</span>}
         </button>
 
         {/* Data Source Badge — visible only in dev or when mock is active; auto-hidden in production + live SP */}
@@ -940,7 +941,7 @@ const Header = ({ title, subtitle, route, setRoute, dark, toggleDark, onMenuClic
             cursor: "pointer", transition: "all 0.2s",
             fontSize: 12, fontWeight: 600, color: T.text,
           }}>
-          <span style={{ fontSize: 15 }}>{dark ? "☀️" : "🌙"}</span>
+          <span style={{ display: "inline-flex", color: "inherit" }}><Ico name={dark ? "sun" : "moon"} size={14} /></span>
           {!isMobile && <span style={{ color: T.text }}>{dark ? "Light" : "Dark"}</span>}
           {!isMobile && (
             <div style={{ width: 32, height: 18, borderRadius: 10, background: dark ? T.accent : "#cbd5e1", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
@@ -1000,7 +1001,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
     const canViewGRC = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF || userRole === ROLE_GRC || userRole === ROLE_GRC_ADMIN || userRole === ROLE_EXEC || isGRCDeptHead;
     if (!canViewGRC) return (
       <div style={{ padding: 64, textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <div style={{ marginBottom: 16 }}><Ico name="lock" size={44} color="#dc2626" strokeWidth={1.2} /></div>
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>Access Restricted</div>
         <div style={{ fontSize: 13, color: T.muted }}>GRC Dashboard is only available to authorized GRC personnel.</div>
       </div>
@@ -1067,7 +1068,9 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
         {/* Top row */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, position: "relative", zIndex: 2, gap: 14, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, background: "rgba(0,255,179,0.18)", border: "1px solid rgba(0,255,179,0.35)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>{dept.icon}</div>
+            <div style={{ width: 52, height: 52, background: "rgba(0,255,179,0.18)", border: "1px solid rgba(0,255,179,0.35)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, fontWeight: 800, color: "#00FFB3", letterSpacing: "0.02em", flexShrink: 0 }}>
+              {(dept.name || "?").split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w[0] || "")).slice(0, 2).map(w => w[0].toUpperCase()).join("")}
+            </div>
             <div>
               <div style={{ color: "#00FFB3", fontSize: 11, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 3 }}>Department</div>
               <h1 style={{ fontSize: bp === "mobile" ? 22 : 28, fontWeight: 800, color: "white", lineHeight: 1.05, letterSpacing: "-0.5px", margin: 0 }}>{dept.name}</h1>
@@ -1126,7 +1129,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                 background: "rgba(255,80,0,0.10)", border: "1px solid rgba(255,80,0,0.30)", borderLeft: "3px solid #FF5000",
                 borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
               }}>
-                <span style={{ fontSize: 16 }}>🔴</span>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#dc2626", display: "inline-block", flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: "#ffa07a", fontSize: 9, fontWeight: 800, letterSpacing: "0.6px", textTransform: "uppercase", marginBottom: 2 }}>Top concern in this dept</div>
                   <div style={{ color: "white", fontSize: 12.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{topConcern.p.code} · {topConcern.p.name}</div>
@@ -1185,7 +1188,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
           {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
         <button onClick={() => setFilterRoadmap(v => !v)} style={{ background: filterRoadmap ? T.primary : T.surface, color: filterRoadmap ? "#fff" : T.muted, border: `1px solid ${filterRoadmap ? T.primary : T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontWeight: filterRoadmap ? 700 : 400 }}>
-          🗺 Roadmap{filterRoadmap ? " ✓" : ""}
+          <Ico name="map" size={13} /> Roadmap{filterRoadmap ? " ✓" : ""}
         </button>
         <button onClick={() => { const dm = Object.fromEntries([...(departments || [])].map(d => [d.id, d.name])); exportExcel(filtered, `${dept?.name?.replace(/\s+/g,"-") || "dept"}-${TODAY}.xls`, dm); }}
           style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: T.text, fontWeight: 600, whiteSpace: "nowrap" }}>
@@ -1348,13 +1351,13 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     return deriveProjectStatus(synthetic);
   }, [project, milestones, plannedEnd, gate, documents, budget, actualCost, autoProgress]);
   const TABS = [
-    { key: "Status",     icon: "📊" },
-    { key: "Financials", icon: "💰" },
-    { key: "Activities", icon: "🎯" },
-    { key: "Risks",      icon: "⚠️" },
-    { key: "Benefits",   icon: "📈" },
-    { key: "Documents",  icon: "📁" },
-    { key: "Note",       icon: "📝" },
+    { key: "Status",     icon: "gauge" },
+    { key: "Financials", icon: "coins" },
+    { key: "Activities", icon: "target" },
+    { key: "Risks",      icon: "alert" },
+    { key: "Benefits",   icon: "trend" },
+    { key: "Documents",  icon: "doc" },
+    { key: "Note",       icon: "note" },
   ];
 
   const handleSubmit = async () => {
@@ -1397,7 +1400,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
                   {derivedStatus.status}
                 </div>
                 <span style={{ fontSize: 10, color: T.muted, fontStyle: "italic", letterSpacing: "0.04em" }}>
-                  🤖 Auto · {derivedStatus.reason}
+                  Auto · {derivedStatus.reason}
                 </span>
               </div>
             );
@@ -1617,8 +1620,9 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
               style={{ padding: "10px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
                 background: "transparent", border: "none",
                 borderBottom: tab === t.key ? `2px solid ${T.primary}` : "2px solid transparent",
-                color: tab === t.key ? T.primary : T.muted }}>
-              {t.icon} {t.key}
+                color: tab === t.key ? T.primary : T.muted,
+                display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Ico name={t.icon} size={13} /> {t.key}
             </button>
           ))}
         </div>
@@ -2291,7 +2295,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             {(() => { const sla = getGateSLA(project); return <span style={{ background: sla && sla.days > 30 ? "rgba(220,38,38,0.35)" : "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>{project.gate}{sla && <span style={{ fontSize: 9, fontWeight: 800, opacity: 0.9 }}>· Day {sla.days}</span>}</span>; })()}
             <span style={{ background: "rgba(255,255,255,0.15)", color: T.headerText, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>{project.priority}</span>
             <TypeBadge type={project.projectType || "Project"} />
-            {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>🗺 Roadmap</span>}
+            {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 5 }}><Ico name="map" size={12} /> Roadmap</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {(() => {
@@ -2335,13 +2339,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
                     <button onClick={() => setShowUpdate(true)}
                       style={{ ...baseBtn, background: T.accent, color: T.accentText, border: "1px solid transparent", fontWeight: 800 }}>
-                      ✏️ Update
+                      <Ico name="pencil" size={13} /> Update
                     </button>
                   )}
                   {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF) && project.pmoStatus === "Submitted" && (
                     <button onClick={() => setRoute({ view: "actions" })}
                       style={{ ...baseBtn, background: "#f59e0b", color: "#fff", border: "1px solid transparent", fontWeight: 800 }}>
-                      ✅ Validate
+                      <Ico name="check" size={13} /> Validate
                     </button>
                   )}
                   {(userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && (
@@ -2352,7 +2356,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   )}
                   <button onClick={printProjectReport}
                     style={{ ...baseBtn, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontWeight: 600 }}>
-                    📄 Print Report
+                    <Ico name="printer" size={13} /> Print Report
                   </button>
                 </>
               );
@@ -2491,7 +2495,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               )}
               {ipiResult.dataReliability === "baseline_forming" && (
                 <div style={{ color: "#fbbf24", marginTop: 2 }}>
-                  ⏳ Baseline forming — IPI available after 7 days of activity
+                  Baseline forming — IPI available after 7 days of activity
                 </div>
               )}
             </div>
@@ -2525,7 +2529,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#92400e" }}>Update Returned by PMO — revision required</div>
             {project.pmoValidationNote && <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>{project.pmoValidationNote}</div>}
-            <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the ✏️ Update button above.</div>
+            <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the Update button above.</div>
           </div>
         </div>
       )}
@@ -2535,7 +2539,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 18px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: noteEdit ? 10 : 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 15 }}>📝</span>
+              <span style={{ display: "inline-flex", color: "#92400e" }}><Ico name="note" size={14} /></span>
               <span style={{ fontWeight: 700, fontSize: 12, color: "#92400e" }}>PMO Internal Notes</span>
               <span style={{ fontSize: 10, color: "#b45309", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "1px 7px" }}>not visible to PM</span>
             </div>
@@ -3109,8 +3113,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                         </span>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {m.weight > 1 && <span style={{ background: T.surface, color: T.muted, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, border: `1px solid ${T.border}` }}>W:{m.weight}</span>}
-                          {isOverdue && <span style={{ background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20, letterSpacing: "0.04em" }}>OVERDUE</span>}
-                          <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>{m.status}</span>
+                          {/* One calm pill carries the whole story — the coloured
+                              marker on the timeline is the only other signal. */}
+                          <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>{isOverdue ? `Overdue · ${m.status}` : m.status}</span>
                         </div>
                       </div>
                       <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>
@@ -3338,7 +3343,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           {/* Required Documents */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <span style={{ fontSize: 16 }}>⭐</span>
+              <span style={{ display: "inline-flex", color: T.primary }}><Ico name="star" size={15} /></span>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Required Documents</h3>
               <span style={{ fontSize: 11, background: "#fee2e2", color: "#dc2626", fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>Affects IPI</span>
             </div>
@@ -3367,8 +3372,12 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   const isReady = ["Approved","Final","Received","Current","Submitted"].includes(d.status);
                   const dueGate = d.requiredAtGate || 1;
                   const isFutureDue = dueGate > currentGate;
-                  // Lifecycle icon: ⚪ not due yet · ⚠️ due and missing · ✅ delivered
-                  const lifecycleIcon = isFutureDue ? "⚪" : isReady ? "✅" : "⚠️";
+                  // Lifecycle marker: hollow dot = not due yet · check = delivered · alert = due and missing
+                  const lifecycleIcon = isFutureDue
+                    ? <span style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.muted}`, display: "inline-block", flexShrink: 0 }} />
+                    : isReady
+                      ? <Ico name="check" size={14} color="#16a34a" strokeWidth={2} />
+                      : <Ico name="alert" size={14} color="#dc2626" />;
                   // Due-At chip: muted grey for future-gate; brand mint for currently due
                   const dueChip = isFutureDue
                     ? { bg: T.bg, text: T.muted, label: `Gate ${dueGate} · Not due yet` }
@@ -3377,7 +3386,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     <tr key={d.id} style={{ borderTop: `1px solid ${T.border}`, opacity: isFutureDue ? 0.62 : 1 }}>
                       <td style={{ padding: "12px 14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 16 }}>{lifecycleIcon}</span>
+                          <span style={{ display: "inline-flex", alignItems: "center" }}>{lifecycleIcon}</span>
                           {d.url
                             ? <a href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "none" }}>{d.name} ↗</a>
                             : <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</span>}
@@ -3402,7 +3411,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           {project.documents.filter(d => !d.required).length > 0 && (
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ fontSize: 16 }}>📎</span>
+                <span style={{ display: "inline-flex", color: T.muted }}><Ico name="paperclip" size={15} /></span>
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Additional Documents</h3>
                 <span style={{ fontSize: 11, background: T.bg, color: T.muted, fontWeight: 600, padding: "2px 8px", borderRadius: 10 }}>Does not affect IPI</span>
               </div>
@@ -3418,7 +3427,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
                       <td style={{ padding: "12px 14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 16 }}>📄</span>
+                          <span style={{ display: "inline-flex", color: T.muted }}><Ico name="doc" size={15} /></span>
                           {d.url
                             ? <a href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: T.accent, textDecoration: "none" }}>{d.name} ↗</a>
                             : <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{d.name}</span>}
@@ -3514,7 +3523,7 @@ const DeptCRUD = ({ projects }) => {
   const T = useT();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", id: "", icon: "⚡", color: "#003932" });
+  const [form, setForm] = useState({ name: "", id: "", color: "#003932" });
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -3525,13 +3534,13 @@ const DeptCRUD = ({ projects }) => {
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ name: "", id: "", icon: "⚡", color: "#003932" });
+    setForm({ name: "", id: "", color: "#003932" });
     setShowForm(true);
   };
 
   const openEdit = (d) => {
     setEditing(d.id);
-    setForm({ name: d.name, id: d.id, icon: d.icon, color: d.color });
+    setForm({ name: d.name, id: d.id, color: deptColor(d.id) });
     setShowForm(true);
   };
 
@@ -3542,10 +3551,10 @@ const DeptCRUD = ({ projects }) => {
       showToast("Department ID already exists", "error"); return;
     }
     if (editing) {
-      updateDept(editing, { name: form.name, icon: form.icon, color: form.color });
+      updateDept(editing, { name: form.name, color: form.color });
       showToast("Department updated ✓");
     } else {
-      addDept({ id: form.id.trim().toLowerCase().replace(/\s+/g, "-"), name: form.name, icon: form.icon, color: form.color });
+      addDept({ id: form.id.trim().toLowerCase().replace(/\s+/g, "-"), name: form.name, color: form.color });
       showToast("Department added ✓");
     }
     setShowForm(false);
@@ -3571,7 +3580,7 @@ const DeptCRUD = ({ projects }) => {
       {confirmDelete && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: T.surface, borderRadius: 16, padding: 32, width: 400, textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <div style={{ marginBottom: 12 }}><Ico name="alert" size={36} color="#dc2626" /></div>
             <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800 }}>Delete Department?</h3>
             <p style={{ margin: "0 0 24px", color: T.muted, fontSize: 13 }}>
               This will permanently remove <strong>{departments.find(d => d.id === confirmDelete)?.name}</strong>. This cannot be undone.
@@ -3595,7 +3604,7 @@ const DeptCRUD = ({ projects }) => {
 
             {/* Preview */}
             <div style={{ background: T.headerBg, borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 28 }}>{form.icon}</span>
+              <DeptTile name={form.name || "?"} color={form.color} size={40} solid />
               <div>
                 <div style={{ color: T.headerText, fontWeight: 700, fontSize: 15 }}>{form.name || "Department Name"}</div>
                 <div style={{ color: T.headerText, fontSize: 11, opacity: 0.7 }}>ID: {form.id || "dept-id"}</div>
@@ -3620,23 +3629,12 @@ const DeptCRUD = ({ projects }) => {
               )}
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 8 }}>Icon</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {ICON_OPTIONS.map(ic => (
-                    <button key={ic} onClick={() => setForm(p => ({ ...p, icon: ic }))}
-                      style={{ width: 38, height: 38, fontSize: 20, border: `2px solid ${form.icon === ic ? T.primary : T.border}`, borderRadius: 8, background: form.icon === ic ? T.badgeBg : T.surface, cursor: "pointer" }}>
-                      {ic}
-                    </button>
+                <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 8 }}>Colour <span style={{ fontWeight: 400 }}>(Tree brand palette)</span></label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {["#003932", "#0a5448", "#00b894", "#3a5547", "#7a9485", "#490300", "#7a2620", "#FF5000", "#b23800"].map(c => (
+                    <button key={c} onClick={() => setForm(p => ({ ...p, color: c }))}
+                      style={{ width: 32, height: 32, background: c, border: form.color === c ? `3px solid ${T.accent}` : "3px solid transparent", borderRadius: 9, cursor: "pointer", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)" }} />
                   ))}
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 4 }}>Color</label>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
-                    style={{ width: 44, height: 36, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", padding: 2 }} />
-                  <span style={{ fontSize: 12, color: T.muted }}>{form.color}</span>
                 </div>
               </div>
             </div>
@@ -3661,7 +3659,7 @@ const DeptCRUD = ({ projects }) => {
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: T.bg }}>
-            {["Icon", "Department Name", "ID", "Total Projects", "On Track", "Delayed", "Completed", "Health", "IPI", "Actions"].map(h => (
+            {["", "Department Name", "ID", "Total Projects", "On Track", "Delayed", "Completed", "Health", "IPI", "Actions"].map(h => (
               <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
@@ -3672,7 +3670,7 @@ const DeptCRUD = ({ projects }) => {
             const hasProjects = s.total > 0;
             return (
               <tr key={d.id} style={{ borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? "transparent" : T.bg }}>
-                <td style={{ padding: "12px 14px", fontSize: 22 }}>{d.icon}</td>
+                <td style={{ padding: "12px 14px" }}><DeptTile name={d.name} color={deptColor(d.id)} size={32} radius={8} /></td>
                 <td style={{ padding: "12px 14px", fontSize: 14, fontWeight: 700 }}>{d.name}</td>
                 <td style={{ padding: "12px 14px" }}>
                   <span style={{ fontSize: 11, background: "#e8f5f0", color: T.primary, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>{d.id}</span>
@@ -3821,7 +3819,7 @@ const ApprovalLogPanel = ({ log }) => {
       <button onClick={() => setOpen(o => !o)}
         style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "transparent", border: "none", padding: "9px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>
         <span style={{ fontWeight: 700 }}>
-          📜 Approval Log
+          <span style={{ display: "inline-flex", verticalAlign: "-2px", marginRight: 6, color: T.muted }}><Ico name="clipboard" size={13} /></span>Approval Log
           <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, color: T.muted }}>{entries.length} response{entries.length === 1 ? "" : "s"}</span>
         </span>
         <span style={{ fontSize: 11, color: T.muted }}>{open ? "▲ hide" : "▼ show"}</span>
@@ -3832,11 +3830,11 @@ const ApprovalLogPanel = ({ log }) => {
             if (e.raw) return <div key={i} style={{ fontSize: 11, color: T.muted, fontStyle: "italic" }}>{e.raw}</div>;
             const reject = /reject/i.test(e.decision);
             const chip = reject
-              ? { bg: "#fee2e2", text: "#991b1b", icon: "❌" }
-              : { bg: "#dcfce7", text: "#15803d", icon: "✅" };
+              ? { bg: "#fee2e2", text: "#991b1b", icon: <Ico name="alert" size={14} color="#dc2626" /> }
+              : { bg: "#dcfce7", text: "#15803d", icon: <Ico name="check" size={14} color="#16a34a" strokeWidth={2} /> };
             return (
               <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderTop: i > 0 ? `1px dashed ${T.border}` : "none" }}>
-                <span style={{ fontSize: 14, lineHeight: "20px", flexShrink: 0 }}>{e.emoji || chip.icon}</span>
+                <span style={{ lineHeight: "20px", flexShrink: 0, display: "inline-flex", alignItems: "center", height: 20 }}>{chip.icon}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{e.name}</span>
@@ -4008,7 +4006,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
         {/* Gate 1 — Project Request */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 20 }}>📋</div>
+          <div style={{ color: T.primary }}><Ico name="clipboard" size={20} /></div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 1 — Project Request</div>
             <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit a new project idea for PMO review and Strategy alignment</div>
@@ -4021,7 +4019,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
         {/* Gate 2 — Initiation */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 20 }}>🚀</div>
+          <div style={{ color: T.primary }}><Ico name="flag" size={20} /></div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 2 — Initiation</div>
             <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Charter for PMO review and stakeholder alignment</div>
@@ -4034,7 +4032,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
         {/* Gate 3 — Planning */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 20 }}>📎</div>
+          <div style={{ color: T.primary }}><Ico name="calendar" size={20} /></div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 3 — Planning</div>
             <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Plan and Resource Plan for PMO review</div>
@@ -4047,7 +4045,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
 
         {/* Gate 5 — Closure */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 20 }}>✅</div>
+          <div style={{ color: T.primary }}><Ico name="check" size={20} /></div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 5 — Closure</div>
             <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the closure document once the project is completed</div>
@@ -4118,7 +4116,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
         {pending.length === 0
           ? (
             <div style={{ textAlign: "center", padding: "28px 20px", color: T.muted, background: T.surface, borderRadius: 12, border: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+              <div style={{ marginBottom: 8, opacity: 0.45 }}><Ico name="inbox" size={26} /></div>
               <div style={{ fontSize: 13, fontWeight: 600 }}>No active requests</div>
               <div style={{ fontSize: 12, marginTop: 4 }}>Click "Start New Request" above to begin</div>
             </div>
@@ -4255,7 +4253,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
     const borderColor = urgency === "high" ? "#dc2626" : urgency === "medium" ? "#d97706" : T.border;
     return (
       <div onClick={onClick} style={{ background: T.surface, border: `1px solid ${borderColor}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: onClick ? "pointer" : "default", transition: "all 0.15s" }}>
-        <div style={{ fontSize: 22, flexShrink: 0 }}>{icon}</div>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", color: T.muted }}>{icon}</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{title}</div>
           <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{subtitle}</div>
@@ -4278,7 +4276,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
 
       {!hasAnything && (
         <div style={{ textAlign: "center", padding: "48px 20px", color: T.muted, background: T.surface, borderRadius: 14, border: `1px solid ${T.border}` }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+          <div style={{ marginBottom: 12 }}><Ico name="check" size={34} color="#16a34a" /></div>
           <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>All clear</div>
           <div style={{ fontSize: 13, marginTop: 6 }}>No pending actions at this time</div>
         </div>
@@ -4294,7 +4292,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingRequests.map(req => (
               <ActionCard key={req.id}
-                icon="📥"
+                icon={<Ico name="inbox" size={20} />}
                 title={req.title}
                 subtitle={`Requested by ${req.requestedBy} · ${req.daysInCurrentStage} day${req.daysInCurrentStage !== 1 ? "s" : ""} pending`}
                 rightContent={<RequestStatusBadge status={req.status} />}
@@ -4317,7 +4315,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
             {pendingGates.map(gs => (
               <div key={gs.id}>
                 <ActionCard
-                  icon="🔖"
+                  icon={<Ico name="flag" size={20} />}
                   title={`${gs.gateLabel} — ${gs.projectTitle}`}
                   subtitle={`Submitted by ${gs.submittedBy} · ${gs.daysAtGate} day${gs.daysAtGate !== 1 ? "s" : ""} at gate`}
                   rightContent={<RequestStatusBadge status={gs.status} />}
@@ -4342,7 +4340,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
             {pendingClosures.map(cl => (
               <div key={cl.id}>
                 <ActionCard
-                  icon="🔐"
+                  icon={<Ico name="lock" size={20} />}
                   title={`${cl.projectTitle}${cl.projectCode ? ` (${cl.projectCode})` : ""}`}
                   subtitle={`PM: ${cl.projectManager} · ${cl.daysInClosure} day${cl.daysInClosure !== 1 ? "s" : ""} in closure · Pending with ${cl.pendingWith || "—"}`}
                   rightContent={<RequestStatusBadge status={cl.status || "In Review"} />}
@@ -4365,7 +4363,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {overdueMilestones.slice(0, 10).map(m => (
               <ActionCard key={`${m.projectId}-${m.id}`}
-                icon="⏰"
+                icon={<Ico name="calendar" size={20} color="#dc2626" />}
                 title={m.name}
                 subtitle={`${m.projectName} · Due ${m.date} · Owner: ${m.owner}`}
                 urgency="high"
@@ -4386,7 +4384,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingValidations.map(p => (
               <div key={p.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ fontSize: 22, flexShrink: 0 }}>📋</div>
+                <div style={{ flexShrink: 0, display: "flex", alignItems: "center", color: T.muted }}><Ico name="clipboard" size={20} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
@@ -4589,7 +4587,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
       {confirmDeleteForever && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: T.surface, borderRadius: 16, padding: 32, width: 420, textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
+            <div style={{ marginBottom: 12 }}><Ico name="trash" size={34} color="#dc2626" /></div>
             <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: T.text }}>Delete Permanently?</h3>
             <p style={{ margin: "0 0 24px", color: T.muted, fontSize: 13 }}>
               This will permanently delete <strong>{projects.find(p => p.id === confirmDeleteForever)?.name}</strong>. This cannot be undone.
@@ -4608,7 +4606,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: T.text }}>Admin Panel</h1>
           <p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>Data Management & System Administration</p>
         </div>
-        <div style={{ background: "#fee2e2", color: "#991b1b", padding: "8px 16px", borderRadius: 10, fontSize: 12, fontWeight: 600 }}>🔒 Admin Access</div>
+        <div style={{ background: "#fee2e2", color: "#991b1b", padding: "8px 16px", borderRadius: 10, fontSize: 12, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}><Ico name="lock" size={13} /> Admin Access</div>
       </div>
 
       <Tab tabs={["Projects", "Archived", "Departments"]} active={adminTab} onSelect={setAdminTab} />
@@ -4747,7 +4745,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
             borderRadius: 12, padding: "14px 20px", marginBottom: 20,
             display: "flex", alignItems: "center", gap: 12,
           }}>
-            <span style={{ fontSize: 22 }}>🗄️</span>
+            <span style={{ display: "inline-flex", color: T.muted }}><Ico name="archive" size={20} /></span>
             <div>
               <div style={{ fontWeight: 700, color: themeStore.dark ? "#fed7aa" : "#9a3412", fontSize: 14 }}>Archived Projects — {archivedProjects.length} projects</div>
               <div style={{ fontSize: 12, color: themeStore.dark ? "rgba(254, 215, 170, 0.7)" : "#9a3412", opacity: themeStore.dark ? 1 : 0.75 }}>Archived projects are hidden from all dashboards and reports. You can restore them anytime or delete permanently.</div>
@@ -4756,7 +4754,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
 
           {archivedProjects.length === 0 ? (
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 48, textAlign: "center" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+              <div style={{ marginBottom: 12 }}><Ico name="check" size={34} color="#16a34a" /></div>
               <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>No Archived Projects</div>
               <div style={{ fontSize: 13, color: T.muted }}>When you archive a project it will appear here</div>
             </div>
@@ -4789,7 +4787,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                         {/* Delete Forever */}
                         <button onClick={() => setConfirmDeleteForever(p.id)}
                           style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-                          🗑 Delete Forever
+                          Delete Forever
                         </button>
                       </div>
                     </td>
@@ -4961,7 +4959,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             {/* Card header */}
             <div style={{ background: T.headerBg, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 22 }}>{d.icon}</span>
+                <DeptTile name={d.name} color={deptColor(d.id)} size={34} radius={9} solid />
                 <div>
                   <div style={{ color: T.headerText, fontWeight: 800, fontSize: 14 }}>{d.name}</div>
                   <div style={{ color: T.headerText, fontSize: 11, opacity: 0.7 }}>{d.stats.total} projects</div>
@@ -5199,7 +5197,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
           {PROJECT_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
         <button onClick={() => setFilterRoadmap(v => !v)} style={{ background: filterRoadmap ? T.primary : T.surface, color: filterRoadmap ? "#fff" : T.muted, border: `1px solid ${filterRoadmap ? T.primary : T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontWeight: filterRoadmap ? 700 : 400 }}>
-          🗺 Roadmap{filterRoadmap ? " ✓" : ""}
+          <Ico name="map" size={13} /> Roadmap{filterRoadmap ? " ✓" : ""}
         </button>
         <button onClick={() => setShowCompleted(v => !v)} style={{ background: showCompleted ? T.btnPrimBg : T.surface, color: showCompleted ? T.btnPrimText : T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
           {showCompleted ? "Hide Completed" : `+ ${completedCount} Completed`}
@@ -5253,7 +5251,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
           <tbody>
             {sorted.length === 0 && (
               <tr><td colSpan={99} style={{ padding: "48px 20px", textAlign: "center" }}>
-                <div style={{ fontSize: 28, opacity: 0.35, marginBottom: 10 }}>📭</div>
+                <div style={{ opacity: 0.4, marginBottom: 10 }}><Ico name="inbox" size={26} /></div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>
                   {userRole === ROLE_PM && active.length === 0 ? "No projects assigned to you yet" : "No projects match the current filters"}
                 </div>
@@ -5285,8 +5283,8 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   </td>
                   <td style={{ padding: "12px 14px" }}><TypeBadge type={p.projectType || "Internal Project"} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span>{dept?.icon}</span><span style={{ color: T.muted }}>{dept?.name}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: deptColor(p.deptId), flexShrink: 0 }} /><span style={{ color: T.muted }}>{dept?.name}</span>
                     </span>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.pm}</td>
@@ -5400,7 +5398,7 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove, move }) => {
     }}>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
         <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: "0.06em" }}>
-          {isActivity ? "🔸 ACTIVITY" : "📍 MILESTONE"}
+          {isActivity ? "ACTIVITY" : "MILESTONE"}
         </span>
         <input value={item.name} onChange={e => upd(item.id, "name", e.target.value)}
           placeholder={isActivity ? "Activity name *" : "Milestone name *"}
@@ -5889,12 +5887,12 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
   };
 
   const STEPS = [
-    { label: "Basic Info", icon: "📋" },
-    { label: "Timeline & Budget", icon: "📅" },
-    { label: "Activities", icon: "🎯" },
-    { label: "Risks & Issues", icon: "⚠️" },
-    { label: "Documents", icon: "📄" },
-    { label: "Updates", icon: "📝" },
+    { label: "Basic Info", icon: "clipboard" },
+    { label: "Timeline & Budget", icon: "calendar" },
+    { label: "Activities", icon: "target" },
+    { label: "Risks & Issues", icon: "alert" },
+    { label: "Documents", icon: "doc" },
+    { label: "Updates", icon: "note" },
   ];
 
   const s = fInputStyle(T, false);
@@ -5946,7 +5944,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         <div onClick={() => set("isRoadmap", !form.isRoadmap)}
           style={{ background: form.isRoadmap ? `${T.primary}18` : T.bg, border: `1.5px solid ${form.isRoadmap ? T.primary : T.border}`, borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", transition: "all 0.15s" }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>🗺 Roadmap Project</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, display: "flex", alignItems: "center", gap: 6 }}><Ico name="map" size={14} /> Roadmap Project</div>
             <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Tag this project as part of the strategic roadmap — enables Roadmap filter across all views</div>
           </div>
           <div style={{ width: 44, height: 24, borderRadius: 12, background: form.isRoadmap ? T.primary : T.border, position: "relative", flexShrink: 0, transition: "background 0.2s", marginLeft: 16 }}>
@@ -6149,8 +6147,9 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
             style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
               background: step === i ? T.primary : T.bg,
               color: step === i ? (T.btnPrimText || "#fff") : T.muted,
-              border: step === i ? "none" : `1px solid ${T.border}` }}>
-            {st.icon} {st.label}
+              border: step === i ? "none" : `1px solid ${T.border}`,
+              display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Ico name={st.icon} size={13} /> {st.label}
           </button>
         ))}
       </div>
@@ -6162,7 +6161,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 
       {saveError && (
         <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 16px", marginTop: 12, color: "#991b1b", fontSize: 13 }}>
-          ⚠️ {saveError}
+          ⚠ {saveError}
         </div>
       )}
 
@@ -6567,7 +6566,7 @@ export default function App() {
   if (loadError) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: activeT.bg, flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 40 }}>⚠️</div>
+        <Ico name="alert" size={36} color="#dc2626" />
         <h2 style={{ color: activeT.text, margin: 0 }}>Failed to load data</h2>
         <p style={{ color: activeT.muted, fontSize: 13, margin: 0 }}>{loadError}</p>
         <button onClick={() => window.location.reload()} style={{ marginTop: 8, padding: "8px 20px", background: activeT.primary, color: activeT.btnPrimText || "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Retry</button>
@@ -6579,7 +6578,7 @@ export default function App() {
   if (userRole === ROLE_LOCKED) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: activeT.bg, flexDirection: "column", gap: 16, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
-        <div style={{ fontSize: 52 }}>🔒</div>
+        <Ico name="lock" size={44} color="#dc2626" strokeWidth={1.2} />
         <div style={{ fontWeight: 900, fontSize: 20, color: activeT.text }}>Account Deactivated</div>
         <div style={{ fontSize: 13, color: activeT.muted, textAlign: "center", maxWidth: 340, lineHeight: 1.6 }}>
           Your account has been deactivated. Please contact the PMO team to restore access.
@@ -6596,12 +6595,12 @@ export default function App() {
       <div style={{ height: "100vh", overflowY: "auto", fontFamily: "'Segoe UI', system-ui, sans-serif", background: activeT.bg, color: activeT.text }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: activeT.headerBg, borderBottom: `1px solid ${activeT.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 20 }}>🛡️</span>
+            <span style={{ display: "inline-flex", color: activeT.headerText }}><Ico name="shield" size={18} /></span>
             <span style={{ fontWeight: 900, fontSize: 15, color: activeT.headerText }}>GRC Portal</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 12, color: activeT.headerText, opacity: 0.7 }}>{currentUserName || currentUserEmail}</span>
-            <button onClick={toggleDark} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", color: activeT.headerText }}>{dark ? "☀️" : "🌙"}</button>
+            <button onClick={toggleDark} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: activeT.headerText, display: "inline-flex", alignItems: "center" }}><Ico name={dark ? "sun" : "moon"} size={14} /></button>
           </div>
         </div>
         <GRCDashboard canEdit={userRole === ROLE_GRC_ADMIN} />

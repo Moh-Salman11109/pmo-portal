@@ -19,8 +19,3 @@ export const PROJECT_TYPES = [
   "Internal Project",
 ];
 
-// ─── DEPARTMENT ICON OPTIONS ─────────────────────────────────────
-export const ICON_OPTIONS = [
-  "⚡","💻","⚙️","🛡️","👥","🖥️","💰","✅","📈",
-  "🏗️","📊","🔬","📣","🤝","🌐","🔒","📦","🧪","🏆","💡",
-];

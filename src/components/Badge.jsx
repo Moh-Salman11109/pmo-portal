@@ -3,14 +3,15 @@ import { statusColor, riskColor } from "../utils/colors.js";
 
 export const TypeBadge = ({ type }) => {
   const styles = {
-    "Business Project":   { bg: "#dbeafe", text: "#1e40af", icon: "🔵" },
-    "Enterprise Project": { bg: "#ede9fe", text: "#6d28d9", icon: "🟣" },
-    "Internal Project":   { bg: "#dcfce7", text: "#15803d", icon: "🟢" },
+    "Business Project":   { bg: "#dbeafe", text: "#1e40af", dot: "#3b82f6" },
+    "Enterprise Project": { bg: "#ede9fe", text: "#6d28d9", dot: "#8b5cf6" },
+    "Internal Project":   { bg: "#dcfce7", text: "#15803d", dot: "#16a34a" },
   };
   const s = styles[type] || styles["Internal Project"];
   return (
-    <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>
-      {s.icon} {type}
+    <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
+      {type}
     </span>
   );
 };

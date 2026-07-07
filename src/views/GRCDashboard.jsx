@@ -5,6 +5,7 @@ import { useBp } from "../hooks/useBp.js";
 import { isUsingMock } from "../services/sharepoint.js";
 import { acquireSpToken } from "../services/auth.js";
 import { RAG_COLOR, trendIcon, trendColor } from "../utils/colors.js";
+import { Ico } from "../components/Icon.jsx";
 import { env } from "../config/runtimeEnv.js";
 
 const GRC_SP_SITE = env.VITE_GRC_SP_SITE_URL || "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
@@ -145,7 +146,7 @@ const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
             RAG Status
             {autoRAG && (
               <span style={{ fontWeight: 400, color: T.muted, fontSize: 10, marginLeft: 6 }}>
-                💡 auto: {autoRAG}
+                auto: {autoRAG}
               </span>
             )}
           </label>
@@ -1204,8 +1205,8 @@ const GRCDashboard = ({ canEdit = false }) => {
       </tr>`;
       const narrativeRow = hasNarrative ? `<tr class="kri-narrative"><td colspan="6">
         <div class="narrative-grid">
-          ${r.Justification ? `<div class="narrative-cell"><div class="narrative-label">💡 Justification</div><div class="narrative-body">${esc(r.Justification)}</div></div>` : ""}
-          ${r.ActionPlan ? `<div class="narrative-cell action"><div class="narrative-label">🎯 Action Plan</div><div class="narrative-body">${esc(r.ActionPlan)}</div></div>` : ""}
+          ${r.Justification ? `<div class="narrative-cell"><div class="narrative-label">Justification</div><div class="narrative-body">${esc(r.Justification)}</div></div>` : ""}
+          ${r.ActionPlan ? `<div class="narrative-cell action"><div class="narrative-label">Action Plan</div><div class="narrative-body">${esc(r.ActionPlan)}</div></div>` : ""}
         </div>
       </td></tr>` : "";
       return mainRow + narrativeRow;
@@ -1631,7 +1632,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       <!-- ════════════ COVER ════════════ -->
       <div class="cover">
         <div class="crest">
-          <div class="icon">🛡</div>
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8l5.2 1.9v4.1c0 3.3-2.3 5.6-5.2 6.6-2.9-1-5.2-3.3-5.2-6.6V3.7z"/></svg></div>
           <div>
             <h1>GRC Risk Intelligence<br><em>Quarterly Report</em></h1>
             <div class="sub">Key Risk Indicators · Risk Register · Risk Appetite · Audit Findings · Corrective Actions</div>
@@ -1655,7 +1656,7 @@ const GRCDashboard = ({ canEdit = false }) => {
           <!-- Card 1 — KEY RISK INDICATORS -->
           <div class="es-card indicators">
             <div class="es-topic">
-              <span class="es-icon">📊</span>
+              <span class="es-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 13.5h11 M5 13.5V8.2 M8 13.5V4.5 M11 13.5V9.8"/></svg></span>
               <span class="es-topic-name">Key Risk Indicators</span>
             </div>
             <div class="es-headline-row">
@@ -1704,7 +1705,7 @@ const GRCDashboard = ({ canEdit = false }) => {
           <!-- Card 3 — AUDIT & ACTIONS -->
           <div class="es-card audit">
             <div class="es-topic">
-              <span class="es-icon">🔍</span>
+              <span class="es-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2l3.4 3.4"/></svg></span>
               <span class="es-topic-name">Audit &amp; Actions</span>
             </div>
             <div class="es-headline-row">
@@ -1802,7 +1803,7 @@ const GRCDashboard = ({ canEdit = false }) => {
 
   if (loading) return (
     <div style={{ padding: 64, textAlign: "center", color: T.muted }}>
-      <div style={{ fontSize: 36, marginBottom: 12 }}>🛡️</div>
+      <div style={{ marginBottom: 12 }}><Ico name="shield" size={34} color="#490300" /></div>
       <div style={{ fontWeight: 700, fontSize: 15 }}>Loading GRC Dashboard…</div>
     </div>
   );
@@ -1821,7 +1822,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <span style={{ fontSize: 22 }}>🛡️</span>
+              <span style={{ display: "inline-flex", color: "#fff" }}><Ico name="shield" size={20} /></span>
               <h1 style={{ margin: 0, fontSize: bp === "mobile" ? 17 : 21, fontWeight: 900 }}>GRC Risk Intelligence Dashboard</h1>
             </div>
             <p style={{ margin: 0, opacity: 0.65, fontSize: 12 }}>Key Risk Indicators · Risk Register · Appetite Monitoring</p>
@@ -1831,7 +1832,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             <div style={{ fontSize: 12, fontWeight: 600 }}>{new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</div>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={load} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>↻ Refresh</button>
-              <button onClick={printGRCReport} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>🖨 Print Report</button>
+              <button onClick={printGRCReport} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>Print Report</button>
               {canEdit && (
                 <button onClick={() => setGlobalEdit(g => !g)} style={{ background: globalEdit ? "#00ffb3" : "rgba(255,255,255,0.1)", border: globalEdit ? "none" : "1px solid rgba(255,255,255,0.25)", color: globalEdit ? "#061210" : "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, fontWeight: globalEdit ? 800 : 400, cursor: "pointer" }}>
                   {globalEdit ? "✓ Edit Mode ON" : "✎ Global Edit"}
@@ -1939,7 +1940,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         {/* ── Filter bar ── */}
         {kriWithLatest.length > 0 && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${T.border}` }}>
-            <input value={kriSearch} onChange={e => setKriSearch(e.target.value)} placeholder="🔍 Search name, ID, metric, source…"
+            <input value={kriSearch} onChange={e => setKriSearch(e.target.value)} placeholder="Search name, ID, metric, source…"
               style={{ flex: 1, minWidth: 220, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, outline: "none", background: T.inputBg, color: T.inputText }} />
             <MultiSelect label="Department" options={deptOptions} selected={filterDept} onChange={setFilterDept} />
             <MultiSelect label="Category"   options={catOptions}  selected={filterCat}  onChange={setFilterCat} />
@@ -1983,7 +1984,7 @@ const GRCDashboard = ({ canEdit = false }) => {
                           <span>{kri.KRIID || "—"}</span>
                           {kri.ReportingFrequency && kri.ReportingFrequency !== "Monthly" && (
                             <span style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.muted, fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
-                              🗓 {kri.ReportingFrequency}
+                              {kri.ReportingFrequency}
                             </span>
                           )}
                         </div>
@@ -2028,7 +2029,7 @@ const GRCDashboard = ({ canEdit = false }) => {
                             </button>
                             <button onClick={() => deleteKRI(kri)} disabled={saving}
                               style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", color: "#991b1b", whiteSpace: "nowrap", opacity: saving ? 0.5 : 1 }}>
-                              🗑
+                              <Ico name="trash" size={13} />
                             </button>
                           </div>
                         </td>
@@ -2053,7 +2054,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         return (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text }}>📈 Trend — {kri?.Title}</h3>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text }}>Trend — {kri?.Title}</h3>
               <button onClick={() => setSelectedKRI(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer", color: T.muted }}>✕ Close</button>
             </div>
             <ResponsiveContainer width="100%" height={220}>
@@ -2099,13 +2100,13 @@ const GRCDashboard = ({ canEdit = false }) => {
                           <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${T.border}`, display: "grid", gridTemplateColumns: r.Justification && r.ActionPlan ? "1fr 1fr" : "1fr", gap: 12 }}>
                             {r.Justification && (
                               <div>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>💡 Justification</div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>Justification</div>
                                 <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.Justification}</div>
                               </div>
                             )}
                             {r.ActionPlan && (
                               <div>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>🎯 Action Plan</div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>Action Plan</div>
                                 <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.ActionPlan}</div>
                               </div>
                             )}
@@ -2124,7 +2125,7 @@ const GRCDashboard = ({ canEdit = false }) => {
       {/* ── Risk Heatmap ── */}
       {riskReg.filter(r => r.RiskStatus !== "Closed").length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 24 }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: T.text }}>🔥 Risk Heatmap</h3>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: T.text }}>Risk Heatmap</h3>
           <p style={{ margin: "0 0 20px", fontSize: 12, color: T.muted }}>Active risks by Likelihood × Impact. Click a populated cell to see risk names.</p>
           <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
             {/* Grid */}
@@ -2224,7 +2225,7 @@ const GRCDashboard = ({ canEdit = false }) => {
 
         {/* Risk Appetite */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-          <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 800, color: T.text }}>🎯 Risk Appetite by Category</h3>
+          <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 800, color: T.text }}>Risk Appetite by Category</h3>
           {appetite.length === 0
             ? <p style={{ color: T.muted, fontSize: 13 }}>No appetite data.</p>
             : appetite.map(a => {
@@ -2274,7 +2275,7 @@ const GRCDashboard = ({ canEdit = false }) => {
         {/* Top Risks */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>⚠️ {globalEdit ? "All Risks" : "Top Risks by Score"}</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>{globalEdit ? "All Risks" : "Top Risks by Score"}</h3>
             {globalEdit && (
               <button onClick={() => setNewRiskModal(true)}
                 style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
@@ -2379,7 +2380,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             {/* ── Audit Findings ── */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>🔍 Audit Findings Summary</h3>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>Audit Findings Summary</h3>
                 {globalEdit && (
                   <button onClick={() => { setSaveErr(""); setAfNewModal(true); }}
                     style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
@@ -2430,7 +2431,7 @@ const GRCDashboard = ({ canEdit = false }) => {
             {/* ── Corrective Actions ── */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>✅ Corrective Actions Progress</h3>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text }}>Corrective Actions Progress</h3>
                 {globalEdit && (
                   <button onClick={() => { setSaveErr(""); setCaNewModal(true); }}
                     style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>

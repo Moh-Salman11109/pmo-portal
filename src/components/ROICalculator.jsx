@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useT } from "../theme.js";
+import { Ico } from "./Icon.jsx";
 
 // ============================================================================
 //  ROI CALCULATOR — modal accessible from the What-If hub
@@ -251,7 +252,7 @@ const ROICalculator = ({ onClose, onBack }) => {
                 border: `2px dashed ${T.border}`, borderRadius: 12,
                 display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, minHeight: 320,
               }}>
-                <div style={{ fontSize: 32, opacity: 0.4 }}>📊</div>
+                <div style={{ opacity: 0.4, display: "flex", justifyContent: "center" }}><Ico name="trend" size={30} /></div>
                 <div style={{ fontWeight: 600, color: T.text }}>Awaiting input</div>
                 <div style={{ fontSize: 12, lineHeight: 1.6 }}>
                   Enter cost, expected annual benefit, and duration, then press
