@@ -408,7 +408,7 @@ const DocGenerator = ({ onClose, currentUserName }) => {
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: i > 0 ? `1px solid ${T.border}` : "none", background: i % 2 ? T.bg : "transparent" }}>
               <span style={{ flex: 1, fontSize: 11.5, fontWeight: i === 0 ? 800 : 500, color: T.text }}>{q}</span>
               {["yes", "no"].map(v => (
-                <button key={v} onClick={() => setC("ias", charter.ias.map((x, xi) => xi === i ? v : x))}
+                <button key={v} onClick={() => setCharter(p => ({ ...p, ias: p.ias.map((x, xi) => xi === i ? v : x) }))}
                   style={{ background: charter.ias[i] === v ? T.primary : T.bg, color: charter.ias[i] === v ? "#fff" : T.muted, border: `1px solid ${charter.ias[i] === v ? T.primary : T.border}`, borderRadius: 7, padding: "4px 13px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                   {v === "yes" ? "Yes" : "No"}
                 </button>
