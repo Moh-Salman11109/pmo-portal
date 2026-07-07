@@ -337,16 +337,16 @@ const DocGenerator = ({ onClose, currentUserName }) => {
               <div>
                 <div style={{ color: T.accent, fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>Document Generator</div>
                 <div style={{ color: T.headerText, fontWeight: 900, fontSize: 19 }}>Generate a governance document</div>
-                <div style={{ color: T.headerText, opacity: 0.65, fontSize: 12, marginTop: 3 }}>Fill a form, print, save as PDF — no more chasing templates.</div>
+                <div style={{ color: T.headerText, opacity: 0.65, fontSize: 12, marginTop: 3 }}>Fill a form, print, save as PDF.</div>
               </div>
               <button onClick={onClose} style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: T.headerText, fontSize: 14 }}>✕</button>
             </div>
           </div>
           <div style={{ padding: "22px 28px 26px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {card("charter", "clipboard", "Project Charter", "The official Tree charter, filled by you",
-              "All seven template sections — purpose, scope, business case, IAS 38 capitalization, milestones, risks, acceptance — plus signature blocks.")}
-            {card("plan", "calendar", "Project Plan", "Phase Gantt + milestones + resource plan",
-              "Pick a start and end month, define phases and milestones, list the resource plan, and get a board-ready timeline document.")}
+            {card("charter", "clipboard", "Project Charter", "Fill the form, print the charter",
+              "Sections 1–7 of the Tree charter template, with signature blocks.")}
+            {card("plan", "calendar", "Project Plan", "Fill the form, print the plan",
+              "Phase timeline, milestones, and resource plan across your chosen months.")}
           </div>
         </div>
       </div>
