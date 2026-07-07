@@ -55,6 +55,7 @@ import IPICalculator from "./components/IPICalculator.jsx";
 import CostCalculator from "./components/CostCalculator.jsx";
 import ROICalculator from "./components/ROICalculator.jsx";
 import WhatIfPicker from "./components/WhatIfPicker.jsx";
+import DocGenerator from "./components/DocGenerator.jsx";
 import { IPIBreakdownModal, ProgressBreakdownModal } from "./components/MetricBreakdown.jsx";
 import GRCDashboard from "./views/GRCDashboard.jsx";
 import HomeView from "./views/HomeView.jsx";
@@ -550,6 +551,7 @@ const NavIcon = ({ name, size = 16 }) => {
     check:    <><circle cx="8" cy="8" r="5.5"/><path d="m5.7 8.2 1.6 1.6 3-3.4"/></>,
     gear:     <><circle cx="8" cy="8" r="2"/><path d="M8 2.8v1.4M8 11.8v1.4M2.8 8h1.4M11.8 8h1.4M4.3 4.3l1 1M10.7 10.7l1 1M11.7 4.3l-1 1M5.3 10.7l-1 1"/></>,
     sliders:  <><path d="M3 5h10M3 11h10"/><circle cx="6" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="10" cy="11" r="1.6" fill="currentColor" stroke="none"/></>,
+    doc:      <><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.3h4M6 10.8h2.5"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -575,7 +577,7 @@ const DeptGlyph = ({ name }) => {
   );
 };
 
-const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, userDeptId, open, onClose, onOpenWhatIf }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, userDeptId, open, onClose, onOpenWhatIf, onOpenDocGen }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -630,6 +632,9 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
   // What-If tools are planning aids, not admin surface — PMO Staff do the
   // day-to-day estimation work, so they get them too (role-audit finding).
   const canWhatIf = isAdmin || userRole === ROLE_PMO_STAFF;
+  // Doc Generator is FOR the PMs (self-service charters/plans instead of
+  // template e-mails), so PMs get it alongside the PMO roles.
+  const canDocGen = isAdmin || userRole === ROLE_PMO_STAFF || isPM;
 
   // The projects route is visible to EVERY role. For a PM the projects prop
   // is already server-filtered to their own projects (getProjects role=pm),
@@ -685,35 +690,39 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
           {/* What-If Hub — single sidebar entry that opens a picker with
               IPI / Cost / ROI calculators. Replaces the two separate sidebar
               buttons; keeps the sidebar clean as we add more planning tools. */}
-          {canWhatIf && onOpenWhatIf && (
+          {((canWhatIf && onOpenWhatIf) || (canDocGen && onOpenDocGen)) && (
             /* Designed INTO the sidebar's own language instead of imported
                from elsewhere: a micro section header (same idiom as
-               "DEPARTMENTS" below) and a quietly recessed tool tray — one
-               step darker than the sidebar with a mint hairline, so it
-               reads as a built-in instrument rather than a marketing
-               button. Hover simply raises the hairline and warms the tray. */
+               "DEPARTMENTS" below) and quietly recessed tool trays — one
+               step darker than the sidebar with a mint hairline, so they
+               read as built-in instruments rather than marketing buttons. */
             <>
               <div style={{ margin: "14px 0 6px", padding: "0 12px", fontSize: 10, color: "rgba(161,185,171,0.5)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Planning
               </div>
-              <button onClick={() => { onOpenWhatIf(); if (!isDesktop) onClose(); }} style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
-                border: "1px solid rgba(0,255,179,0.16)",
-                background: "rgba(0,0,0,0.22)",
-                color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                marginBottom: 2, transition: "all 0.18s", textAlign: "left",
-              }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = "rgba(0,255,179,0.10)";
-                  e.currentTarget.style.borderColor = "rgba(0,255,179,0.40)";
+              {[
+                ...(canWhatIf && onOpenWhatIf ? [{ icon: "sliders", label: "What-If Tools", onClick: onOpenWhatIf }] : []),
+                ...(canDocGen && onOpenDocGen ? [{ icon: "doc", label: "Doc Generator", onClick: onOpenDocGen }] : []),
+              ].map(tool => (
+                <button key={tool.label} onClick={() => { tool.onClick(); if (!isDesktop) onClose(); }} style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
+                  border: "1px solid rgba(0,255,179,0.16)",
+                  background: "rgba(0,0,0,0.22)",
+                  color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  marginBottom: 4, transition: "all 0.18s", textAlign: "left",
                 }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = "rgba(0,0,0,0.22)";
-                  e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)";
-                }}>
-                <NavIcon name="sliders" />
-                <span style={{ flex: 1 }}>What-If Tools</span>
-              </button>
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = "rgba(0,255,179,0.10)";
+                    e.currentTarget.style.borderColor = "rgba(0,255,179,0.40)";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = "rgba(0,0,0,0.22)";
+                    e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)";
+                  }}>
+                  <NavIcon name={tool.icon} />
+                  <span style={{ flex: 1 }}>{tool.label}</span>
+                </button>
+              ))}
             </>
           )}
           {/* Dept Heads see only their own department(s) — their project data
@@ -6201,6 +6210,7 @@ export default function App() {
   // · "cost" · "roi". Back arrow in a calculator returns to "picker"; ×
   // returns to null.
   const [whatIfView, setWhatIfView] = useState(null);
+  const [docGenOpen, setDocGenOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
@@ -6617,7 +6627,8 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} />
+      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => setDocGenOpen(true)} />
+      {docGenOpen && <DocGenerator onClose={() => setDocGenOpen(false)} currentUserName={currentUserName} />}
       {whatIfView === "picker" && <WhatIfPicker  onClose={() => setWhatIfView(null)} onPick={(k) => setWhatIfView(k)} />}
       {whatIfView === "ipi"    && <IPICalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
       {whatIfView === "cost"   && <CostCalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
