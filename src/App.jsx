@@ -5259,7 +5259,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                 </div>
                 <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.7, maxWidth: 460, margin: "0 auto" }}>
                   {userRole === ROLE_PM && active.length === 0
-                    ? "A project appears here when its PM Email field matches the email you sign in with. If you expect to see a project, ask the PMO to verify the PM Email on that project."
+                    ? "A project appears here when its PM Email field includes the email you sign in with (multiple PMs can be listed, comma-separated). If you expect to see a project, ask the PMO to verify the PM Email on that project."
                     : "Try clearing the search box or resetting the filters above."}
                 </div>
               </td></tr>
@@ -5919,7 +5919,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
           </FField>
           <FField label="Project Type"><select value={form.projectType} onChange={e => set("projectType", e.target.value)} style={ss}>{PROJECT_TYPES.map(o => <option key={o}>{o}</option>)}</select></FField>
           <FField label="Project Manager" required error={errors.pm}><input value={form.pm} onChange={e => set("pm", e.target.value)} placeholder="Full name" style={sErr("pm")} /></FField>
-          <FField label="PM Email"><input value={form.pmEmail || ""} onChange={e => set("pmEmail", e.target.value)} placeholder="pm@tree.com.sa" type="email" style={s} /></FField>
+          <FField label="PM Email(s)"><input value={form.pmEmail || ""} onChange={e => set("pmEmail", e.target.value)} placeholder="pm@tree.com.sa, co-pm@tree.com.sa" type="email" multiple style={s} /></FField>
           <FField label="Sponsor"><input value={form.sponsor} onChange={e => set("sponsor", e.target.value)} placeholder="Full name" style={s} /></FField>
           <FField label="Sponsor Email"><input value={form.sponsorEmail || ""} onChange={e => set("sponsorEmail", e.target.value)} placeholder="sponsor@tree.com.sa" type="email" style={s} /></FField>
           <FField label="Current Gate"><select value={form.gate} onChange={e => set("gate", e.target.value)} style={ss}>{["Gate 1","Gate 2","Gate 3","Gate 4","Gate 5"].map(o => <option key={o}>{o}</option>)}</select></FField>
@@ -6298,11 +6298,13 @@ export default function App() {
   // Others    → full list
   const visibleProjects = useMemo(() => {
     if (userRole === ROLE_PM) {
-      // Filter by email (unique) with fallback to name match for projects without pmEmail yet
+      // PM Email may hold SEVERAL addresses (comma/semicolon-separated) so a
+      // project can be visible to co-PMs. Fallback to name match for projects
+      // without pmEmail yet.
       if (currentUserEmail) {
         const email = currentUserEmail.trim().toLowerCase();
         return projects.filter(p =>
-          p.pmEmail ? p.pmEmail.trim().toLowerCase() === email
+          p.pmEmail ? p.pmEmail.split(/[,;]/).map(e => e.trim().toLowerCase()).includes(email)
                     : (p.pm || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
         );
       }

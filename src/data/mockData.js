@@ -17,7 +17,7 @@ export const MOCK_PROJECTS = [
   {
     id: "P001", code: "STRAT-2025-001", deptId: "strategy",
     name: "PMO Transformation",
-    pm: "Mohammed", sponsor: "Alhanouf",
+    pm: "Mohammed", pmEmail: "pm.strategy@pmo.test, pm.digital@pmo.test", sponsor: "Alhanouf",
     projectType: "Enterprise Project",
     phase: "Execution", gate: "Gate 4", status: "On Track", priority: "Critical",
     progress: 72, plannedProgress: 68, startDate: "2025-01-15", plannedEnd: "2025-12-31",
