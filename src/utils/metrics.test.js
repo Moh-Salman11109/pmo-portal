@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcTimeWeightedIPI, effectiveProgress, ipiColor, plannedProgressAt } from "./metrics.js";
+import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcTimeWeightedIPI, effectiveProgress, ipiColor, plannedProgressAt, trackMilestoneDateChanges } from "./metrics.js";
 
 // Convenience: build a minimal project that calcProjectIPIFull will accept.
 // asOfDate frozen so the time-based PV piece is deterministic across runs.
@@ -890,3 +890,41 @@ describe("plannedProgressAt — display-grade Planned curve for the progress cha
 
 
 
+
+
+describe("trackMilestoneDateChanges — Gantt replan memory", () => {
+  const prev = [{ id: "A1", name: "Build API", date: "2026-06-18" }];
+
+  it("first date change stores the replaced date as prevDate", () => {
+    const next = [{ id: "A1", name: "Build API", date: "2026-06-19" }];
+    const out = trackMilestoneDateChanges(next, prev);
+    expect(out[0].prevDate).toBe("2026-06-18");
+    expect(out[0].date).toBe("2026-06-19");
+  });
+
+  it("second change replaces prevDate — the first date disappears (window of 1)", () => {
+    const afterFirst = trackMilestoneDateChanges(
+      [{ id: "A1", name: "Build API", date: "2026-06-19" }], prev);
+    const afterSecond = trackMilestoneDateChanges(
+      [{ ...afterFirst[0], date: "2026-06-20" }], afterFirst);
+    expect(afterSecond[0].prevDate).toBe("2026-06-19");   // 18 Jun is gone
+    expect(afterSecond[0].date).toBe("2026-06-20");
+  });
+
+  it("saving without changing the date preserves the existing prevDate", () => {
+    const withPrev = [{ id: "A1", name: "Build API", date: "2026-06-19", prevDate: "2026-06-18" }];
+    const resaved = trackMilestoneDateChanges(
+      [{ id: "A1", name: "Build API", date: "2026-06-19" }], withPrev);
+    expect(resaved[0].prevDate).toBe("2026-06-18");
+  });
+
+  it("new activities and unchanged items pass through untouched", () => {
+    const next = [
+      { id: "A1", name: "Build API", date: "2026-06-18" },
+      { id: "A2", name: "New task", date: "2026-07-01" },
+    ];
+    const out = trackMilestoneDateChanges(next, prev);
+    expect(out[0].prevDate).toBeUndefined();
+    expect(out[1].prevDate).toBeUndefined();
+  });
+});

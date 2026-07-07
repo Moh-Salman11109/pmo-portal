@@ -649,6 +649,28 @@ export function plannedProgressAt(project, asOfDate = TODAY) {
 }
 
 /**
+ * Replan memory for the Gantt: when an activity's finish date changes on save,
+ * remember the date it replaced so the chart can show "18 Jun (struck) → 19 Jun".
+ *
+ * Window of exactly ONE previous date — a second replan overwrites prevDate
+ * with the date being replaced, so the chart always reads "last plan → current
+ * plan" and older history never piles up. prevDate persists inside the
+ * MilestonesJSON blob; no SharePoint schema change needed.
+ */
+export function trackMilestoneDateChanges(next = [], prev = []) {
+  const prevById = new Map(prev.map(m => [m.id, m]));
+  return next.map(m => {
+    const old = prevById.get(m.id);
+    if (!old) return m;
+    if (old.date && m.date && old.date !== m.date) {
+      return { ...m, prevDate: old.date };
+    }
+    if (old.prevDate && !m.prevDate) return { ...m, prevDate: old.prevDate };
+    return m;
+  });
+}
+
+/**
  * Derive the project's status from its current performance signals.
  * Returns { status, reason } so callers can both render the chip and
  * show the user WHY the derivation landed where it did.

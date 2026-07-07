@@ -36,9 +36,9 @@ export const MOCK_PROJECTS = [
     requiredDocs: ["Resource Plan", "Vendor Contract", "Training Plan"],
     milestones: [
       { id: "M1", name: "PMO Framework Approved",     date: "2025-02-28", status: "Completed",   owner: "Mohammed" },
-      { id: "M2", name: "Tooling Implementation",     date: "2025-06-30", status: "In Progress", owner: "Nawaf" },
+      { id: "M2", name: "Tooling Implementation",     startDate: "2025-04-01", date: "2025-06-30", prevDate: "2025-06-15", status: "In Progress", owner: "Nawaf" },
       { id: "M3", name: "Training Programme Launch",  date: "2025-09-15", status: "Upcoming",    owner: "Munira" },
-      { id: "M4", name: "Go-Live",                    date: "2025-12-15", status: "Upcoming",    owner: "Mohammed" },
+      { id: "M4", name: "Go-Live",                    date: "2025-12-15", prevDate: "2025-11-30", status: "Upcoming", owner: "Mohammed" },
     ],
     risks: [],
     issues: [],

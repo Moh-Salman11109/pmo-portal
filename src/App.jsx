@@ -46,7 +46,7 @@ import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor } from "./utils/colors.js";
 import { fmtSAR } from "./utils/format.js";
 import { TODAY, daysSince } from "./utils/dates.js";
-import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, plannedProgressAt } from "./utils/metrics.js";
+import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, getGateSLA, deriveRiskLevel, deriveBudgetStatus, calcProjectProgressFromWBS, effectiveProgress, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, plannedProgressAt, trackMilestoneDateChanges } from "./utils/metrics.js";
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Progress } from "./components/Progress.jsx";
@@ -1708,6 +1708,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   const span = t1 - t0;
   const toPct = d => d ? Math.max(0, Math.min(100, ((new Date(d).getTime() - t0) / span) * 100)) : null;
   const todayPct = toPct(TODAY);
+  const hasReplan = milestones.some(m => m.prevDate && m.date);
 
   const ticks = [];
   const cur = new Date(t0);
@@ -1729,17 +1730,17 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
       <div style={{ fontWeight: 800, fontSize: 13, color: T.text, marginBottom: 12 }}>Gantt Chart</div>
       <div style={{ minWidth: 640 }}>
 
-        {/* Month labels */}
-        <div style={{ display: "flex", marginBottom: 4 }}>
-          <div style={{ width: 280, flexShrink: 0 }} />
-          <div style={{ flex: 1, position: "relative", height: 20 }}>
-            {ticks.map((t, i) => (
-              <div key={i} style={{ position: "absolute", left: `${t.p}%`, transform: "translateX(-50%)", fontSize: 9, color: T.muted, fontWeight: 700, whiteSpace: "nowrap" }}>{t.label}</div>
-            ))}
-          </div>
+        {/* Month labels — full-width axis, no name column */}
+        <div style={{ position: "relative", height: 20, marginBottom: 4 }}>
+          {ticks.map((t, i) => (
+            <div key={i} style={{ position: "absolute", left: `${t.p}%`, transform: "translateX(-50%)", fontSize: 9, color: T.muted, fontWeight: 700, whiteSpace: "nowrap" }}>{t.label}</div>
+          ))}
         </div>
 
-        {/* Milestone + Activity rows (WBS hierarchy) */}
+        {/* Executive rows: the activity name lives INSIDE its bar (or beside
+            the marker when the bar is too narrow) so the chart presents
+            without a legend column. Date labels carry replan memory —
+            struck old date + current date when the finish was moved. */}
         {milestones.map((m, i) => {
           const sc  = SC[m.status] || SC.Upcoming;
           const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
@@ -1756,80 +1757,80 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             ? (() => { const w = kids.reduce((s, c) => s + (c.weight || 1), 0); return w ? Math.round(kids.reduce((s, c) => s + (c.weight || 1) * (c.progress || 0), 0) / w) : 0; })()
             : (m.progress ?? (m.status === "Completed" ? 100 : 0));
           const isMs = m._isMilestone;
-          const labelPad = isMs ? 12 : 28; // indent activities
+          const isDiamond = isMs && !hasDuration;
+          const name = m.name || (isMs ? "(unnamed milestone)" : "(activity)");
+          const fitsInside = !isDiamond && width > name.length * 0.65 + 6;
+          const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+          const dateLbl = m.date ? (
+            <span style={{ fontSize: 9, fontWeight: 700, color: T.muted, whiteSpace: "nowrap" }}>
+              {m.prevDate && <s style={{ color: "#dc2626", marginRight: 4, opacity: 0.85 }}>{fmtD(m.prevDate)}</s>}
+              {fmtD(m.date)}
+            </span>
+          ) : null;
+          const nearRightEdge = right > 80;
+          const outerStyle = {
+            position: "absolute", top: "50%", transform: "translateY(-50%)",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            fontSize: isMs ? 11 : 10, fontWeight: isMs ? 800 : 600,
+            color: sp == null && ep == null ? T.muted : T.text,
+            whiteSpace: "nowrap", zIndex: 4,
+            ...(nearRightEdge
+              ? { right: `calc(${100 - left}% + ${isDiamond ? 16 : 8}px)` }
+              : { left: `calc(${right}% + ${isDiamond ? 16 : 8}px)` }),
+          };
 
           return (
             <div key={m.id || i} style={{
-              display: "flex",
-              alignItems: "center",
-              height: isMs ? 38 : 32,
+              position: "relative",
+              height: isMs ? 36 : 30,
               borderTop: `1px solid ${T.border}`,
               background: isMs ? `${T.primary}06` : "transparent",
-            }}>
-              <div style={{
-                width: 280, flexShrink: 0, paddingRight: 12, paddingLeft: labelPad,
-                fontSize: isMs ? 12 : 10.5,
-                fontWeight: isMs ? 800 : 500,
-                color: sp == null && ep == null ? T.muted : T.text,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                textAlign: "left",
-              }} title={m.name}>
-                {isMs ? "📍 " : "↳ "}{m.name || (isMs ? "(unnamed milestone)" : "(activity)")}
-              </div>
-              <div style={{ flex: 1, position: "relative", height: "100%" }}>
-                {ticks.map((t, ti) => (
-                  <div key={ti} style={{ position: "absolute", left: `${t.p}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: 0.4 }} />
-                ))}
-                {todayPct != null && (
-                  <div style={{ position: "absolute", left: `${todayPct}%`, top: 0, bottom: 0, width: 2, background: T.accent, opacity: 0.85, zIndex: 3 }} />
-                )}
-                {sp == null && ep == null
-                  ? <div style={{ position: "absolute", top: 10, left: 8, fontSize: 10, color: T.muted, fontStyle: "italic" }}>No dates</div>
-                  : (isMs && !hasDuration)
-                    // True milestone with single date → diamond marker
-                    ? (
-                      <div style={{ position: "absolute", left: `calc(${left}% - 10px)`, top: 8, width: 20, height: 20, background: c.fill, border: `2px solid ${c.border}`, borderRadius: 3, transform: "rotate(45deg)", zIndex: 2 }} />
-                    )
-                    // Activity OR milestone-with-duration → bar with progress
-                    : (
-                      <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: isMs ? 8 : 6, height: isMs ? 22 : 18, background: c.track, border: `1.5px solid ${c.border}`, borderRadius: isMs ? 5 : 4, overflow: "hidden", zIndex: 1 }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: c.fill, opacity: 0.9 }} />
-                        {pct > 15 && (
-                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: c.lbl }}>{pct}%</div>
-                        )}
+            }} title={m.name}>
+              {ticks.map((t, ti) => (
+                <div key={ti} style={{ position: "absolute", left: `${t.p}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: 0.4 }} />
+              ))}
+              {todayPct != null && (
+                <div style={{ position: "absolute", left: `${todayPct}%`, top: 0, bottom: 0, width: 2, background: T.accent, opacity: 0.85, zIndex: 3 }} />
+              )}
+              {sp == null && ep == null ? (
+                <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: 8, fontSize: 10.5, fontWeight: isMs ? 800 : 600, color: T.muted }}>
+                  {name} <span style={{ fontStyle: "italic", fontWeight: 500 }}>— no dates</span>
+                </div>
+              ) : isDiamond ? (
+                <>
+                  <div style={{ position: "absolute", left: `calc(${left}% - 9px)`, top: 9, width: 18, height: 18, background: c.fill, border: `2px solid ${c.border}`, borderRadius: 3, transform: "rotate(45deg)", zIndex: 2 }} />
+                  <span style={outerStyle}>{name}{dateLbl}</span>
+                </>
+              ) : (
+                <>
+                  <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, top: isMs ? 6 : 5, height: isMs ? 24 : 20, background: c.track, border: `1.5px solid ${c.border}`, borderRadius: isMs ? 5 : 4, overflow: "hidden", zIndex: 1 }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: c.fill, opacity: 0.9 }} />
+                    {fitsInside && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "0 8px" }}>
+                        <span style={{ fontSize: isMs ? 10.5 : 10, fontWeight: 800, color: c.lbl, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: c.lbl, flexShrink: 0 }}>{pct}%</span>
                       </div>
-                    )
-                }
-                {m.date && ep != null && (() => {
-                  // Diamond corners stick out ~14px past the row position after
-                  // the 45° rotation — bars don't. Bump the date offset for
-                  // milestone diamonds so the label doesn't overlap the marker.
-                  const isDiamond = isMs && !hasDuration;
-                  const dx = isDiamond ? 18 : 6;
-                  return (
-                    <div style={{ position: "absolute", left: `calc(${ep}% + ${dx}px)`, top: isMs ? 11 : 9, fontSize: 9, color: T.muted, whiteSpace: "nowrap", zIndex: 4 }}>
-                      {new Date(m.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    </div>
-                  );
-                })()}
-              </div>
+                    )}
+                  </div>
+                  <span style={outerStyle}>
+                    {!fitsInside && <span>{name} · {pct}%</span>}
+                    {dateLbl}
+                  </span>
+                </>
+              )}
             </div>
           );
         })}
 
         {/* Today label */}
         {todayPct != null && (
-          <div style={{ display: "flex" }}>
-            <div style={{ width: 280, flexShrink: 0 }} />
-            <div style={{ flex: 1, position: "relative", height: 16 }}>
-              <div style={{ position: "absolute", left: `${todayPct}%`, transform: "translateX(-50%)", fontSize: 9, color: T.accent, fontWeight: 800, whiteSpace: "nowrap" }}>▲ Today</div>
-            </div>
+          <div style={{ position: "relative", height: 16 }}>
+            <div style={{ position: "absolute", left: `${todayPct}%`, transform: "translateX(-50%)", fontSize: 9, color: T.accent, fontWeight: 800, whiteSpace: "nowrap" }}>▲ Today</div>
           </div>
         )}
 
         {/* Legend */}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
-          <div style={{ width: 280, flexShrink: 0 }} />
           {[["#3b82f6","Completed"],["#16a34a","In Progress"],["#ef4444","Delayed / Overdue"],["#94a3b8","Upcoming"]].map(([col, lbl]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
               <div style={{ width: 14, height: 8, background: col, borderRadius: 2 }} />
@@ -1840,6 +1841,11 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             <div style={{ width: 2, height: 14, background: T.accent, borderRadius: 1 }} />
             Today
           </div>
+          {hasReplan && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
+              <s style={{ color: "#dc2626", fontWeight: 700 }}>old</s> new = date replanned
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1953,6 +1959,11 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       "Delayed":     { fill: "#490300", border: "#2c0200", txt: "#fff" },     // Maroon — Tree gravity
       "Upcoming":    { fill: "#A1B9AB", border: "#7a9485", txt: "#003932" },  // Moss — Tree neutral
     };
+    // Executive layout: NO left label column — the activity name lives INSIDE
+    // its bar (readable from the back of a boardroom), falling outside-right
+    // only when the bar is too narrow. Date labels carry replan memory:
+    // "18 Jun (struck) 19 Jun" when the finish date was moved.
+    const hasReplan = ordered.some(m => m.prevDate && m.date);
     const rowsHtml = ordered.length === 0
       ? `<div class="empty">No activities recorded yet.</div>`
       : ordered.map(m => {
@@ -1965,18 +1976,36 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const pct = m._isMs && kidsOf(m.id).length > 0
           ? (() => { const k = kidsOf(m.id); const w = k.reduce((s,x)=>s+(x.weight||1),0); return w ? Math.round(k.reduce((s,x)=>s+(x.weight||1)*(x.progress||0),0)/w) : 0; })()
           : (m.progress ?? (m.status === "Completed" ? 100 : 0));
-        const visual = (m._isMs && !hasDuration)
-          ? `<div class="diamond" style="left:calc(${left}% - 8px); background:${c.fill}; border-color:${c.border}"></div>`
-          : `<div class="bar" style="left:${left}%; width:${width}%; background:${c.fill}; border-color:${c.border}"><span class="bar-pct" style="color:${c.txt}">${pct}%</span></div>`;
+        const name = esc(m.name) || "(unnamed)";
+        const nameLen = (m.name || "(unnamed)").length;
+        const isDiamond = m._isMs && !hasDuration;
+        const dateLbl = m.date
+          ? `<span class="dt">${m.prevDate ? `<s>${fmtDate(m.prevDate)}</s>` : ""}${fmtDate(m.date)}</span>`
+          : "";
+        // ~10.4px per 1% of track width; 8px Inter ≈ 4.4px/char + pct chip room
+        const fitsInside = !isDiamond && width > nameLen * 0.45 + 4;
+        const nearRightEdge = right > 82;
+        const outerPos = nearRightEdge
+          ? `right:calc(${(100 - left).toFixed(2)}% + 10px)`
+          : `left:calc(${right.toFixed(2)}% + ${isDiamond ? 12 : 6}px)`;
+        let visual, outer;
+        if (isDiamond) {
+          visual = `<div class="diamond" style="left:calc(${left}% - 7px); background:${c.fill}; border-color:${c.border}"></div>`;
+          outer  = `<span class="out-lbl ms" style="${outerPos}">${name} ${dateLbl}</span>`;
+        } else if (fitsInside) {
+          visual = `<div class="bar" style="left:${left}%; width:${width}%; background:${c.fill}; border-color:${c.border}"><span class="bar-name" style="color:${c.txt}">${name}</span><span class="bar-pct" style="color:${c.txt}">${pct}%</span></div>`;
+          outer  = `<span class="out-lbl" style="${outerPos}">${dateLbl}</span>`;
+        } else {
+          visual = `<div class="bar" style="left:${left}%; width:${width}%; background:${c.fill}; border-color:${c.border}"></div>`;
+          outer  = `<span class="out-lbl${m._isMs ? " ms" : ""}" style="${outerPos}">${name} · ${pct}% ${dateLbl}</span>`;
+        }
         // Past-fade overlay: a soft Lichen mist over the days that have already
-        // passed. Sits BELOW the bars so completed work stays crisp; thicker in
-        // the distant past, fading to transparent right at the Today marker —
-        // gives the timeline a real sense of time flowing forward.
+        // passed. Sits BELOW the bars so completed work stays crisp — gives the
+        // timeline a real sense of time flowing forward.
         const pastFade = todayPct > 0.5
           ? `<div class="past-fade" style="width:${todayPct}%"></div>` : "";
         return `<div class="row ${m._isMs ? "ms" : "act"}">
-          <div class="label" title="${esc(m.name)}">${m._isMs ? "📍" : "↳"} ${esc(m.name) || "(unnamed)"}</div>
-          <div class="track">${pastFade}${ticks.map(t => `<div class="grid" style="left:${t.p}%"></div>`).join("")}${visual}<div class="today" style="left:${todayPct}%"></div></div>
+          <div class="track">${pastFade}${ticks.map(t => `<div class="grid" style="left:${t.p}%"></div>`).join("")}${visual}${outer}<div class="today" style="left:${todayPct}%"></div></div>
         </div>`;
       }).join("");
 
@@ -2076,21 +2105,13 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         section h2 .icon { color: #00FFB3; }
         section .head-meta { margin-left: auto; font-size: 9.5px; color: #7a9485; }
 
-        /* ─── TIMELINE — Lichen borders, Sea today marker, Moss grid, past-fade ─── */
-        .timeline { background: #fff; border: 1px solid #C9D5C9; border-radius: 8px; padding: 8px 10px; overflow: hidden; }
-        .timeline .axis { display: flex; margin-bottom: 4px; padding-left: 220px; position: relative; height: 12px; }
+        /* ─── TIMELINE — executive full-width Gantt: names live INSIDE the bars ─── */
+        .timeline { background: #fff; border: 1px solid #C9D5C9; border-radius: 8px; padding: 8px 12px; overflow: hidden; }
+        .timeline .axis { margin-bottom: 4px; position: relative; height: 12px; }
         .timeline .axis .tick { position: absolute; transform: translateX(-50%); font-size: 8.5px; color: #7a9485; font-weight: 600; }
-        .timeline .row { display: flex; align-items: stretch; min-height: 18px; border-top: 1px solid #ecf2ed; }
-        .timeline .row.ms { background: rgba(0,57,50,0.04); min-height: 20px; font-weight: 700; }
-        .timeline .row.act .label { padding: 3px 10px 3px 22px; font-size: 9px; font-weight: 500; color: #3a5547; }
-        /* Label column: compact but still wraps 2 lines for long names */
-        .timeline .row .label {
-          width: 220px; flex-shrink: 0; padding: 3px 10px 3px 12px;
-          font-size: 10px; color: #003932; line-height: 1.2;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-          overflow: hidden; text-overflow: ellipsis;
-        }
-        .timeline .row .track { flex: 1; position: relative; min-width: 360px; overflow: hidden; }
+        .timeline .row { position: relative; height: 22px; border-top: 1px solid #ecf2ed; }
+        .timeline .row.ms { background: rgba(0,57,50,0.04); height: 24px; }
+        .timeline .row .track { position: absolute; inset: 0; }
         /* Past-fade: Lichen mist over days that have already passed. Sits at
            z-index 0 so bars (z:1) and diamonds (z:2) stay on top, crisp. The
            gradient fades to transparent right at the Today line. */
@@ -2109,9 +2130,18 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           position: absolute; top: -2px; bottom: -2px; width: 2px;
           background: #00FFB3; box-shadow: 0 0 6px rgba(0,255,179,0.7); z-index: 4;
         }
-        .timeline .bar { position: absolute; top: 4px; height: 11px; border: 1.5px solid; border-radius: 3px; display: flex; align-items: center; justify-content: center; z-index: 1; min-width: 3px; }
-        .timeline .bar-pct { font-size: 7.5px; font-weight: 800; }
-        .timeline .diamond { position: absolute; top: 4px; width: 12px; height: 12px; border: 1.5px solid; border-radius: 2px; transform: rotate(45deg); z-index: 2; }
+        .timeline .bar { position: absolute; top: 3px; height: 15px; border: 1.5px solid; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 5px; z-index: 1; min-width: 3px; box-sizing: border-box; }
+        .timeline .row.ms .bar { top: 3px; height: 17px; }
+        .timeline .bar-name { font-size: 8px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.01em; }
+        .timeline .row.ms .bar-name { font-size: 8.5px; }
+        .timeline .bar-pct { font-size: 7.5px; font-weight: 800; flex-shrink: 0; opacity: 0.9; }
+        .timeline .diamond { position: absolute; top: 5px; width: 11px; height: 11px; border: 1.5px solid; border-radius: 2px; transform: rotate(45deg); z-index: 2; }
+        /* Outside labels — used for diamonds and bars too narrow to hold a name */
+        .timeline .out-lbl { position: absolute; top: 50%; transform: translateY(-50%); font-size: 8px; font-weight: 600; color: #3a5547; white-space: nowrap; z-index: 3; }
+        .timeline .out-lbl.ms { font-weight: 800; color: #003932; font-size: 8.5px; }
+        /* Replan-aware date chip: struck old date in maroon-red, current date solid */
+        .timeline .dt { font-family: 'JetBrains Mono', monospace; font-size: 7.5px; color: #003932; font-weight: 700; margin-left: 4px; }
+        .timeline .dt s { color: #b91c1c; text-decoration-thickness: 1.5px; margin-right: 4px; font-weight: 600; opacity: 0.9; }
         .empty { padding: 22px; text-align: center; color: #7a9485; font-style: italic; font-size: 10.5px; }
 
         /* ─── BOTTOM GRID ─── compact */
@@ -2201,10 +2231,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       <section>
         <div class="section-head">
           <h2><span class="icon">▸</span> Delivery Timeline</h2>
-          <span class="head-meta">${ordered.length} item${ordered.length === 1 ? "" : "s"} · ▾ Today</span>
+          <span class="head-meta">${ordered.length} item${ordered.length === 1 ? "" : "s"} · ▾ Today${hasReplan ? ` · <s style="color:#b91c1c">old</s> new = date replanned` : ""}</span>
         </div>
         <div class="timeline">
-          ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:calc(220px + (100% - 220px) * ${t.p} / 100)">${t.label}</div>`).join("")}</div>` : ""}
+          ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:${t.p}%">${t.label}</div>`).join("")}</div>` : ""}
           ${rowsHtml}
         </div>
       </section>
@@ -6321,6 +6351,12 @@ export default function App() {
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
 
+    // Replan memory: if an activity's finish date moved, stamp prevDate so the
+    // Gantt (portal + print) shows "old date struck → new date".
+    const trackedMilestones = Array.isArray(milestones)
+      ? trackMilestoneDateChanges(milestones, project.milestones || [])
+      : milestones;
+
     // Build update log entries
     const logEntries = [];
     if (note?.trim()) {
@@ -6351,7 +6387,7 @@ export default function App() {
     const snapState = {
       ...project,
       status, progress, plannedProgress, startDate, plannedEnd,
-      budget, actualCost, milestones,
+      budget, actualCost, milestones: trackedMilestones,
       documents: documents ?? project.documents,
     };
     const fullResult = calcProjectIPIFull(snapState);
@@ -6386,7 +6422,7 @@ export default function App() {
       actualFinishDate: capturedFinish,
       roadmapDeadline: isPMOrDeptHead ? project.roadmapDeadline : roadmapDeadline,
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
-      milestones, risks, benefits,
+      milestones: trackedMilestones, risks, benefits,
       ...(documents ? { documents } : {}),
       updates: newUpdates, lastUpdate: today,
       ipiHistory,
@@ -6446,6 +6482,10 @@ export default function App() {
       ? (form.actualFinishDate || todayStr)
       : null;
     const full = { ...form, updates, _newUpdate: undefined, lastUpdate: todayStr, actualFinishDate: capturedFinish };
+    if (mode === "edit" && Array.isArray(full.milestones)) {
+      const prevMs = projects.find(p => p.id === localId)?.milestones || [];
+      full.milestones = trackMilestoneDateChanges(full.milestones, prevMs);
+    }
 
     if (!isUsingMock()) {
       if (mode === "create") {
@@ -6465,7 +6505,7 @@ export default function App() {
         setProjects(prev => prev.map(p => p.id === localId ? { ...p, ...full } : p));
       }
     }
-  }, []);
+  }, [projects]);
 
   const getTitle = () => {
     if (route.view === "home") {
