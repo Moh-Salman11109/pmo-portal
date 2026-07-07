@@ -317,8 +317,8 @@ const DocGenerator = ({ onClose, currentUserName }) => {
 
   // ── Picker ──
   if (view === "picker") {
-    const card = (key, icon, title, sub, body) => (
-      <div onClick={() => setView(key)} style={{ border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", cursor: "pointer", background: T.surface, display: "flex", flexDirection: "column", gap: 10, transition: "all 0.15s" }}
+    const card = (key, icon, title, sub) => (
+      <div onClick={() => setView(key)} style={{ border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 22px", cursor: "pointer", background: T.surface, display: "flex", flexDirection: "column", gap: 12, transition: "all 0.15s" }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = T.primary; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,57,50,0.10)"; }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
         <span style={{ color: T.primary }}><Ico name={icon} size={26} strokeWidth={1.3} /></span>
@@ -326,7 +326,6 @@ const DocGenerator = ({ onClose, currentUserName }) => {
           <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3 }}>{title}</div>
           <div style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>{sub}</div>
         </div>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.55 }}>{body}</div>
       </div>
     );
     return (
@@ -343,10 +342,8 @@ const DocGenerator = ({ onClose, currentUserName }) => {
             </div>
           </div>
           <div style={{ padding: "22px 28px 26px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {card("charter", "clipboard", "Project Charter", "Fill the form, print the charter",
-              "Sections 1–7 of the Tree charter template, with signature blocks.")}
-            {card("plan", "calendar", "Project Plan", "Fill the form, print the plan",
-              "Phase timeline, milestones, and resource plan across your chosen months.")}
+            {card("charter", "clipboard", "Project Charter", "Fill the form, print the charter")}
+            {card("plan", "calendar", "Project Plan", "Fill the form, print the plan")}
           </div>
         </div>
       </div>
