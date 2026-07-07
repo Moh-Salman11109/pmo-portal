@@ -496,11 +496,33 @@ const DocComplianceBar = ({ project }) => {
 
 const Tab = ({ tabs, active, onSelect }) => {
   const T = useT();
+  // Segmented control: the active tab is a filled brand pill, inactive tabs
+  // read as solid dark text (not faint grey) so the whole bar is legible at
+  // a glance. Sits in a subtle tray to look like one deliberate control.
   return (
-    <div className="pmo-tabs" style={{ display: "flex", gap: 4, borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
-      {tabs.map(t => (
-        <button key={t} onClick={() => onSelect(t)} style={{ background: "none", border: "none", borderBottom: active === t ? `2px solid ${T.primary}` : "2px solid transparent", marginBottom: -2, padding: "10px 16px", fontSize: 13, fontWeight: active === t ? 700 : 500, color: active === t ? T.primary : T.muted, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>{t}</button>
-      ))}
+    <div className="pmo-tabs" style={{
+      display: "inline-flex", gap: 2, marginBottom: 24, padding: 4,
+      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12,
+      maxWidth: "100%",
+    }}>
+      {tabs.map(t => {
+        const on = active === t;
+        return (
+          <button key={t} onClick={() => onSelect(t)} style={{
+            background: on ? T.primary : "transparent",
+            border: "none", borderRadius: 8,
+            padding: "8px 15px", fontSize: 13,
+            fontWeight: on ? 700 : 600,
+            color: on ? "#fff" : T.text,
+            cursor: "pointer", transition: "all 0.15s",
+            whiteSpace: "nowrap", flexShrink: 0,
+            boxShadow: on ? "0 1px 3px rgba(0,57,50,0.25)" : "none",
+          }}
+            onMouseEnter={e => { if (!on) e.currentTarget.style.background = T.border; }}
+            onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}
+          >{t}</button>
+        );
+      })}
     </div>
   );
 };
@@ -2461,6 +2483,71 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
       </div>
 
+      <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
+
+      {/* ── GATE TRACKER — always visible ── */}
+      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
+
+      {/* ── PMO returned banner — visible to PM only ── */}
+      {userRole === ROLE_PM && project.pmoStatus === "Returned" && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>↩</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#92400e" }}>Update Returned by PMO — revision required</div>
+            {project.pmoValidationNote && <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>{project.pmoValidationNote}</div>}
+            <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the ✏️ Update button above.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PMO Internal Notes (hidden from PM) ─────────────────── */}
+      {canSeeNotes && (
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 18px", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: noteEdit ? 10 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 15 }}>📝</span>
+              <span style={{ fontWeight: 700, fontSize: 12, color: "#92400e" }}>PMO Internal Notes</span>
+              <span style={{ fontSize: 10, color: "#b45309", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "1px 7px" }}>not visible to PM</span>
+            </div>
+            {!noteEdit && (
+              <button onClick={() => { setNoteDraft(project.pmoNotes || ""); setNoteEdit(true); }}
+                style={{ background: "none", border: "1px solid #fcd34d", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#92400e", cursor: "pointer", fontWeight: 600 }}>
+                {project.pmoNotes ? "Edit" : "+ Add note"}
+              </button>
+            )}
+          </div>
+          {noteEdit ? (
+            <div>
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                placeholder="Internal PMO observations, follow-up actions, concerns..."
+                rows={3}
+                style={{ width: "100%", borderRadius: 8, border: "1px solid #fcd34d", padding: "8px 10px", fontSize: 12, resize: "vertical", background: "#fffde7", color: "#1e293b", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
+                <button onClick={() => setNoteEdit(false)}
+                  style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 14px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>
+                  Cancel
+                </button>
+                <button disabled={noteSaving} onClick={async () => {
+                  setNoteSaving(true);
+                  try { await savePMONote(project.id, noteDraft); setNoteEdit(false); }
+                  finally { setNoteSaving(false); }
+                }}
+                  style={{ background: "#f59e0b", border: "none", borderRadius: 6, padding: "4px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#fff", opacity: noteSaving ? 0.6 : 1 }}>
+                  {noteSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            project.pmoNotes
+              ? <div style={{ fontSize: 12, color: "#78350f", marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{project.pmoNotes}</div>
+              : <div style={{ fontSize: 12, color: "#b45309", marginTop: 4, opacity: 0.6, fontStyle: "italic" }}>No internal notes yet.</div>
+          )}
+        </div>
+      )}
+
       {/* ── IPI TREND — one immutable dot per save ─────────────────────────
           Every save appends to ipiHistory (never overwrites), so this chart
           is the visual audit trail. Each point carries the full datetime,
@@ -2729,71 +2816,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           </div>
         );
       })()}
-
-      <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
-
-      {/* ── GATE TRACKER — always visible ── */}
-      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
-
-      {/* ── PMO returned banner — visible to PM only ── */}
-      {userRole === ROLE_PM && project.pmoStatus === "Returned" && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <span style={{ fontSize: 20, flexShrink: 0 }}>↩</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#92400e" }}>Update Returned by PMO — revision required</div>
-            {project.pmoValidationNote && <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>{project.pmoValidationNote}</div>}
-            <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the ✏️ Update button above.</div>
-          </div>
-        </div>
-      )}
-
-      {/* ── PMO Internal Notes (hidden from PM) ─────────────────── */}
-      {canSeeNotes && (
-        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 18px", marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: noteEdit ? 10 : 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 15 }}>📝</span>
-              <span style={{ fontWeight: 700, fontSize: 12, color: "#92400e" }}>PMO Internal Notes</span>
-              <span style={{ fontSize: 10, color: "#b45309", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "1px 7px" }}>not visible to PM</span>
-            </div>
-            {!noteEdit && (
-              <button onClick={() => { setNoteDraft(project.pmoNotes || ""); setNoteEdit(true); }}
-                style={{ background: "none", border: "1px solid #fcd34d", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#92400e", cursor: "pointer", fontWeight: 600 }}>
-                {project.pmoNotes ? "Edit" : "+ Add note"}
-              </button>
-            )}
-          </div>
-          {noteEdit ? (
-            <div>
-              <textarea
-                value={noteDraft}
-                onChange={e => setNoteDraft(e.target.value)}
-                placeholder="Internal PMO observations, follow-up actions, concerns..."
-                rows={3}
-                style={{ width: "100%", borderRadius: 8, border: "1px solid #fcd34d", padding: "8px 10px", fontSize: 12, resize: "vertical", background: "#fffde7", color: "#1e293b", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
-              />
-              <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
-                <button onClick={() => setNoteEdit(false)}
-                  style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 14px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>
-                  Cancel
-                </button>
-                <button disabled={noteSaving} onClick={async () => {
-                  setNoteSaving(true);
-                  try { await savePMONote(project.id, noteDraft); setNoteEdit(false); }
-                  finally { setNoteSaving(false); }
-                }}
-                  style={{ background: "#f59e0b", border: "none", borderRadius: 6, padding: "4px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#fff", opacity: noteSaving ? 0.6 : 1 }}>
-                  {noteSaving ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            project.pmoNotes
-              ? <div style={{ fontSize: 12, color: "#78350f", marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{project.pmoNotes}</div>
-              : <div style={{ fontSize: 12, color: "#b45309", marginTop: 4, opacity: 0.6, fontStyle: "italic" }}>No internal notes yet.</div>
-          )}
-        </div>
-      )}
 
       {/* ── Submit Update Panel ─────────────────────────────────── */}
       {showUpdate && <UpdatePanel project={project} onClose={() => setShowUpdate(false)} onSubmit={submitUpdate} userRole={userRole} />}
