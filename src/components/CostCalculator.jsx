@@ -19,6 +19,7 @@ const RATES = {
   "Professional/Supervisor": 102.27,
   "Management":             198.86,
   "Leadership":             340.91,
+  "Bytforce":             1125,
 };
 
 const HOURS_PER_DAY = 8;
