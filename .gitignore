@@ -39,3 +39,8 @@ skills-lock.json
 
 # Personal, per-machine Claude Code settings (permissions etc.)
 .claude/settings.local.json
+
+# Personal doc generators — not part of the app (kept local)
+scripts/_build-*.cjs
+scripts/_pdf-handover.cjs
+scripts/_scenario-audit-ipi.mjs
