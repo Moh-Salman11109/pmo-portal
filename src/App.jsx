@@ -2879,78 +2879,76 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       <div key={activeTab} className="pmo-tab-content">
       {/* EXEC SUMMARY TAB */}
       {activeTab === "Exec Summary" && (() => {
-        const nextMilestone = [...(project.milestones || [])].filter(m => m.status !== "Completed").sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
+        const upcomingSorted = [...(project.milestones || [])].filter(m => m.status !== "Completed").sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+        const nextMilestone = upcomingSorted[0];
+        const thenMilestone = upcomingSorted[1];
         const msOverdue = nextMilestone && nextMilestone.date && nextMilestone.date < TODAY;
+        const msOverdueDays = msOverdue ? daysSince(nextMilestone.date) : null;
         const riskOrder = { Critical: 4, High: 3, Medium: 2, Low: 1 };
         const topRisk = [...(project.risks || [])].filter(r => r.status === "Open").sort((a, b) => (riskOrder[b.level] || 0) - (riskOrder[a.level] || 0))[0];
         const rc = topRisk ? (riskColor[topRisk.level] || riskColor["Medium"]) : null;
+        const topRiskHot = topRisk && (topRisk.level === "Critical" || topRisk.level === "High");
+        const forecast = project.forecast || 0;
+        const forecastPct = project.budget ? Math.min(100, Math.round((forecast / project.budget) * 100)) : 0;
+        const forecastOver = forecast - (project.budget || 0);
         const latestUpdate = [...(project.updates || [])].sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
         const gridCols = bp === "mobile" ? "1fr" : "1fr 1fr 1fr";
         const twoCol = bp === "mobile" ? "1fr" : "1fr 1fr";
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Status strip */}
-            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 24px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-                {[
-                  { label: "Status", node: <Badge status={project.status} /> },
-                  { label: "Progress", node: <span style={{ fontSize: 22, fontWeight: 900, color: T.text }}>{effectiveProgress}%</span> },
-                  { label: "IPI", node: <span style={{ fontSize: 20, fontWeight: 900, color: ipiC.color }}>{ipi ?? "—"} <span style={{ fontSize: 11, fontWeight: 600 }}>{ipiC.label}</span></span> },
-                  { label: "Planned End", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.plannedEnd || "—"}</span> },
-                  { label: "Current Gate", node: <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{project.gate}</span> },
-                  { label: "PM", node: <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{project.pm}</span> },
-                ].map((item, i) => (
-                  <div key={item.label} style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: i > 0 ? 20 : 0, borderLeft: i > 0 ? `1px solid ${T.border}` : "none" }}>
-                    <div style={{ fontSize: 10, color: T.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{item.label}</div>
-                    {item.node}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Budget | Next Milestone | Top Risk */}
+            {/* Budget | Next Milestone | Top Risk (status/progress/IPI now live in the hero) */}
             <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 16 }}>
               {/* Budget Health */}
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Budget Health</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: remaining >= 0 ? "#15803d" : "#dc2626" }}>{fmtSAR(project.actualCost)}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: remaining >= 0 ? "#007a62" : "#b23800" }}>{fmtSAR(project.actualCost)}</div>
                 <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>of {fmtSAR(project.budget)} approved</div>
-                <Progress value={budgetUtil} color={budgetUtil > 90 ? "#dc2626" : budgetUtil > 75 ? "#eab308" : T.accent} height={8} />
+                {/* Utilisation bar with a forecast marker tick */}
+                <div style={{ position: "relative", height: 8, background: "#eef3ee", borderRadius: 5, overflow: "visible" }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, budgetUtil)}%`, borderRadius: 5, background: budgetUtil > 90 ? "#FF5000" : budgetUtil > 75 ? "#d97706" : "#00b894" }} />
+                  {forecast > 0 && <div title={`Forecast ${forecastPct}%`} style={{ position: "absolute", left: `${forecastPct}%`, top: -3, width: 2, height: 14, background: forecastOver > 0 ? "#b23800" : "#5a7a6e" }} />}
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 10 }}>
                   <span style={{ fontSize: 11, color: T.muted }}>{budgetUtil}% utilized</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: remaining >= 0 ? "#15803d" : "#dc2626" }}>{deriveBudgetStatus(project)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: remaining >= 0 ? "#007a62" : "#b23800" }}>{deriveBudgetStatus(project)}</span>
                 </div>
-                <div style={{ fontSize: 12, color: T.muted }}>CPI: <span style={{ fontWeight: 700, color: project.cpi >= 1 ? "#15803d" : "#dc2626" }}>{project.cpi.toFixed(2)}</span> &nbsp;·&nbsp; SPI: <span style={{ fontWeight: 700, color: project.spi >= 0.9 ? "#15803d" : "#dc2626" }}>{project.spi.toFixed(2)}</span></div>
+                {forecastOver > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: "#b23800", marginBottom: 8 }}>Forecast {fmtSAR(forecastOver)} over</div>}
+                <div style={{ fontSize: 12, color: T.muted }}>CPI: <span style={{ fontWeight: 700, color: project.cpi >= 1 ? "#007a62" : "#b23800" }}>{project.cpi.toFixed(2)}</span> &nbsp;·&nbsp; SPI: <span style={{ fontWeight: 700, color: project.spi >= 0.9 ? "#007a62" : "#b23800" }}>{project.spi.toFixed(2)}</span></div>
               </div>
 
               {/* Next Milestone */}
-              <div style={{ background: T.surface, border: `1px solid ${msOverdue ? "rgba(220,38,38,0.4)" : T.border}`, borderRadius: 14, padding: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Next Milestone</div>
+              <div style={{ background: T.surface, border: `1px solid ${msOverdue ? "#ffd0ba" : T.border}`, borderRadius: 14, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Next Milestone</div>
+                  {msOverdue && <span style={{ background: "#ffe8de", color: "#b23800", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 10, marginLeft: "auto" }}>{msOverdueDays != null ? `${msOverdueDays}d ` : ""}OVERDUE</span>}
+                </div>
                 {nextMilestone ? (
                   <>
-                    {msOverdue && <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 10, display: "inline-block", marginBottom: 8 }}>OVERDUE</span>}
                     <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 6 }}>{nextMilestone.name}</div>
                     <div style={{ fontSize: 12, color: T.muted, marginBottom: 4 }}>Due: {nextMilestone.date}</div>
                     <div style={{ fontSize: 12, color: T.muted }}>Owner: {nextMilestone.owner}</div>
-                    <div style={{ marginTop: 10 }}><span style={{ background: "#fef9c3", color: "#854d0e", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 8 }}>{nextMilestone.status}</span></div>
+                    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ background: "#fdf1dd", color: "#b45309", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 8 }}>{nextMilestone.status}</span>
+                    </div>
+                    {thenMilestone && <div style={{ marginTop: 8, fontSize: 11, color: T.muted }}>Then: <span style={{ fontWeight: 600, color: T.text }}>{thenMilestone.name}</span></div>}
                   </>
                 ) : (
-                  <div style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>All milestones complete ✓</div>
+                  <div style={{ fontSize: 13, color: "#007a62", fontWeight: 600 }}>All milestones complete ✓</div>
                 )}
               </div>
 
               {/* Top Risk */}
-              <div style={{ background: T.surface, border: `1px solid ${topRisk && (topRisk.level === "Critical" || topRisk.level === "High") ? "rgba(220,38,38,0.3)" : T.border}`, borderRadius: 14, padding: 20 }}>
+              <div style={{ background: T.surface, border: `1px solid ${topRiskHot ? "#ffd0ba" : T.border}`, borderRadius: 14, padding: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Top Risk</div>
                 {topRisk ? (
                   <>
                     <span style={{ background: rc.bg, color: rc.text, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 10, display: "inline-block", marginBottom: 8 }}>{topRisk.level}</span>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>{topRisk.title}</div>
                     <div style={{ fontSize: 12, color: T.muted, marginBottom: 4 }}>Owner: {topRisk.owner}</div>
-                    <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Mitigation: {topRisk.mitigation}</div>
+                    <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>↳ {topRisk.mitigation}</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>No open risks ✓</div>
+                  <div style={{ fontSize: 13, color: "#007a62", fontWeight: 600 }}>No open risks ✓</div>
                 )}
               </div>
             </div>
