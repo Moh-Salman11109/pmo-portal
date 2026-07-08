@@ -2357,136 +2357,111 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         {project.objective && project.objective.trim() && (
           <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
         )}
-        {/* Performance banner — Progress + IPI side by side, equal billing */}
-        <div style={{ display: "flex", gap: 14, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "stretch", flexWrap: "wrap" }}>
-          {/* Progress block — click to open the WBS rollup audit modal */}
-          <button
-            type="button"
-            onClick={() => setShowProgressBreakdown(true)}
-            title="Click to see the full progress calculation"
-            style={{
-              background: "rgba(0,184,148,0.10)",
-              border: "1px solid rgba(0,184,148,0.25)",
-              borderRadius: 10,
-              padding: "10px 16px",
-              minWidth: 180,
-              display: "flex", flexDirection: "column", justifyContent: "center",
-              cursor: "pointer", textAlign: "left",
-              transition: "transform 0.15s, border-color 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = "rgba(0,184,148,0.55)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(0,184,148,0.25)"; }}
-          >
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 30, fontWeight: 900, color: T.accent, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{effectiveProgress}%</span>
-              <span style={{ fontSize: 10, color: T.accent, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.85 }}>Progress</span>
-              <span style={{ marginLeft: "auto", fontSize: 9, color: T.accent, opacity: 0.7, fontWeight: 700, letterSpacing: "0.06em" }}>AUDIT ↗</span>
-            </div>
-            <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${effectiveProgress}%`, background: T.accent, borderRadius: 3, transition: "width 0.4s" }} />
-            </div>
-            <div style={{ fontSize: 10, opacity: 0.65, marginTop: 6, color: T.headerText }}>
-              {wbsProgress != null ? "Auto-rolled from Activities" : "Manual entry"}
-            </div>
-          </button>
-          <div style={{ display: "flex", alignItems: "stretch", gap: 14, flex: 1 }}>
-            {/* IPI Score block — click to open the full IPI audit modal */}
-            <button
-              type="button"
-              onClick={() => setShowIPIBreakdown(true)}
-              title="Click to see the full IPI calculation"
-              style={{
-                background: ipiC.bg,
-                borderRadius: 10,
-                padding: "10px 16px",
-                minWidth: 140,
-                display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
-                border: "1px solid transparent",
-                cursor: "pointer",
-                transition: "transform 0.15s, box-shadow 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.25)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
-            >
-              <div style={{ fontSize: 30, fontWeight: 900, color: ipiC.color, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{ipi == null ? "—" : countedIPI}</div>
-              <div style={{ fontSize: 9, color: ipiC.color, opacity: 0.7, fontWeight: 700, letterSpacing: "0.1em", marginTop: 10 }}>AUDIT ↗</div>
+        {/* Performance row — three equal tiles: Progress · IPI · Snapshot */}
+        {(() => {
+          const plannedNow = plannedProgressAt(project);
+          const progVar    = plannedNow != null ? effectiveProgress - plannedNow : null;
+          const bandDark   = ipiColorDark(ipi);
+          const trend      = ipiDisplay?.hasHistory ? ipiDisplay.delta : null;
+          const spiF = ipiResult.components.spiFinal ?? ipiResult.components.spi;
+          const cpiV = ipiResult.components.cpi;
+          const mciV = ipiResult.components.mci;
+          const numCol = (ok) => ok ? "#7dffd9" : "#ff9d7a";
+          const ant  = calcAnticipatedMCI(project);
+          const tileBase = { background: "rgba(0,0,0,0.28)", borderRadius: 12, padding: "16px 18px", textAlign: "left", cursor: "pointer", transition: "border-color 0.15s" };
+          return (
+          <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr 1.4fr", gap: 14, marginTop: 20 }}>
+
+            {/* Progress tile */}
+            <button type="button" onClick={() => setShowProgressBreakdown(true)} title="Click to see the full progress calculation"
+              style={{ ...tileBase, border: "1px solid rgba(0,184,148,0.3)", color: T.headerText }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(0,255,179,0.6)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(0,184,148,0.3)"}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#00ffb3" }}>Progress</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(0,255,179,0.7)" }}>AUDIT ↗</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{effectiveProgress}%</span>
+                {progVar != null && progVar !== 0 && (
+                  <span style={{ background: progVar < 0 ? "#ffe8de" : "#e0f8ee", color: progVar < 0 ? "#b23800" : "#007a62", fontSize: 11, fontWeight: 800, padding: "2px 9px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                    {progVar < 0 ? "▼" : "▲"} {Math.abs(progVar)} pts vs plan
+                  </span>
+                )}
+              </div>
+              <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 3, marginTop: 10, overflow: "visible", position: "relative" }}>
+                <div style={{ height: "100%", width: `${effectiveProgress}%`, background: "#00ffb3", borderRadius: 3 }} />
+                {plannedNow != null && <div style={{ position: "absolute", top: -2, bottom: -2, left: `${Math.min(100, plannedNow)}%`, width: 2, background: "rgba(255,255,255,0.55)" }} />}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
+                {wbsProgress != null ? "Auto-rolled from Activities" : "Manual entry"}{plannedNow != null ? ` · plan marker at ${plannedNow}%` : ""}
+              </div>
             </button>
-            <div style={{ fontSize: 11, color: T.headerText, lineHeight: 1.9, opacity: 0.9 }}>
-              {/* Snapshot context — explains why the breakdown below sums to a
-                  different number than the big weighted IPI on the left. The
-                  big number is the 90-day weighted; the components are the
-                  current snapshot. Both are real; the reconciliation lives
-                  in the audit modal one click away. */}
-              <div style={{
-                fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: T.accent, opacity: 0.85, marginBottom: 4,
-                display: "flex", alignItems: "center", gap: 8,
-              }}>
-                <span>Current Snapshot</span>
-                {ipiSnapshot != null && (
-                  <span style={{ background: "rgba(0,255,179,0.18)", color: T.accent, padding: "1px 7px", borderRadius: 8, fontSize: 9, fontWeight: 800 }}>
-                    IPI {ipiSnapshot}
-                  </span>
-                )}
-                {ipi != null && ipiSnapshot != null && ipi !== ipiSnapshot && (
-                  <span style={{ opacity: 0.6, fontSize: 9, fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>
-                    · weighted = {ipi}
-                  </span>
-                )}
+
+            {/* IPI tile */}
+            <button type="button" onClick={() => setShowIPIBreakdown(true)} title="Click to see the full IPI calculation"
+              style={{ ...tileBase, border: `1px solid ${bandDark.border}`, color: T.headerText }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = bandDark.text}
+              onMouseLeave={e => e.currentTarget.style.borderColor = bandDark.border}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: bandDark.text }}>IPI Score</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: bandDark.text, opacity: 0.8 }}>AUDIT ↗</span>
               </div>
-              <div>
-                <span style={{ color: T.accent, fontWeight: 700 }}>SPI</span>
-                {" "}{ipiResult.components.spi ?? "N/A"}
-                {" "}→ <strong style={{ color: T.accent }}>{ipiResult.components.spiFinal ?? "N/A"}</strong> × 50%
-                {ipiResult.scheduleAnchor === "roadmap" && (
-                  <span style={{ fontSize: 9.5, opacity: 0.65, marginLeft: 6 }}>(vs roadmap)</span>
-                )}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 34, fontWeight: 900, color: bandDark.text, lineHeight: 1 }}>{ipi == null ? "—" : countedIPI}</span>
+                {ipiC && <span style={{ background: ipiC.bg, color: ipiC.color, fontSize: 11, fontWeight: 800, padding: "2px 9px", borderRadius: 10, whiteSpace: "nowrap" }}>● {ipiC.label}</span>}
               </div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>CPI</span> {ipiResult.components.cpi ?? "N/A"} × 25%</div>
-              <div><span style={{ color: T.accent, fontWeight: 700 }}>MCI</span> {ipiResult.components.mci == null ? "N/A (no docs)" : `${Math.round(ipiResult.components.mci * 100)}% docs`} × 25%</div>
-              {(() => {
-                const ant = calcAnticipatedMCI(project);
-                if (!ant) return null;
-                const currentMci = ipiResult.components.mci;
-                const willDrop = currentMci != null && ant.mci != null && ant.mci < currentMci;
+              {ipi != null && (
+                <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 3, marginTop: 10, overflow: "visible", position: "relative" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, ipi)}%`, background: `linear-gradient(90deg, ${bandDark.gaugeFrom}, ${bandDark.gaugeTo})`, borderRadius: 3 }} />
+                  <div style={{ position: "absolute", top: -2, bottom: -2, left: "70%", width: 2, background: "rgba(255,255,255,0.4)" }} />
+                  <div style={{ position: "absolute", top: -2, bottom: -2, left: "90%", width: 2, background: "rgba(255,255,255,0.4)" }} />
+                </div>
+              )}
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
+                {trend != null && trend !== 0 ? `${trend < 0 ? "▼" : "▲"} ${Math.abs(trend)} vs last month · ` : ""}90-day weighted
+              </div>
+            </button>
+
+            {/* Snapshot tile */}
+            <div style={{ background: "rgba(0,0,0,0.28)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "16px 18px" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 10 }}>
+                Current snapshot{ipiSnapshot != null ? ` · IPI ${ipiSnapshot}` : ""}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                {[
+                  { v: spiF, label: "SPI × 50%", ok: spiF != null && spiF >= 0.9, txt: spiF != null ? spiF : "—" },
+                  { v: cpiV, label: "CPI × 25%", ok: cpiV != null && cpiV >= 1, txt: cpiV != null ? cpiV : "—" },
+                  { v: mciV, label: "MCI × 25%", ok: mciV != null && mciV >= 0.8, txt: mciV == null ? "—" : `${Math.round(mciV * 100)}%` },
+                ].map(c => (
+                  <div key={c.label} style={{ background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "9px 12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: numCol(c.ok) }}>{c.txt}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>{c.label}</div>
+                  </div>
+                ))}
+              </div>
+              {ant && (() => {
+                const willDrop = mciV != null && ant.mci != null && ant.mci < mciV;
                 return (
-                  <div style={{ color: willDrop ? "#fbbf24" : "#86efac", fontSize: 10.5, marginTop: 1 }} title="Forecast MCI when this project enters its next gate, using today's document statuses.">
-                    {willDrop ? "⚠" : "✓"} Anticipated at Gate {ant.atGate}: {ant.mci == null ? "—" : `${Math.round(ant.mci * 100)}%`}
-                    {" "}<span style={{ opacity: 0.7 }}>({ant.deltaDocs} new doc{ant.deltaDocs > 1 ? "s" : ""} become due)</span>
+                  <div style={{ color: willDrop ? "#fbd0a5" : "#7dffd9", fontSize: 11, marginTop: 10 }} title="Forecast MCI when this project enters its next gate.">
+                    {willDrop ? "⚠" : "✓"} Anticipated at Gate {ant.atGate}: {ant.mci == null ? "—" : `${Math.round(ant.mci * 100)}%`} — {ant.deltaDocs} new doc{ant.deltaDocs > 1 ? "s" : ""} due
                   </div>
                 );
               })()}
               {project.roadmapDeadline && (() => {
-                // Direct date compare — the roadmap penalty is retired, but
-                // the user still wants a clear "past deadline" chip. Uses
-                // actualFinishDate when completed so a project that finished
-                // on time doesn't keep flagging months later.
                 const rd = new Date(project.roadmapDeadline).getTime();
                 const measure = project.status === "Completed"
                   ? new Date(project.actualFinishDate || project.lastUpdate || TODAY).getTime()
                   : new Date(TODAY).getTime();
                 const daysPast = measure > rd ? Math.floor((measure - rd) / 86_400_000) : 0;
-                return (
-                  <div style={{ color: daysPast > 0 ? "#f87171" : "#86efac", marginTop: 2 }}>
-                    {daysPast > 0
-                      ? `⚠ ${daysPast}d past roadmap (${project.roadmapDeadline})`
-                      : `✓ Within roadmap (${project.roadmapDeadline})`}
-                  </div>
-                );
+                return <div style={{ color: daysPast > 0 ? "#ff9d7a" : "#7dffd9", fontSize: 11, marginTop: 4 }}>{daysPast > 0 ? `⚠ ${daysPast}d past roadmap` : "✓ Within roadmap"}</div>;
               })()}
-              {ipiResult.dataReliability === "invalid_dates" && (
-                <div style={{ color: "#f87171", marginTop: 2, fontWeight: 700 }}>
-                  ⚠ Data invalid: planned end is on/before start date
-                </div>
-              )}
-              {ipiResult.dataReliability === "baseline_forming" && (
-                <div style={{ color: "#fbbf24", marginTop: 2 }}>
-                  Baseline forming — IPI available after 7 days of activity
-                </div>
-              )}
+              {ipiResult.dataReliability === "invalid_dates" && <div style={{ color: "#ff9d7a", fontSize: 11, marginTop: 4, fontWeight: 700 }}>⚠ Invalid dates: planned end ≤ start</div>}
+              {ipiResult.dataReliability === "baseline_forming" && <div style={{ color: "#fbd0a5", fontSize: 11, marginTop: 4 }}>Baseline forming — IPI after 7 days</div>}
             </div>
           </div>
-        </div>
+          );
+        })()}
         <div style={{ display: "grid", gridTemplateColumns: infoCols, gap: 16, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.border}` }}>
           {[
             { label: "PM", value: project.pm },
