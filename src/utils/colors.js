@@ -13,10 +13,10 @@ export const healthColor = {
 };
 
 export const riskColor = {
-  "Critical": { bg: "#fee2e2", text: "#991b1b" },
-  "High":     { bg: "#fef3c7", text: "#92400e" },
-  "Medium":   { bg: "#fef9c3", text: "#854d0e" },
-  "Low":      { bg: "#dcfce7", text: "#15803d" },
+  "Critical": { bg: "#fff3ee", text: "#FF5000" },
+  "High":     { bg: "#fdece2", text: "#b23800" },
+  "Medium":   { bg: "#fdf6e8", text: "#d97706" },
+  "Low":      { bg: "#eefaf4", text: "#007a62" },
 };
 
 export const RAG_COLOR = {

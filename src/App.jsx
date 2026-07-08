@@ -36,7 +36,7 @@
 // ============================================================================
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, ReferenceLine, ReferenceArea, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, ReferenceLine, ReferenceArea, CartesianGrid, LabelList } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
@@ -91,23 +91,27 @@ const RiskMatrix = ({ risks }) => {
     return "Low";
   };
 
-  // Zone definitions per cell — industry-standard color zones
+  // Zone definitions per cell — v2 brand recolor.
+  const _CRIT = { bg: "#fff3ee", fill: "#ffe3d6", accent: "#FF5000", text: "#7c2d12", zone: "Critical" };
+  const _HIGH = { bg: "#fdece2", fill: "#fbdcc9", accent: "#b23800", text: "#7c2d12", zone: "High"     };
+  const _MED  = { bg: "#fdf6e8", fill: "#fbedcf", accent: "#d97706", text: "#78350f", zone: "Medium"   };
+  const _LOW  = { bg: "#eefaf4", fill: "#d8f3e6", accent: "#007a62", text: "#00432f", zone: "Low"      };
   const ZONE_MAP = {
-    "High-Low":      { bg: "#fffbeb", fill: "#fef3c7", accent: "#f59e0b", text: "#78350f", zone: "Medium"   },
-    "High-Medium":   { bg: "#fff7ed", fill: "#ffedd5", accent: "#f97316", text: "#7c2d12", zone: "High"     },
-    "High-High":     { bg: "#fef2f2", fill: "#fee2e2", accent: "#dc2626", text: "#7f1d1d", zone: "Critical" },
-    "Medium-Low":    { bg: "#fefce8", fill: "#fef9c3", accent: "#eab308", text: "#713f12", zone: "Low"      },
-    "Medium-Medium": { bg: "#fffbeb", fill: "#fef3c7", accent: "#f59e0b", text: "#78350f", zone: "Medium"   },
-    "Medium-High":   { bg: "#fff7ed", fill: "#ffedd5", accent: "#f97316", text: "#7c2d12", zone: "High"     },
-    "Low-Low":       { bg: "#f0fdf4", fill: "#dcfce7", accent: "#16a34a", text: "#14532d", zone: "Low"      },
-    "Low-Medium":    { bg: "#f0fdf4", fill: "#d1fae5", accent: "#059669", text: "#064e3b", zone: "Low"      },
-    "Low-High":      { bg: "#fefce8", fill: "#fef9c3", accent: "#eab308", text: "#713f12", zone: "Medium"   },
+    "High-Low":      _MED,
+    "High-Medium":   _HIGH,
+    "High-High":     _CRIT,
+    "Medium-Low":    _LOW,
+    "Medium-Medium": _MED,
+    "Medium-High":   _HIGH,
+    "Low-Low":       _LOW,
+    "Low-Medium":    _LOW,
+    "Low-High":      _MED,
   };
   const ZONE_META = {
-    Critical: { color: "#dc2626", bg: "#fee2e2", label: "Critical" },
-    High:     { color: "#ea580c", bg: "#ffedd5", label: "High"     },
-    Medium:   { color: "#d97706", bg: "#fef3c7", label: "Medium"   },
-    Low:      { color: "#16a34a", bg: "#dcfce7", label: "Low"      },
+    Critical: { color: "#FF5000", bg: "#fff3ee", label: "Critical" },
+    High:     { color: "#b23800", bg: "#fdece2", label: "High"     },
+    Medium:   { color: "#d97706", bg: "#fdf6e8", label: "Medium"   },
+    Low:      { color: "#007a62", bg: "#eefaf4", label: "Low"      },
   };
 
   const openRisks = risks.filter(r => r.status !== "Closed");
@@ -183,7 +187,7 @@ const RiskMatrix = ({ risks }) => {
                       onClick={() => setActiveCell(isActive ? null : (n > 0 ? key : null))}
                       style={{
                         background: isActive ? z.fill : z.bg,
-                        border: `1.5px solid ${isActive ? z.accent : `${z.accent}50`}`,
+                        border: `1.5px solid ${isActive ? z.accent : `${z.accent}${n > 0 ? "80" : "40"}`}`,
                         borderRadius: 10,
                         minHeight: 76,
                         padding: "8px 10px 26px",
@@ -1731,11 +1735,12 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
     cur.setMonth(cur.getMonth() + 1);
   }
 
+  // v2 brand recolor: green families for done/in-flight, Tree orange for late.
   const SC = {
-    Completed:     { track: "#dbeafe", fill: "#3b82f6", border: "#1e40af", lbl: "#1e40af" },
-    "In Progress": { track: "#dcfce7", fill: "#16a34a", border: "#15803d", lbl: "#15803d" },
-    Delayed:       { track: "#fee2e2", fill: "#ef4444", border: "#dc2626", lbl: "#991b1b" },
-    Upcoming:      { track: "#f1f5f9", fill: "#94a3b8", border: "#cbd5e1", lbl: "#64748b" },
+    Completed:     { track: "#e0f8ee", fill: "#007a62", border: "#00614d", lbl: "#00432f" },
+    "In Progress": { track: "#dff7ef", fill: "#00b894", border: "#009677", lbl: "#00432f" },
+    Delayed:       { track: "#ffe8de", fill: "#FF5000", border: "#cc4000", lbl: "#7c2d12" },
+    Upcoming:      { track: "#f0f4f0", fill: "#a1b9ab", border: "#8aa093", lbl: "#3a5547" },
   };
 
   return (
@@ -1803,7 +1808,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
                 <div key={ti} style={{ position: "absolute", left: `${t.p}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: 0.4 }} />
               ))}
               {todayPct != null && (
-                <div style={{ position: "absolute", left: `${todayPct}%`, top: 0, bottom: 0, width: 2, background: T.accent, opacity: 0.85, zIndex: 3 }} />
+                <div style={{ position: "absolute", left: `${todayPct}%`, top: 0, bottom: 0, width: 2, background: "#00b894", boxShadow: "0 0 6px rgba(0,184,148,0.6)", zIndex: 3 }} />
               )}
               {sp == null && ep == null ? (
                 <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: 8, fontSize: 10.5, fontWeight: isMs ? 800 : 600, color: T.muted }}>
@@ -1844,7 +1849,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
 
         {/* Legend */}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
-          {[["#3b82f6","Completed"],["#16a34a","In Progress"],["#ef4444","Delayed / Overdue"],["#94a3b8","Upcoming"]].map(([col, lbl]) => (
+          {[["#007a62","Completed"],["#00b894","In Progress"],["#FF5000","Delayed / Overdue"],["#a1b9ab","Upcoming"]].map(([col, lbl]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted }}>
               <div style={{ width: 14, height: 8, background: col, borderRadius: 2 }} />
               {lbl}
@@ -2622,7 +2627,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           inWin:  new Date(h.date).getTime() >= windowMs,
         }));
         const inWindowCount = data.filter(d => d.inWin).length;
-        const dotColor = (v) => v >= 100 ? "#16a34a" : v >= 90 ? "#fbbf24" : v >= 70 ? "#f97316" : "#dc2626";
+        const dotColor = (v) => v >= 90 ? "#007a62" : v >= 70 ? "#d97706" : "#FF5000";
         const firstWin = data.find(d => d.inWin);
 
         // Recharts <Tooltip content={fn}> accepts a plain function that
@@ -2728,11 +2733,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     Immutable record per save · hover a dot for audit metadata
                   </div>
                 </div>
-                <div style={{ fontSize: 10, color: T.muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#16a34a", borderRadius: 4, marginRight: 4 }} />≥ 100</span>
-                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fbbf24", borderRadius: 4, marginRight: 4 }} />90-99</span>
-                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#f97316", borderRadius: 4, marginRight: 4 }} />70-89</span>
-                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#dc2626", borderRadius: 4, marginRight: 4 }} />&lt; 70</span>
+                <div style={{ fontSize: 11, color: T.muted, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#007a62", borderRadius: 4, marginRight: 4 }} />On Track 90+</span>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#d97706", borderRadius: 4, marginRight: 4 }} />Watch 70–89</span>
+                  <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#FF5000", borderRadius: 4, marginRight: 4 }} />Critical &lt;70</span>
                 </div>
               </div>
               {data.length === 0 ? (
@@ -2745,28 +2749,37 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={210}>
-                  <LineChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 2 }}>
+                  <LineChart data={data} margin={{ top: 20, right: 12, left: -10, bottom: 2 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: T.muted }} interval="preserveStartEnd" />
-                    <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]} tick={{ fontSize: 10, fill: T.muted }} />
+                    <YAxis domain={[0, 120]} ticks={[0, 70, 90, 100, 120]}
+                      tick={({ x, y, payload }) => {
+                        const c = payload.value === 90 ? "#007a62" : payload.value === 70 ? "#FF5000" : T.muted;
+                        return <text x={x} y={y} dy={3} textAnchor="end" fontSize={10} fill={c} fontWeight={payload.value === 90 || payload.value === 70 ? 700 : 400}>{payload.value}</text>;
+                      }} />
                     <Tooltip content={renderTooltip} />
                     {firstWin && (
-                      <ReferenceArea x1={firstWin.label} x2={data[data.length - 1].label} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.06} />
+                      <ReferenceArea x1={firstWin.label} x2={data[data.length - 1].label} y1={0} y2={120} fill="#00FFB3" fillOpacity={0.07} radius={[6, 6, 0, 0]} />
                     )}
-                    <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 3" />
-                    <ReferenceLine y={90}  stroke="#fbbf24" strokeDasharray="4 3" />
-                    <ReferenceLine y={70}  stroke="#f97316" strokeDasharray="4 3" />
+                    <ReferenceLine y={90} stroke="#007a62" strokeDasharray="4 3" strokeOpacity={0.5} />
+                    <ReferenceLine y={70} stroke="#FF5000" strokeDasharray="4 3" strokeOpacity={0.5} />
                     <Line
                       type="monotone"
                       dataKey="ipi"
                       stroke="#003932"
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       dot={(props) => {
                         const { cx, cy, payload } = props;
-                        return <circle key={`d-${payload.idx}`} cx={cx} cy={cy} r={5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={1.5} />;
+                        return <circle key={`d-${payload.idx}`} cx={cx} cy={cy} r={5.5} fill={dotColor(payload.ipi)} stroke="#fff" strokeWidth={2} />;
                       }}
                       activeDot={{ r: 7 }}
-                    />
+                    >
+                      <LabelList dataKey="ipi" position="top" content={(props) => {
+                        const { x, y, value } = props;
+                        if (value == null) return null;
+                        return <text x={x} y={y - 9} textAnchor="middle" fontSize={11.5} fontWeight={800} fill={dotColor(value)}>{value}</text>;
+                      }} />
+                    </Line>
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -2780,9 +2793,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     Progress · Planned vs Actual
                     {variance != null && (
                       <span style={{
-                        marginLeft: 10, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 8,
-                        background: variance >= 0 ? "rgba(22,163,74,0.12)" : "rgba(220,38,38,0.10)",
-                        color: variance >= 0 ? "#15803d" : "#dc2626",
+                        marginLeft: 10, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 8,
+                        background: variance >= 0 ? "#e0f8ee" : "#fdf1dd",
+                        color: variance >= 0 ? "#007a62" : "#b45309",
                       }}>
                         {variance >= 0 ? "▲" : "▼"} {Math.abs(variance)} pts vs plan
                       </span>
@@ -2842,12 +2855,12 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     <div style={{ display: "flex", gap: 16 }}>
                       <span>Planned <strong style={{ color: T.text }}>{plannedToday}%</strong></span>
                       <span>Actual <strong style={{ color: T.text }}>{actualToday}%</strong></span>
-                      <span>Variance <strong style={{ color: variance >= 0 ? "#15803d" : "#dc2626" }}>{variance >= 0 ? "+" : ""}{variance} pts</strong></span>
+                      <span>Variance <strong style={{ color: variance >= 0 ? "#007a62" : "#b23800" }}>{variance >= 0 ? "+" : ""}{variance} pts</strong></span>
                     </div>
                     <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 7,
-                      background: variance >= 0 ? "rgba(22,163,74,0.12)" : "rgba(217,119,6,0.14)",
-                      color: variance >= 0 ? "#15803d" : "#b45309",
+                      fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 7,
+                      background: variance >= 0 ? "#e0f8ee" : "#fdf1dd",
+                      color: variance >= 0 ? "#007a62" : "#b45309",
                     }}>
                       {variance >= 0 ? "On / ahead of plan" : `Behind plan · ${Math.abs(variance)} pts`}
                     </span>
@@ -3067,14 +3080,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               // grey family) while letting parent milestones stand out as the
               // stronger, more saturated anchor.
               const statusStyles = {
-                "Completed":   { bg: "#dbeafe", text: "#1e40af", icon: "✓", lineColor: "#3b82f6", softColor: "#93c5fd" },
-                "In Progress": { bg: "#dcfce7", text: "#15803d", icon: "◎", lineColor: "#16a34a", softColor: "#86efac" },
-                "Upcoming":    { bg: "#f3f4f6", text: "#6b7280", icon: "○", lineColor: "#d1d5db", softColor: "#e5e7eb" },
-                "Delayed":     { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626", softColor: "#fca5a5" },
+                "Completed":   { bg: "#e0f8ee", text: "#007a62", icon: "✓", lineColor: "#007a62", softColor: "#8fd9c2" },
+                "In Progress": { bg: "#dff7ef", text: "#00614d", icon: "◎", lineColor: "#00b894", softColor: "#7fddc4" },
+                "Upcoming":    { bg: "#f0f4f0", text: "#5a7a6e", icon: "○", lineColor: "#a1b9ab", softColor: "#cdddd2" },
+                "Delayed":     { bg: "#ffe8de", text: "#b23800", icon: "!", lineColor: "#FF5000", softColor: "#ffb59a" },
               };
               const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
               const s = isOverdue
-                ? { bg: "#fee2e2", text: "#991b1b", icon: "!", lineColor: "#dc2626", softColor: "#fca5a5" }
+                ? { bg: "#ffe8de", text: "#b23800", icon: "!", lineColor: "#FF5000", softColor: "#ffb59a" }
                 : (statusStyles[m.status] || statusStyles["Upcoming"]);
               // Top-level item = milestone (diamond) · child = activity (smaller circle).
               const isMilestone = !m.parentId;
@@ -3216,8 +3229,8 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Risk Register</h3>
               <div style={{ display: "flex", gap: 8 }}>
-                <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.risks.filter(r => r.level === "Critical").length} Critical</span>
-                <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.risks.filter(r => r.level === "High").length} High</span>
+                <span style={{ background: "#fff3ee", color: "#FF5000", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.risks.filter(r => r.level === "Critical").length} Critical</span>
+                <span style={{ background: "#fdece2", color: "#b23800", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.risks.filter(r => r.level === "High").length} High</span>
               </div>
             </div>
             {project.risks.length === 0 ? (
@@ -3229,22 +3242,25 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
                   ))}
                 </tr></thead>
-                <tbody>{project.risks.map(r => (
+                <tbody>{[...project.risks].sort((a, b) => ({ Critical: 4, High: 3, Medium: 2, Low: 1 }[b.level] || 0) - ({ Critical: 4, High: 3, Medium: 2, Low: 1 }[a.level] || 0)).map(r => {
+                  const statusCol = r.status === "Open" ? "#b23800" : r.status === "Mitigated" ? "#007a62" : "#b45309";
+                  return (
                   <tr key={r.id} style={{ borderTop: `1px solid ${T.border}` }}>
                     <td style={{ padding: "12px", fontSize: 12 }}>
                       <div style={{ fontWeight: 600, color: T.text }}>{r.title}</div>
-                      <div style={{ fontSize: 11, color: T.muted, marginTop: 3 }}>Mitigation: {r.mitigation}</div>
+                      {r.mitigation && <div style={{ fontSize: 11, color: T.muted, marginTop: 3 }}>↳ {r.mitigation}</div>}
                     </td>
                     <td style={{ padding: "12px", fontSize: 12 }}>{r.probability}</td>
                     <td style={{ padding: "12px", fontSize: 12 }}>{r.impact}</td>
                     <td style={{ padding: "12px" }}><RiskBadge level={r.level} /></td>
                     <td style={{ padding: "12px", fontSize: 12 }}>{r.owner}</td>
                     <td style={{ padding: "12px" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: r.status === "Open" ? "#dc2626" : r.status === "Mitigated" ? "#16a34a" : "#eab308" }}>{r.status}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: statusCol }}>{r.status}</span>
                     </td>
                     <td style={{ padding: "12px", fontSize: 12, color: T.muted }}>{r.dueDate}</td>
                   </tr>
-                ))}</tbody>
+                  );
+                })}</tbody>
               </table>
             )}
           </div>
@@ -3253,37 +3269,44 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Issue Log</h3>
               <div style={{ display: "flex", gap: 8 }}>
                 {project.issues.filter(i => { const d = daysSince(i.raised); return d != null && d > 30 && i.status === "Open"; }).length > 0 && (
-                  <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>
+                  <span style={{ background: "#fff3ee", color: "#FF5000", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>
                     {project.issues.filter(i => { const d = daysSince(i.raised); return d != null && d > 30 && i.status === "Open"; }).length} Stale 30d+
                   </span>
                 )}
                 {project.issues.filter(i => i.escalated).length > 0 && (
-                  <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.issues.filter(i => i.escalated).length} Escalated</span>
+                  <span style={{ background: "#fdece2", color: "#b23800", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20 }}>{project.issues.filter(i => i.escalated).length} Escalated</span>
                 )}
               </div>
             </div>
             {project.issues.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "24px", color: "#16a34a", fontSize: 13 }}>✓ No open issues</div>
+              <div style={{ textAlign: "center", padding: "24px", color: "#007a62", fontSize: 13 }}>✓ No open issues</div>
             ) : (
               project.issues.map(issue => {
                 const issueDays = daysSince(issue.raised);
                 const isStale   = issueDays != null && issueDays > 30 && issue.status === "Open";
-                const borderCol = issue.escalated ? "#dc2626" : isStale ? "#f97316" : issue.severity === "High" ? "#eab308" : T.border;
+                const sevCol    = riskColor[issue.severity]?.text || "#a1b9ab";
+                const borderCol = issue.escalated ? "#FF5000" : isStale ? "#b23800" : sevCol;
+                const nextAction = issue.nextAction || issue.action;
                 return (
                   <div key={issue.id} style={{ padding: "14px 16px", background: T.bg, borderRadius: 10, marginBottom: 10, borderLeft: `4px solid ${borderCol}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{issue.title}</span>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {isStale && <span style={{ background: "#ffedd5", color: "#c2410c", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{issueDays}d open</span>}
-                        {issue.escalated && <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>ESCALATED</span>}
+                        {isStale && <span style={{ background: "#fde8d8", color: "#b23800", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{issueDays}d open</span>}
+                        {issue.escalated && <span style={{ background: "#ffe8de", color: "#FF5000", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>ESCALATED</span>}
                         <RiskBadge level={issue.severity} />
                       </div>
                     </div>
                     <div style={{ fontSize: 12, color: T.muted }}>
                       Owner: {issue.owner} · Raised: {issue.raised}
-                      {issue.targetDate && <span> · Target: <span style={{ color: issue.targetDate < TODAY && issue.status === "Open" ? "#dc2626" : T.muted }}>{issue.targetDate}</span></span>}
-                      {" · "}Status: <span style={{ fontWeight: 600, color: issue.status === "Open" ? "#dc2626" : issue.status === "Resolved" ? "#16a34a" : T.muted }}>{issue.status}</span>
+                      {issue.targetDate && <span> · Target: <span style={{ color: issue.targetDate < TODAY && issue.status === "Open" ? "#b23800" : T.muted }}>{issue.targetDate}</span></span>}
+                      {" · "}Status: <span style={{ fontWeight: 600, color: issue.status === "Open" ? "#b23800" : issue.status === "Resolved" ? "#007a62" : T.muted }}>{issue.status}</span>
                     </div>
+                    {nextAction && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${T.border}`, fontSize: 12, color: T.text }}>
+                        <span style={{ fontWeight: 700, color: "#b45309" }}>Next action:</span> {nextAction}
+                      </div>
+                    )}
                   </div>
                 );
               })
