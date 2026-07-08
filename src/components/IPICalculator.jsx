@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useT } from "../theme.js";
 import { Ico } from "./Icon.jsx";
+import { ScoreChips } from "./ScoreChips.jsx";
 import { calcProjectIPIFull, ipiColor, ipiColorDark } from "../utils/metrics.js";
 import { TODAY } from "../utils/dates.js";
 
@@ -259,6 +260,15 @@ const IPICalculator = ({ onClose, onBack }) => {
                       </div>
                     )}
                   </div>
+                  {/* Mandatory context chips (Late Delivery / Roadmap) + schedule delta */}
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <ScoreChips result={result} size="md" onDark />
+                    {result.scheduleDeltaDays !== 0 && (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: result.scheduleDeltaDays > 0 ? "#ff9d7a" : "#7dffd9" }}>
+                        {Math.abs(result.scheduleDeltaDays)} days {result.scheduleDeltaDays > 0 ? "late" : "early"} vs plan
+                      </span>
+                    )}
+                  </div>
                   {/* Gauge */}
                   <div style={{ marginTop: 14 }}>
                     <div style={{ height: 8, background: "rgba(255,255,255,0.10)", borderRadius: 4, position: "relative", overflow: "hidden" }}>
@@ -267,7 +277,7 @@ const IPICalculator = ({ onClose, onBack }) => {
                       <div style={{ position: "absolute", left: "90%", top: -3, width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
-                      <span>0</span><span>At Risk · 70</span><span>Watch · 90</span><span>100</span>
+                      <span>0</span><span>Critical · 70</span><span>On Track · 90</span><span>100</span>
                     </div>
                   </div>
                 </div>
@@ -277,7 +287,7 @@ const IPICalculator = ({ onClose, onBack }) => {
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 8 }}>Components</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {[
-                      { k: "SPI (raw)",       v: result.components.spi,      hint: `Earned ÷ Planned (vs ${result.scheduleAnchor === "roadmap" ? "Roadmap" : "Planned End"})` },
+                      { k: "SPI (raw)",       v: result.components.spi,      hint: result.complete ? "Baseline ÷ Actual duration (vs Baseline)" : "Earned ÷ Planned (vs Baseline)" },
                       { k: "spiFinal",        v: result.components.spiFinal, hint: "min(1.20, SPI) · used in IPI", strong: true },
                       { k: "CPI",             v: result.components.cpi,      hint: "BCWP ÷ Actual Cost" },
                       { k: "MCI",             v: result.components.mci,      hint: "Σ credit ÷ docs due at gate" },

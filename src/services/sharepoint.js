@@ -80,6 +80,8 @@ export const SP_FIELD_MAP = {
   lastSubmittedDate:   "LastSubmittedDate",
   pmoNotes:            "PMONotes",
   roadmapDeadline:     "RoadmapDeadline",
+  baselineEnd:         "BaselineEnd",
+  baselineExceptionNote: "BaselineExceptionNote",
   isRoadmap:           "IsRoadmapProject",
   actualFinishDate:    "ActualFinishDate",
   // JSON columns — stored as multi-line text in SP, parsed with safeJSON()
@@ -173,6 +175,11 @@ export function mapSPItemToProject(item) {
     lastSubmittedDate:   safeDate(item[f.lastSubmittedDate]),
     pmoNotes:            item[f.pmoNotes]             || "",
     roadmapDeadline:     safeDate(item[f.roadmapDeadline]),
+    // One-time backfill: projects predating the baseline field inherit their
+    // current plannedEnd as the locked baseline on first read, so SPI has a
+    // stable reference. Once BaselineEnd is written in SP it wins thereafter.
+    baselineEnd:         safeDate(item[f.baselineEnd]) || safeDate(item[f.plannedEnd]),
+    baselineExceptionNote: item[f.baselineExceptionNote] || "",
     isRoadmap:           Boolean(item[f.isRoadmap]),
     actualFinishDate:    safeDate(item[f.actualFinishDate]),
     // JSON sub-objects
@@ -281,6 +288,8 @@ export function mapProjectToSPItem(project) {
     [f.lastSubmittedDate]: nd(project.lastSubmittedDate),
     [f.pmoNotes]:          ns(project.pmoNotes),
     [f.roadmapDeadline]:   nd(project.roadmapDeadline),
+    [f.baselineEnd]:       nd(project.baselineEnd),
+    [f.baselineExceptionNote]: ns(project.baselineExceptionNote),
     [f.isRoadmap]:         Boolean(project.isRoadmap),
     [f.actualFinishDate]:  nd(project.actualFinishDate),
     [f.gates]:             js(project.gates),

@@ -475,25 +475,33 @@ export const IPIBreakdownModal = ({ project, onClose }) => {
         <KV k="Actual cost" v={ac ? sar(ac) : "—"} mono />
         <KV k="Current gate" v={`Gate ${gateNum}`} />
         <KV k="Required docs" v={`${reqDocs.length} total · ${dueDocs.length} due at Gate ${gateNum}`} mono />
+        <KV k="SPI reference (baseline)" v={(project.baselineEnd || project.plannedEnd || "—") + (project.baselineEnd ? " · locked baseline" : " · plannedEnd (no baseline)")} mono />
+        <KV k="Schedule vs plan" v={full.scheduleDeltaDays > 0 ? `${full.scheduleDeltaDays} days late` : full.scheduleDeltaDays < 0 ? `${Math.abs(full.scheduleDeltaDays)} days early` : "on plan"} mono />
         <KV k="Roadmap deadline" v={roadmapDeadline || "(none set)"} mono />
-        <KV k="Days past roadmap" v={daysPast > 0 ? `${daysPast} days` : "Within roadmap"} mono />
+        <KV k="Roadmap status" v={full.roadmapStatus === "met" ? `Met${full.roadmapDaysAhead > 0 ? ` · ${full.roadmapDaysAhead}d ahead` : ""}` : full.roadmapStatus === "breach" ? "Breach" : roadmapDeadline ? "On track" : "—"} mono />
       </Section>
 
       {/* ─── 02 SPI ─── */}
       <Section num="02" title="SPI — Schedule Performance Index" accent="#00b894" sub="weight 50% (re-normalised when peers absent)">
-        <Formula>{`Reference deadline: ${project.roadmapDeadline ? "Roadmap (" + project.roadmapDeadline + ")" : "Planned End (" + (project.plannedEnd || "—") + ")"}
-${project.roadmapDeadline ? "                    ↑ Roadmap wins over Planned End when set —\n                    strategic commitment cannot be gamed by padding the plan." : ""}
+        <Formula>{`Reference: ${project.baselineEnd ? "Baseline (" + project.baselineEnd + ", locked at Gate 3)" : "Planned End (" + (project.plannedEnd || "—") + ")"}
+           ↑ The Roadmap Deadline never drives SPI — it is a checkpoint only.
 
-SPI      =  EV ÷ PV        (uncapped — PV > 1 when past reference deadline)
+${full.complete
+  ? `COMPLETED — schedule DURATION ratio (Option C):
+SPI      =  baselineDuration ÷ actualDuration
+         =  ${num3(comp.spi)}`
+  : `IN-PROGRESS — planned% CLAMPED at 100% at the baseline:
+SPI      =  EV ÷ PV
 EV       =  ${num3(evRaw)}   ← effective progress / 100
-PV       =  ${num3(pvUsed)}${pvAuto != null && pvUsed === pvAuto ? `   ← elapsed / duration` : "   ← manual override"}
-SPI      =  ${num3(comp.spi)}
+PV       =  ${num3(pvUsed)}${pvAuto != null && pvUsed === pvAuto ? `   ← min(1, elapsed / duration)` : "   ← manual override"}
+SPI      =  ${num3(comp.spi)}`}
 
 spiFinal = min(1.20, SPI)  =  ${num3(comp.spiFinal)}`}</Formula>
         <div style={{ fontSize: 10, color: PAL.muted, marginTop: 4, lineHeight: 1.6 }}>
-          The explicit roadmap penalty is retired — PV measured against the Roadmap
-          Deadline (when set) already reflects any strategic slip via PV &gt; 1 → SPI &lt; 1.
-          Adding a penalty on top would be double-punishment.
+          SPI is measured against the project&rsquo;s own committed baseline, never the
+          roadmap. In-progress lateness pins planned% at 100% (SPI = actual%); a completed
+          project scores on how its actual duration compares to the baseline duration
+          (late lowers, early raises, capped 1.20). Roadmap is an informational checkpoint.
         </div>
         <KV k="SPI used in IPI" v={num3(comp.spiFinal ?? comp.spi)} mono />
       </Section>

@@ -368,11 +368,19 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const spiFinal = spi === null ? null : Math.min(cap, spi);
 
   // ── Roadmap = CHECKPOINT ONLY (no effect on any number) ───────────────────
-  // A breach is raised when the as-of/finish clock reaches the Roadmap
-  // Deadline while the project is still incomplete. Purely a flag for project
-  // health; SPI already reflects the delay against the baseline.
+  // Commitment status against the strategic Roadmap Deadline. Purely
+  // informational — SPI already reflects delay against the baseline.
+  //   • breach: incomplete and the clock has reached the roadmap, OR completed
+  //     after the roadmap (missed the commitment).
+  //   • met:    completed on or before the roadmap.
+  // `roadmapDaysAhead` = days the finish beat the roadmap (met case).
   const roadmapMs = _toMs(project.roadmapDeadline);
-  const roadmapBreach = !!(roadmapMs && nowMs >= roadmapMs && effProgress < 100);
+  const roadmapMet    = !!(roadmapMs && isComplete && nowMs <= roadmapMs);
+  const roadmapBreach = !!(roadmapMs && (
+    (isComplete && nowMs > roadmapMs) || (!isComplete && nowMs >= roadmapMs)
+  ));
+  const roadmapDaysAhead = roadmapMet ? Math.max(0, Math.floor((roadmapMs - nowMs) / 86_400_000)) : 0;
+  const roadmapStatus = roadmapBreach ? "breach" : roadmapMet ? "met" : null;
 
   // ── Days late vs the baseline plan ────────────────────────────────────────
   // Days the measurement clock (as-of, or actualFinishDate when Completed) has
@@ -380,6 +388,11 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // and persisted into ipiHistory so the lateness trend is preserved.
   const daysLateVsPlan = scheduleEndMs && nowMs > scheduleEndMs
     ? Math.floor((nowMs - scheduleEndMs) / 86_400_000)
+    : 0;
+  // Signed delta vs baseline: negative = ahead, positive = late, 0 = on plan.
+  // Lets the UI render "X days early/late vs plan" from one number.
+  const scheduleDeltaDays = scheduleEndMs && projectStartMs
+    ? Math.round((nowMs - scheduleEndMs) / 86_400_000)
     : 0;
 
   // ── IPI rollup: re-normalise weights of present components ────────────────
@@ -443,8 +456,12 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     ev: +ev.toFixed(3),
     pv: +pv.toFixed(3),
     scheduleAnchor: "baseline",
+    complete: isComplete,
     roadmapBreach,
+    roadmapStatus,
+    roadmapDaysAhead,
     daysLateVsPlan,
+    scheduleDeltaDays,
     dataReliability,
   };
 }

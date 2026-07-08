@@ -50,6 +50,7 @@ import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Ico, DeptTile } from "./components/Icon.jsx";
+import { ScoreChips } from "./components/ScoreChips.jsx";
 import { Progress } from "./components/Progress.jsx";
 import IPICalculator from "./components/IPICalculator.jsx";
 import CostCalculator from "./components/CostCalculator.jsx";
@@ -2421,6 +2422,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
                 {trend != null && trend !== 0 ? `${trend < 0 ? "▼" : "▲"} ${Math.abs(trend)} vs last month · ` : ""}90-day weighted
               </div>
+              <div style={{ marginTop: 8 }}><ScoreChips result={ipiResult} size="md" onDark /></div>
             </button>
 
             {/* Snapshot tile */}
@@ -4700,7 +4702,10 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                     <td style={{ padding: "12px 14px" }}>
                       {ipi == null
                         ? <span style={{ fontSize: 11, color: T.muted }}>—</span>
-                        : <span title={ipiC.label} style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipi}</span>}
+                        : <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                            <span title={ipiC.label} style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipi}</span>
+                            <ScoreChips project={p} size="sm" />
+                          </div>}
                     </td>
                     <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                     <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.gate}</td>
@@ -5282,7 +5287,10 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   <td style={{ padding: "12px 14px" }}>
                     {ipi == null
                       ? <span style={{ fontSize: 11, color: T.muted }}>—</span>
-                      : <span title={ipiC.label} style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipi}</span>}
+                      : <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                          <span title={ipiC.label} style={{ background: ipiC.bg, color: ipiC.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipi}</span>
+                          <ScoreChips project={p} size="sm" />
+                        </div>}
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
@@ -5786,6 +5794,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     classification: "Strategic", strategic: "",
     objective: "", businessCase: "",
     startDate: today, plannedEnd: "", roadmapDeadline: "",
+    baselineEnd: "", baselineExceptionNote: "",
     // Progress is auto-derived from the WBS on save (see handleSave) — these
     // 0 defaults seed new projects until activities are added.
     progress: 0, plannedProgress: 0,
@@ -5940,7 +5949,31 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16 }}>
         <FField label="Start Date"><input type="date" value={form.startDate || ""} onChange={e => set("startDate", e.target.value)} style={s} /></FField>
         <FField label="Planned End Date"><input type="date" value={form.plannedEnd || ""} onChange={e => set("plannedEnd", e.target.value)} style={s} /></FField>
-        <FField label="Roadmap Deadline" title="The strategic deadline from the roadmap. Overrunning this date applies a daily IPI penalty."><input type="date" value={form.roadmapDeadline || ""} onChange={e => set("roadmapDeadline", e.target.value)} style={s} /></FField>
+        <FField label="Roadmap Deadline" title="Strategic checkpoint. Overrunning it raises a Roadmap Breach flag — it does NOT change the IPI math."><input type="date" value={form.roadmapDeadline || ""} onChange={e => set("roadmapDeadline", e.target.value)} style={s} /></FField>
+        {(() => {
+          const gateN = parseGateNumber(form.gate);
+          const locked = gateN >= 3 && !!form.baselineEnd;
+          const overRoadmap = form.baselineEnd && form.roadmapDeadline && new Date(form.baselineEnd) > new Date(form.roadmapDeadline);
+          return (
+            <>
+              <FField label="Baseline End (SPI reference)" title="Locked at Gate 3. SPI is always measured against this baseline, never the roadmap.">
+                <input type="date" value={form.baselineEnd || ""} disabled={locked}
+                  onChange={e => set("baselineEnd", e.target.value)}
+                  style={{ ...s, opacity: locked ? 0.65 : 1, cursor: locked ? "not-allowed" : "auto" }} />
+                <div style={{ fontSize: 10, color: "#5a7a6e", marginTop: 3 }}>
+                  {locked ? "🔒 Locked at Gate 3 — the SPI reference" : gateN >= 3 ? "Will lock to Planned End on save" : "Locks automatically when the project reaches Gate 3"}
+                </div>
+              </FField>
+              {overRoadmap && (
+                <FField label="Baseline Exception Note (required)" title="The baseline overruns the roadmap — document why before saving.">
+                  <input value={form.baselineExceptionNote || ""} onChange={e => set("baselineExceptionNote", e.target.value)}
+                    placeholder="Why the baseline overruns the roadmap…"
+                    style={{ ...s, borderColor: String(form.baselineExceptionNote || "").trim() ? undefined : "#FF5000" }} />
+                </FField>
+              )}
+            </>
+          );
+        })()}
         <FField label="Progress (%)"><input type="number" min={0} max={100} value={form.progress} onChange={e => set("progress", Number(e.target.value))} style={s} /></FField>
         <FField label="Planned Progress (%)"><input type="number" min={0} max={100} value={form.plannedProgress} onChange={e => set("plannedProgress", Number(e.target.value))} style={s} /></FField>
         <FField label="Budget (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>
@@ -6401,6 +6434,8 @@ export default function App() {
       mci:      snapComp.mci,
       ev:       fullResult.ev,
       pv:       fullResult.pv,
+      daysLate: fullResult.daysLateVsPlan,      // lateness trend preserved in the audit trail
+      roadmap:  fullResult.roadmapStatus,       // "met" | "breach" | null at time of save
       by:       currentUserName || "system",
       status,
     };
@@ -6438,7 +6473,7 @@ export default function App() {
       // PMO-authored fields never overwritten from a PM/dept_head save —
       // EXCEPT pmoValidationNote, which PM is allowed to clear on resubmit
       // so the returned banner stops surfacing stale feedback.
-      const PMO_PROTECTED = ["PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline"];
+      const PMO_PROTECTED = ["PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline", "BaselineEnd", "BaselineExceptionNote"];
       const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
       await SPService.updateProject(project.spId, updated, omit);
     }
@@ -6482,6 +6517,21 @@ export default function App() {
     if (mode === "edit" && Array.isArray(full.milestones)) {
       const prevMs = projects.find(p => p.id === localId)?.milestones || [];
       full.milestones = trackMilestoneDateChanges(full.milestones, prevMs);
+    }
+
+    // ── Gate-3 baseline capture + lock ──────────────────────────────────────
+    // When a project reaches Gate 3 or beyond, freeze the current plannedEnd as
+    // the immutable SPI baseline (once). Thereafter plannedEnd can move but the
+    // baseline — and therefore the schedule score — cannot be gamed by padding.
+    if (parseGateNumber(full.gate) >= 3 && !full.baselineEnd && full.plannedEnd) {
+      full.baselineEnd = full.plannedEnd;
+    }
+    // Gate-3 governance validation: a baseline that overruns the strategic
+    // Roadmap Deadline must carry a documented exception before it can be saved.
+    if (full.baselineEnd && full.roadmapDeadline
+        && new Date(full.baselineEnd) > new Date(full.roadmapDeadline)
+        && !String(full.baselineExceptionNote || "").trim()) {
+      throw new Error("Baseline end is later than the Roadmap Deadline — record a baseline exception note before saving (Gate-3 governance).");
     }
 
     if (!isUsingMock()) {
