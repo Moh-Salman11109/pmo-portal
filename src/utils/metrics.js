@@ -736,30 +736,28 @@ export function deriveBudgetStatus(project) {
   return "On Budget";
 }
 
+// Strict 3-band RAG scale derived from the Tree brand (v2 design).
+// `color` = text/label, `bar` = bar/accent fill, `bg` = chip background.
+// The old "Over Achieved" (>100) and "Watch 90-99"/"At Risk 70-89" split is
+// intentionally merged: On Track ≥90, Watch 70-89, Critical <70.
 export function ipiColor(score) {
-  if (score == null) return { color: "#6b7280", bg: "#f3f4f6", label: "No Data" };
-  if (score > 100)  return { color: "#166534", bg: "#bbf7d0", label: "Over Achieved" };
-  if (score >= 100) return { color: "#15803d", bg: "#dcfce7", label: "On Track" };
-  if (score >=  90) return { color: "#854d0e", bg: "#fef9c3", label: "Watch" };
-  if (score >=  70) return { color: "#c05621", bg: "#fed7aa", label: "At Risk" };
-  return               { color: "#991b1b", bg: "#fee2e2", label: "Critical" };
+  if (score == null) return { color: "#5a7a6e", bg: "#eef3ee", bar: "#a1b9ab", label: "No Data" };
+  if (score >= 90) return { color: "#007a62", bg: "#e0f8ee", bar: "#00b894", label: "On Track" };
+  if (score >= 70) return { color: "#b45309", bg: "#fdf1dd", bar: "#d97706", label: "Watch" };
+  return             { color: "#b23800", bg: "#ffe8de", bar: "#FF5000", label: "Critical" };
 }
 
-// Same band mapping as ipiColor() but tuned for dark hero gradients.
+// Same 3-band mapping as ipiColor() but tuned for dark hero gradients.
 // Returns translucent pill colours and a gauge gradient pair.
 export function ipiColorDark(score) {
   const band = ipiColor(score).label;
   switch (band) {
-    case "Over Achieved":
-      return { bg: "rgba(0,255,179,0.22)", border: "rgba(0,255,179,0.45)", text: "#00FFB3", gaugeFrom: "#00b894", gaugeTo: "#00FFB3" };
     case "On Track":
-      return { bg: "rgba(0,255,179,0.18)", border: "rgba(0,255,179,0.40)", text: "#00FFB3", gaugeFrom: "#00b894", gaugeTo: "#00FFB3" };
+      return { bg: "rgba(0,255,179,0.12)", border: "rgba(0,255,179,0.45)", text: "#7dffd9", gaugeFrom: "#00b894", gaugeTo: "#00FFB3" };
     case "Watch":
-      return { bg: "rgba(245,158,11,0.20)", border: "rgba(245,158,11,0.45)", text: "#fcd34d", gaugeFrom: "#d97706", gaugeTo: "#fbbf24" };
-    case "At Risk":
-      return { bg: "rgba(255,80,0,0.20)", border: "rgba(255,80,0,0.45)", text: "#ffa07a", gaugeFrom: "#c2410c", gaugeTo: "#FF5000" };
+      return { bg: "rgba(217,119,6,0.15)", border: "rgba(217,119,6,0.45)", text: "#fcd34d", gaugeFrom: "#b45309", gaugeTo: "#d97706" };
     case "Critical":
-      return { bg: "rgba(220,38,38,0.24)", border: "rgba(220,38,38,0.50)", text: "#fca5a5", gaugeFrom: "#7f1d1d", gaugeTo: "#dc2626" };
+      return { bg: "rgba(255,80,0,0.15)", border: "rgba(255,80,0,0.45)", text: "#ff9d7a", gaugeFrom: "#b23800", gaugeTo: "#FF5000" };
     default:
       return { bg: "rgba(255,255,255,0.10)", border: "rgba(255,255,255,0.20)", text: "rgba(255,255,255,0.7)", gaugeFrom: "#4b6c67", gaugeTo: "#a1b9ab" };
   }

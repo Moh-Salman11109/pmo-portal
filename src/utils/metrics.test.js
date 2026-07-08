@@ -568,24 +568,32 @@ describe("Audit fix — Data reliability guards refuse to score bad inputs", () 
   });
 });
 
-describe("ipiColor — status bands match the documented thresholds", () => {
+describe("ipiColor — strict 3-band scale (v2 design)", () => {
   it("maps null to 'No Data' (grey)", () => {
     expect(ipiColor(null).label).toBe("No Data");
   });
-  it("maps >100 to 'Over Achieved' (green dark)", () => {
-    expect(ipiColor(110).label).toBe("Over Achieved");
+  it("maps >100 to 'On Track' (merged, no separate Over Achieved band)", () => {
+    expect(ipiColor(110).label).toBe("On Track");
   });
-  it("maps exactly 100 to 'On Track' (green)", () => {
+  it("maps exactly 100 to 'On Track'", () => {
     expect(ipiColor(100).label).toBe("On Track");
   });
-  it("maps 90 to 'Watch' (amber)", () => {
-    expect(ipiColor(90).label).toBe("Watch");
+  it("maps 90 to 'On Track' (lower edge of the band)", () => {
+    expect(ipiColor(90).label).toBe("On Track");
   });
-  it("maps 70 to 'At Risk' (orange)", () => {
-    expect(ipiColor(70).label).toBe("At Risk");
+  it("maps 89 to 'Watch'", () => {
+    expect(ipiColor(89).label).toBe("Watch");
   });
-  it("maps below 70 to 'Critical' (red)", () => {
+  it("maps 70 to 'Watch' (lower edge)", () => {
+    expect(ipiColor(70).label).toBe("Watch");
+  });
+  it("maps below 70 to 'Critical'", () => {
     expect(ipiColor(50).label).toBe("Critical");
+  });
+  it("exposes brand text + bar colours per band", () => {
+    expect(ipiColor(95)).toMatchObject({ color: "#007a62", bar: "#00b894" });
+    expect(ipiColor(80)).toMatchObject({ color: "#b45309", bar: "#d97706" });
+    expect(ipiColor(50)).toMatchObject({ color: "#b23800", bar: "#FF5000" });
   });
 });
 
