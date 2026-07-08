@@ -1889,6 +1889,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
+  const dark = themeStore.dark;
   const project = projects.find(p => p.id === projectId);
 
   const TABS = userRole === ROLE_PM ? PROJECT_TABS_PM
@@ -2312,35 +2313,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             {project.isRoadmap && <span style={{ background: "rgba(255,255,255,0.2)", color: T.headerText, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 5 }}><Ico name="map" size={12} /> Roadmap</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {(() => {
-              // Show the stored status as the badge, but if the auto-derived
-              // status disagrees (e.g. PM manually flagged "On Track" while
-              // IPI says "At Risk"), surface a small caution chip so an
-              // auditor doesn't hit a silent contradiction.
-              const derived = deriveProjectStatus(project);
-              const disagrees = derived && derived.status && project.status && derived.status !== project.status;
-              return (
-                <>
-                  <Badge status={project.status} />
-                  {disagrees && (
-                    <span
-                      title={`Math-derived status: ${derived.status}. Reason: ${derived.reason || "based on IPI + gate + progress"}`}
-                      style={{
-                        background: "rgba(217,119,6,0.18)",
-                        color: "#fef3c7",
-                        border: "1px solid rgba(217,119,6,0.55)",
-                        fontSize: 10, fontWeight: 700,
-                        padding: "2px 8px", borderRadius: 10,
-                        letterSpacing: "0.3px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ⚠ derived: {derived.status}
-                    </span>
-                  )}
-                </>
-              );
-            })()}
+            <Badge status={project.status} />
             {(() => {
               const H = 36;
               const baseBtn = {
@@ -2384,7 +2357,6 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         {project.objective && project.objective.trim() && (
           <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>{project.objective}</p>
         )}
-        {(() => { const d = daysSince(project.lastUpdate); if (!d || d < 14) return null; return <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: d >= 30 ? "rgba(220,38,38,0.25)" : "rgba(234,179,8,0.25)", color: d >= 30 ? "#fca5a5" : "#fde68a", display: "inline-block" }}>Updated {d}d ago</div>; })()}
         {/* Performance banner — Progress + IPI side by side, equal billing */}
         <div style={{ display: "flex", gap: 14, marginTop: 16, padding: "14px 16px", background: "rgba(0,0,0,0.3)", borderRadius: 12, alignItems: "stretch", flexWrap: "wrap" }}>
           {/* Progress block — click to open the WBS rollup audit modal */}
@@ -2531,22 +2503,58 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
       </div>
 
+      {/* ── WHY THIS PROJECT IS RED — one consolidated banner ─────────
+           Replaces the scattered stale/returned/derived-status chips. Only
+           renders for projects that are actually off-track. */}
+      {(() => {
+        const derived = deriveProjectStatus(project);
+        const isReturned = project.pmoStatus === "Returned";
+        const plannedNow = plannedProgressAt(project);
+        const behindPts  = plannedNow != null ? plannedNow - effectiveProgress : null;
+        const forecastVal = project.forecast || 0;
+        const overBudget  = forecastVal - (project.budget || 0);
+        const worstOverdue = [...(project.milestones || [])]
+          .filter(m => m.status !== "Completed" && m.date && m.date < TODAY)
+          .sort((a, b) => (daysSince(b.date) || 0) - (daysSince(a.date) || 0))[0];
+        const overdueDays = worstOverdue ? daysSince(worstOverdue.date) : null;
+        const offTrack = ["Delayed", "At Risk"].includes(project.status)
+          || ["Delayed", "At Risk"].includes(derived?.status)
+          || isReturned || overBudget > 0 || (behindPts != null && behindPts >= 15);
+        if (!offTrack) return null;
+
+        const problems = [];
+        if (project.daysDelayed) problems.push(`${project.daysDelayed} days behind plan`);
+        else if (behindPts != null && behindPts > 0) problems.push(`${behindPts} pts behind plan`);
+        if (overBudget > 0) problems.push(`forecast ${fmtSAR(forecastVal)} vs ${fmtSAR(project.budget)} budget (+${fmtSAR(overBudget)})`);
+        if (worstOverdue) problems.push(`"${worstOverdue.name}" milestone ${overdueDays}d overdue`);
+
+        const delayed = project.status === "Delayed" || derived?.status === "Delayed";
+        const headline = `${delayed ? "Behind schedule" : "At risk"}${overBudget > 0 ? " and over forecast" : ""}${isReturned ? " — PMO returned the last update" : ""}`;
+        const note = isReturned ? project.pmoValidationNote : null;
+        const canUpdate = userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF;
+        return (
+          <div style={{ background: dark ? "rgba(255,80,0,0.06)" : "#fff8f4", border: `1px solid ${dark ? "rgba(255,80,0,0.28)" : "#ffd9c7"}`, borderLeft: "4px solid #FF5000", borderRadius: 14, padding: "16px 22px", marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <span style={{ marginTop: 2, flexShrink: 0 }}><Ico name="alert" size={16} color="#FF5000" /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>{headline}</div>
+              <div style={{ fontSize: 12.5, color: dark ? "#ffb59a" : "#7c2d12", marginTop: 4, lineHeight: 1.5 }}>
+                {problems.join(" · ")}{note ? <>{problems.length ? ". " : ""}<strong>PMO note:</strong> {note}</> : ""}
+              </div>
+            </div>
+            {canUpdate && (
+              <button onClick={() => setShowUpdate(true)}
+                style={{ padding: "9px 16px", background: "#003932", color: "#00ffb3", border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                onMouseEnter={e => e.currentTarget.style.background = "#00543f"}
+                onMouseLeave={e => e.currentTarget.style.background = "#003932"}>Submit Recovery Update →</button>
+            )}
+          </div>
+        );
+      })()}
+
       <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
 
       {/* ── GATE TRACKER — always visible ── */}
       <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
-
-      {/* ── PMO returned banner — visible to PM only ── */}
-      {userRole === ROLE_PM && project.pmoStatus === "Returned" && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <span style={{ fontSize: 20, flexShrink: 0 }}>↩</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#92400e" }}>Update Returned by PMO — revision required</div>
-            {project.pmoValidationNote && <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>{project.pmoValidationNote}</div>}
-            <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, opacity: 0.8 }}>Please revise and resubmit using the Update button above.</div>
-          </div>
-        </div>
-      )}
 
       {/* ── PMO Internal Notes (hidden from PM) ─────────────────── */}
       {canSeeNotes && (
