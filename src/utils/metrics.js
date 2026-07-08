@@ -123,19 +123,11 @@ export function calcAnticipatedMCI(project) {
 // auditor reading metrics.js once knows exactly where Tree differs from standard
 // practice and why. See IPI Methodology doc for the long-form justification.
 const IPI_DEFAULTS = {
-  // Roadmap-deadline penalty: -1% per day past the roadmap deadline (linear).
-  // 100 days past = penalty drives SPI to zero. This is a TREE-INVENTED control,
-  // not part of standard EVM. Justification: prevents a runaway project that
-  // has technically finished its scope from inflating IPI past its strategic
-  // window. Decay is linear by design; an exponential alternative was rejected
-  // because executives expect proportional consequence per day.
-  decayWindowDays: 100,
   // Maximum over-achievement allowed. 1.20 means a perfectly-early project can
-  // score up to IPI=115. NON-STANDARD: pure EVM does not cap SPI/CPI. The cap
-  // is applied AFTER the roadmap penalty (so an over-achiever that slips past
-  // the roadmap is correctly penalised from its raw ratio, not from the cap).
-  // Applied at the project level (not the rollup) so a sandbagged plan can't
-  // single-handedly inflate the portfolio average.
+  // score up to IPI=120. NON-STANDARD: pure EVM does not cap SPI/CPI. The cap
+  // bounds genuine early delivery (measured against the project's own baseline)
+  // to a defendable ceiling. Applied at the project level (not the rollup) so a
+  // sandbagged plan can't single-handedly inflate the portfolio average.
   cap:             1.20,
   // Weights chosen so schedule discipline (SPI) is twice cost discipline (CPI).
   // Rationale: at Tree, schedule slippage cascades into business commitments
@@ -176,12 +168,20 @@ function _toMs(d) {
  *   MCI  = (approved + 0.5×submitted) ÷ docs due at the current gate.
  *          • Gate-aware: future-gate docs don't count yet.
  *          • Returns null when nothing measurable — re-normalisation excludes.
- *   penalty = roadmap-deadline linear decay (1% per day past). Applied to
- *             RAW SPI, then capped — so an over-achiever that slips past the
- *             roadmap is penalised from its true ratio, not from the cap.
+ *   Schedule reference = the project's own committed BASELINE finish
+ *             (baselineEnd, locked at Gate-3; falls back to plannedEnd). The
+ *             Roadmap Deadline never feeds the math — it is a checkpoint that
+ *             raises `roadmapBreach` when reached while incomplete.
+ *     • IN-PROGRESS (< 100%): planned% is CLAMPED at 100% at the baseline, so a
+ *       late-but-incomplete project reads SPI = actual% (proportional shortfall)
+ *       and cannot be rewarded for roadmap slack.
+ *     • COMPLETED (Option C): SPI = baselineDuration / actualDuration — late
+ *       delivery lowers the score proportionally, early delivery raises it;
+ *       no jump to 1.0 on closure. `daysLateVsPlan` carries the label.
  *
- * Cap (1.20) is applied at the very end of the SPI pipeline, AFTER penalty.
- * Pure EVM does not cap; Tree caps to bound the IPI to a defendable 0–120.
+ * Cap (1.20) is applied at the very end of the SPI pipeline. Pure EVM does not
+ * cap; Tree caps to bound the IPI to a defendable 0–120. The legacy `penalty`
+ * field is retained (always 1.0) for old audit-modal compatibility.
  *
  * IPI ROLLUP — RE-NORMALISED, NOT NEUTRAL-FILLED:
  * Missing components (e.g. no actualCost → cpi=null) are EXCLUDED and the
@@ -209,12 +209,22 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   //   2. Baseline still forming — fewer than 7 days since start. A single-
   //      day EV/PV ratio has no signal (both approach zero); refuse to guess.
   const projectStartMs = _toMs(project.startDate);
-  // Reference deadline for SPI: prefer the strategic Roadmap Deadline (set
-  // by PMO, protected from PM edits) over the operational plannedEnd (which
-  // PM controls and can pad). Falls back to plannedEnd when roadmap missing.
-  // This is what closes the "pad plannedEnd → cheap SPI wins" gaming vector.
-  const scheduleEndMs = _toMs(project.roadmapDeadline) || _toMs(project.plannedEnd);
-  const datesInvalid = !!(projectStartMs && scheduleEndMs && scheduleEndMs <= projectStartMs);
+  // SPI reference = the project's own committed BASELINE finish. Prefer the
+  // locked baselineEnd (captured at Gate-3 approval, PMO-protected) and fall
+  // back to plannedEnd for projects predating the baseline field. The Roadmap
+  // Deadline is NEVER part of the SPI math — its slack must not inflate SPI.
+  // Roadmap is a checkpoint only (see roadmapBreach below).
+  const scheduleEndMs = _toMs(project.baselineEnd) || _toMs(project.plannedEnd);
+  // Effective progress drives completion detection, the no-WBS SPI fallback,
+  // and CPI's BCWP. Prefers the WBS rollup so a stale project.progress can't
+  // drift from the activity-driven reality shown in the UI.
+  const effProgress = effectiveProgress(project);
+  const isComplete  = effProgress >= 100;
+  // Impossible dates → SPI is meaningless. Baseline at/before start, OR a
+  // completed project whose finish clock lands at/before start (zero/negative
+  // actual duration) both fail the guard and return "Data Invalid".
+  const datesInvalid = !!(projectStartMs && scheduleEndMs && scheduleEndMs <= projectStartMs)
+    || !!(isComplete && projectStartMs && nowMs <= projectStartMs);
   const elapsedMs = projectStartMs && nowMs > projectStartMs ? nowMs - projectStartMs : 0;
   const tooEarly = projectStartMs && elapsedMs < 7 * 86_400_000;
 
@@ -235,12 +245,14 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   };
 
   // Per-leaf PLANNED progress at asOfDate.
-  //   • With both startDate + date: linear interpolation between them.
-  //     PV IS NOT CAPPED AT 1.0. When as-of is past the planned end, PV
-  //     keeps growing (Earned Schedule). This is what lets a completed
-  //     project that finished late score SPI < 1.0. Capping PV at 1.0
-  //     used to give a 100%-done-but-2-months-late project SPI = 1.0 —
-  //     completely wrong and the reason we fixed it.
+  //   • With both startDate + date: linear interpolation between them,
+  //     CLAMPED AT 1.0. Once as-of passes the leaf's planned end the leaf is
+  //     "fully due" (planned% = 100%) and does not keep growing. This is the
+  //     classic-EVM behaviour: schedule variance converges to zero at the
+  //     planned finish. A late-but-incomplete leaf therefore reads actual% <
+  //     100% against planned% = 100% → SPI < 1.0 (penalised); a late-but-
+  //     complete leaf reads 100/100 = 1.0 (no bonus, no penalty). Early
+  //     delivery vs the leaf's own plan is the only way to exceed 1.0.
   //   • KNOWN BIAS: linear interpolation assumes uniform effort. Real work
   //     is S-curve; linear PV systematically reports SPI > 1.0 mid-flight
   //     and SPI < 1.0 near completion. Accepted trade-off for simplicity.
@@ -254,10 +266,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     const endMs   = _toMs(m.date);
     if (startMs && endMs && endMs > startMs) {
       if (nowMs <= startMs) return 0;
-      // No upper cap — PV can exceed 1.0 when the as-of date has passed
-      // the planned end. This is the fix for the "completed late but
-      // shows SPI=1.0" bug.
-      return (nowMs - startMs) / (endMs - startMs);
+      // Clamped at 1.0 — planned value never exceeds "fully due".
+      return Math.min(1, (nowMs - startMs) / (endMs - startMs));
     }
     if (startMs && endMs && endMs === startMs) {
       // Instant milestone — done the day it happens.
@@ -270,12 +280,6 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // ── SPI: EVM from leaves; fallback to project-level dates if no leaves
   let ev, pv, spi;
 
-  // Project progress used for both SPI fallback (no-WBS path) and CPI BCWP.
-  // SOURCE OF TRUTH: effectiveProgress — prefers the WBS rollup so a stale
-  // project.progress field can never drift from the activity-driven reality
-  // shown in the UI. Falls back to project.progress only when no WBS exists.
-  const effProgress = effectiveProgress(project);
-
   // Only leaves with a defined PV contribute. Unscheduled leaves (no dates)
   // are excluded from BOTH numerator and denominator — they don't contribute
   // PV and their weight no longer pollutes the divisor.
@@ -287,21 +291,40 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     // excluded from the IPI rollup via re-normalisation, and the caller can
     // read `dataReliability` off the result to warn the user.
     ev = 0; pv = 0; spi = null;
+  } else if (isComplete && projectStartMs && scheduleEndMs) {
+    // ── Option C — COMPLETED projects score on schedule DURATION ────────────
+    // Once a project is delivered, progress % is 100 by definition; the honest
+    // schedule signal is how its actual duration compares to the committed
+    // baseline duration:
+    //     SPI = baselineDuration / actualDuration
+    //     baselineDuration = start → baseline (locked Gate-3; else plannedEnd)
+    //     actualDuration   = start → finish   (actualFinishDate; else as-of)
+    // Late delivery lowers SPI proportionally, early delivery raises it (capped
+    // 1.20). `nowMs` already resolves to the finish date for Completed projects
+    // and to as-of otherwise, so a 100%-done calculator run and the registered
+    // project produce identical results. Durations are guaranteed > 0 here
+    // (the datesInvalid guard rejects zero/negative baseline or actual spans).
+    const baselineDur = scheduleEndMs - projectStartMs;
+    const actualDur   = nowMs - projectStartMs;
+    ev  = 1;
+    pv  = actualDur / baselineDur;   // > 1 when late, < 1 when early (uncapped)
+    spi = baselineDur / actualDur;   // = ev / pv
   } else if (scheduledLeaves.length > 0 && totalW > 0) {
     ev = scheduledLeaves.reduce((s, m) => s + (m.weight || 1) * actualPct(m),  0) / totalW;
     pv = scheduledLeaves.reduce((s, m) => s + (m.weight || 1) * plannedPct(m), 0) / totalW;
     spi = pv === 0 ? null : ev / pv;
   } else if (projectStartMs && scheduleEndMs) {
     // No WBS — fall back to project-level dates + effective progress.
-    // Reference deadline is Roadmap when set, else plannedEnd (see
-    // scheduleEndMs above). PV is uncapped — a project past its reference
-    // deadline correctly shows PV > 1 and SPI < 1.
+    // Reference is the baseline/plannedEnd (scheduleEndMs above), never the
+    // roadmap. PV is CLAMPED AT 1.0: once as-of passes the baseline the
+    // project is "fully due", so a late-but-complete project reads SPI = 1.0
+    // (not a bonus) and a late-but-incomplete project reads SPI < 1.0.
     ev = effProgress / 100;
     if (project.plannedProgress != null && project.plannedProgress !== "") {
       // Manual override still respected (used mainly by the IPI Calculator).
-      pv = Math.max(0, Number(project.plannedProgress) / 100);
+      pv = Math.max(0, Math.min(1, Number(project.plannedProgress) / 100));
     } else {
-      pv = nowMs <= projectStartMs ? 0 : (nowMs - projectStartMs) / (scheduleEndMs - projectStartMs);
+      pv = nowMs <= projectStartMs ? 0 : Math.min(1, (nowMs - projectStartMs) / (scheduleEndMs - projectStartMs));
     }
     spi = pv === 0 ? null : ev / pv;
   } else {
@@ -336,15 +359,28 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const mci = computeMCI(project.documents, parseGateNumber(project.gate));
 
   // ── Final SPI: only the cap remains ───────────────────────────────────────
-  // The old Tree-invented "roadmap penalty" is retired. Its whole purpose
-  // was to reduce SPI when a project slipped past the strategic deadline —
-  // now that PV is measured against roadmapDeadline directly, that slip is
-  // already captured (PV > 1 → SPI < 1). Applying the penalty on top would
-  // be double-punishment. The `penalty` field is still exposed on the
-  // result (always 1) so old audit modals don't break; new modals should
-  // explain the roadmap-anchored PV instead.
+  // The old Tree-invented "roadmap penalty" is fully retired. SPI is measured
+  // against the project's own baseline and lateness is captured by the clamped
+  // PV (planned% pins at 100% at the baseline), so no separate penalty is
+  // needed. The `penalty` field is kept (always 1) for legacy audit-modal
+  // compatibility.
   const penalty = 1;
   const spiFinal = spi === null ? null : Math.min(cap, spi);
+
+  // ── Roadmap = CHECKPOINT ONLY (no effect on any number) ───────────────────
+  // A breach is raised when the as-of/finish clock reaches the Roadmap
+  // Deadline while the project is still incomplete. Purely a flag for project
+  // health; SPI already reflects the delay against the baseline.
+  const roadmapMs = _toMs(project.roadmapDeadline);
+  const roadmapBreach = !!(roadmapMs && nowMs >= roadmapMs && effProgress < 100);
+
+  // ── Days late vs the baseline plan ────────────────────────────────────────
+  // Days the measurement clock (as-of, or actualFinishDate when Completed) has
+  // passed the baseline finish. 0 when on/before plan. Surfaced on the result
+  // and persisted into ipiHistory so the lateness trend is preserved.
+  const daysLateVsPlan = scheduleEndMs && nowMs > scheduleEndMs
+    ? Math.floor((nowMs - scheduleEndMs) / 86_400_000)
+    : 0;
 
   // ── IPI rollup: re-normalise weights of present components ────────────────
   // OLD BEHAVIOUR (PERVERSE INCENTIVE): null components were treated as a
@@ -406,7 +442,9 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     },
     ev: +ev.toFixed(3),
     pv: +pv.toFixed(3),
-    scheduleAnchor: _toMs(project.roadmapDeadline) ? "roadmap" : "plannedEnd",
+    scheduleAnchor: "baseline",
+    roadmapBreach,
+    daysLateVsPlan,
     dataReliability,
   };
 }

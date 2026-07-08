@@ -303,77 +303,87 @@ describe("Caps — components clamp at IPI_DEFAULTS.cap (1.20)", () => {
   });
 });
 
-describe("Roadmap-anchored SPI — measure vs Roadmap Deadline, not plannedEnd", () => {
-  // The old model applied a 1%-per-day penalty on top of plannedEnd-derived
-  // SPI. That let a PM pad plannedEnd to always look ahead, and the penalty
-  // could not fully claw back the padding advantage. Now roadmap is used as
-  // the SPI denominator directly and the explicit penalty is retired.
-  // Legacy: `components.penalty` still exists and always reads 1.0 so old
-  // audit modals don't break; new callers should ignore it.
-  it("penalty field is always 1.0 (retired — kept for legacy modal compat)", () => {
-    const p = mk({ roadmapDeadline: "2026-06-09" });
-    expect(ipi(p).components.penalty).toBe(1.0);
-    const q = mk({ roadmapDeadline: "2025-01-01" });   // way past
-    expect(ipi(q).components.penalty).toBe(1.0);
+describe("Baseline-anchored SPI — measure vs the locked baseline, clamp at plan", () => {
+  // SPI is measured against the project's own committed baseline (baselineEnd,
+  // falling back to plannedEnd). Roadmap Deadline never feeds the math; planned%
+  // clamps at 100% at the baseline so lateness pins SPI at/under 1.0 and only
+  // genuine early delivery exceeds it (Option B, capped 1.20).
+  it("penalty field is always 1.0 (retired — legacy modal compat)", () => {
+    expect(ipi(mk({})).components.penalty).toBe(1.0);
   });
 
-  it("SPI uses roadmap as denominator when set, plannedEnd otherwise", () => {
-    // No roadmap → falls back to plannedEnd (2026-12-31). PV = 79/275 ≈ 0.29.
-    // Progress 50 → EV = 0.5. Raw SPI ≈ 0.5 / 0.29 = 1.72 → capped 1.20.
-    const noRoadmap = mk({
-      startDate: "2026-04-01", plannedEnd: "2026-12-31",
-      progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [],
-    });
-    expect(ipi(noRoadmap).components.spiFinal).toBeCloseTo(1.20, 2);
-
-    // Same project with a roadmap that predates plannedEnd. PV should now
-    // measure against roadmap (2026-06-30), producing a lower SPI because
-    // the strategic window is tighter than the operational plan.
-    const withRoadmap = mk({
-      ...noRoadmap, roadmapDeadline: "2026-06-30",
-    });
-    expect(ipi(withRoadmap).components.spi).toBeLessThan(ipi(noRoadmap).components.spi);
-  });
-
-  it("finishing after roadmap correctly shows SPI < 1 (no explicit penalty needed)", () => {
-    // Start May 1, roadmap Jun 30, as-of Jul 15, 100% done.
-    // Old model: raw SPI = 1.20 (early vs plannedEnd), penalty 0.85 → spiFinal 1.02 → IPI 101 "Over Achieved" (bug).
-    // New model: PV vs roadmap = 75/60 = 1.25, EV = 1.0, SPI = 0.80, IPI ≈ 90 "Watch".
+  it("headline scenario — roadmap slack ignored, completed-late scored on duration (Option C)", () => {
+    // Start 1 Jul, Planned End 30 Jul, Roadmap 15 Aug, as-of 5 Aug, 100% done.
+    // Old (roadmap-anchored) model rewarded the slack → IPI 110.
+    // Option C: baselineDur 29d, actualDur (start→as-of) 35d → SPI 29/35 ≈ 0.829
+    //           → IPI round(0.5·0.829 + 0.25·1 + 0.25·1)·100 = 91 "Watch".
     const p = mk({
-      startDate: "2026-05-01", plannedEnd: "2026-07-30",
-      roadmapDeadline: "2026-06-30",
+      startDate: "2026-07-01", plannedEnd: "2026-07-30",
+      roadmapDeadline: "2026-08-15",
       progress: 100, milestones: [],
-      budget: 1500, actualCost: 1500,
+      budget: 100, actualCost: 100, gate: "Gate 4",
       documents: [
-        { name: "D1", required: true, requiredAtGate: 1, status: "Approved" },
-        { name: "D2", required: true, requiredAtGate: 2, status: "Approved" },
-        { name: "D3", required: true, requiredAtGate: 3, status: "Approved" },
+        { name: "D1", required: true, requiredAtGate: 4, status: "Approved" },
+        { name: "D2", required: true, requiredAtGate: 4, status: "Approved" },
       ],
     });
-    const r = calcProjectIPIFull(p, "2026-07-15");
-    expect(r.components.spi).toBeGreaterThan(0.75);
-    expect(r.components.spi).toBeLessThan(0.85);
-    expect(r.ipi).toBeGreaterThan(85);
-    expect(r.ipi).toBeLessThan(95);
-    // The "Over Achieved" band is impossible when past roadmap — verify.
-    expect(r.ipi).toBeLessThan(100);
+    const r = calcProjectIPIFull(p, "2026-08-05");
+    expect(r.components.spiFinal).toBeCloseTo(29 / 35, 2);   // 0.829
+    expect(r.ipi).toBe(91);
+    expect(r.status).toBe("Watch");
+    expect(r.daysLateVsPlan).toBe(6);
+    expect(r.roadmapBreach).toBe(false);      // as-of is before the roadmap
+    expect(r.scheduleAnchor).toBe("baseline");
   });
 
-  it("padded plannedEnd does not inflate SPI when roadmap is set", () => {
-    // Same real work, two projects. A has honest plannedEnd matching roadmap;
-    // B pads plannedEnd 2× beyond roadmap. Their SPIs must be identical when
-    // roadmap is used as the denominator.
-    const honest = mk({
-      startDate: "2026-01-01", plannedEnd: "2026-06-30",
-      roadmapDeadline: "2026-06-30",
-      progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [],
-    });
-    const padded = mk({
-      startDate: "2026-01-01", plannedEnd: "2026-12-31",     // 2× padded
-      roadmapDeadline: "2026-06-30",
-      progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [],
-    });
-    expect(ipi(padded).components.spi).toBeCloseTo(ipi(honest).components.spi, 3);
+  it("Option C — completed projects score on duration: late < 1, on-time = 1, early capped 1.20", () => {
+    // Baseline window 1 Jul → 30 Jul (29 days).
+    const base = { startDate: "2026-07-01", plannedEnd: "2026-07-30", progress: 100, status: "Completed", budget: 0, actualCost: 0, milestones: [], documents: [] };
+    const late   = calcProjectIPIFull(mk({ ...base, actualFinishDate: "2026-08-05" }), "2026-08-10");   // 35d
+    const onTime = calcProjectIPIFull(mk({ ...base, actualFinishDate: "2026-07-30" }), "2026-08-10");   // 29d
+    const early  = calcProjectIPIFull(mk({ ...base, actualFinishDate: "2026-07-20" }), "2026-08-10");   // 19d
+    expect(late.components.spiFinal).toBeCloseTo(29 / 35, 2);   // 0.829
+    expect(late.daysLateVsPlan).toBe(6);
+    expect(onTime.components.spiFinal).toBe(1.0);
+    expect(early.components.spiFinal).toBe(1.20);               // 29/19 = 1.53 → capped
+  });
+
+  it("baselineEnd overrides plannedEnd as the SPI reference", () => {
+    const common = { startDate: "2026-01-01", plannedEnd: "2026-12-31", progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [] };
+    const noBaseline   = mk({ ...common });
+    const withBaseline = mk({ ...common, baselineEnd: "2026-06-30" });   // tighter reference
+    const a = calcProjectIPIFull(noBaseline,   "2026-06-19").components.spi;
+    const b = calcProjectIPIFull(withBaseline, "2026-06-19").components.spi;
+    expect(b).toBeLessThan(a);   // tighter baseline → lower SPI than the padded plannedEnd
+  });
+
+  it("padded plannedEnd cannot inflate SPI once a baseline is locked", () => {
+    const common = { startDate: "2026-01-01", baselineEnd: "2026-06-30", progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [] };
+    const honest = mk({ ...common, plannedEnd: "2026-06-30" });
+    const padded = mk({ ...common, plannedEnd: "2026-12-31" });   // 2× padded, but baseline is locked
+    expect(calcProjectIPIFull(padded, "2026-06-19").components.spi)
+      .toBeCloseTo(calcProjectIPIFull(honest, "2026-06-19").components.spi, 3);
+  });
+
+  it("roadmap is a checkpoint only — no effect on the numbers, raises roadmapBreach", () => {
+    const common = { startDate: "2026-01-01", plannedEnd: "2026-12-31", progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [] };
+    const withRm    = mk({ ...common, roadmapDeadline: "2026-06-30" });
+    const withoutRm = mk({ ...common });
+    // Identical SPI with or without a roadmap — it never touches the math.
+    expect(calcProjectIPIFull(withRm, "2026-07-15").components.spi)
+      .toBe(calcProjectIPIFull(withoutRm, "2026-07-15").components.spi);
+    // Breach: as-of past roadmap while incomplete.
+    expect(calcProjectIPIFull(withRm, "2026-07-15").roadmapBreach).toBe(true);
+    expect(calcProjectIPIFull(withRm, "2026-06-01").roadmapBreach).toBe(false);   // before roadmap
+    // A completed project that finished before the roadmap never breaches.
+    const done = mk({ ...common, roadmapDeadline: "2026-06-30", progress: 100, status: "Completed", actualFinishDate: "2026-06-15" });
+    expect(calcProjectIPIFull(done, "2026-08-01").roadmapBreach).toBe(false);
+  });
+
+  it("daysLateVsPlan is 0 on/before plan and counts days past the baseline", () => {
+    const p = mk({ startDate: "2026-04-01", plannedEnd: "2026-12-31", progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [] });
+    expect(calcProjectIPIFull(p, "2026-06-19").daysLateVsPlan).toBe(0);      // well before plannedEnd
+    expect(calcProjectIPIFull(p, "2027-01-10").daysLateVsPlan).toBe(10);     // 10 days past 31 Dec
   });
 });
 
@@ -557,14 +567,11 @@ describe("Audit fix — Data reliability guards refuse to score bad inputs", () 
     expect(ipi(p).components.mci).toBe(null);
   });
 
-  it("scheduleAnchor reports which deadline drove SPI (roadmap vs plannedEnd)", () => {
-    // Governance-facing signal so a reviewer knows whether the SPI they're
-    // reading was measured against the strategic (roadmap) or operational
-    // (plannedEnd) window.
-    const withRoadmap    = mk({ roadmapDeadline: "2026-12-31" });
-    const withoutRoadmap = mk({ roadmapDeadline: null });
-    expect(ipi(withRoadmap).scheduleAnchor).toBe("roadmap");
-    expect(ipi(withoutRoadmap).scheduleAnchor).toBe("plannedEnd");
+  it("scheduleAnchor is always 'baseline' — SPI is measured against the baseline", () => {
+    // The reference is the locked baseline (baselineEnd → plannedEnd); the
+    // roadmap never drives SPI, so the anchor label is constant.
+    expect(ipi(mk({ roadmapDeadline: "2026-12-31" })).scheduleAnchor).toBe("baseline");
+    expect(ipi(mk({ roadmapDeadline: null })).scheduleAnchor).toBe("baseline");
   });
 });
 
@@ -616,14 +623,21 @@ describe("Audit fix — negative actualCost is treated as missing data", () => {
 });
 
 describe("Audit fix — same-day (instant) milestone behaves as a real instant", () => {
-  it("a milestone with start==end is 100% planned the day it's due, not 0%", () => {
-    // Instant milestone dated in the past: should be PV=1 → SPI based on actual.
+  it("a past instant milestone (start==end) is fully planned (PV=1) in an in-progress project", () => {
+    // Two leaves keep the project < 100% so the leaf-PV path runs (not the
+    // Option C completion branch). M1 is a done past-instant; M2 is unstarted.
     const p = mk({
-      milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-05-01", date: "2026-05-01" }],
+      progress: 50,
+      milestones: [
+        { id: "M1", weight: 1, progress: 100, startDate: "2026-05-01", date: "2026-05-01" }, // past instant → PV 1, EV 1
+        { id: "M2", weight: 1, progress: 0,   startDate: "2026-12-01", date: "2026-12-31" }, // not started → PV 0, EV 0
+      ],
     });
-    const r = ipi(p);
-    expect(r.pv).toBeCloseTo(1.0, 3);
-    expect(r.components.spi).toBeCloseTo(1.0, 3);
+    const r = ipi(p);   // as-of 2026-06-19
+    // Aggregate: EV = (1+0)/2 = 0.5, PV = (1+0)/2 = 0.5 → SPI = 1.0. If M1's
+    // instant PV were mishandled as 0, PV would be 0 and SPI undefined.
+    expect(r.pv).toBeCloseTo(0.5, 2);
+    expect(r.components.spi).toBeCloseTo(1.0, 2);
   });
   it("future instant milestone is 0% planned (and the weight isn't excluded — it's a real PV value)", () => {
     const p = mk({
@@ -724,41 +738,36 @@ describe("Audit fix — IPI status band uses unrounded decimal, not the displaye
   });
 });
 
-describe("Audit fix — PV is NOT capped at 1.0 (completed-late bug)", () => {
-  // The scenario the user caught in the IPI Calculator on 2026-07-01:
-  //   Start Nov 1 2025, Planned End Jan 30 2026, As-of Apr 1 2026,
-  //   Actual Progress 100%. Old engine returned SPI = 1.0 (PV capped).
-  //   That is nonsense: the project finished 2 months late.
-  //   With the fix, PV = 151/90 ≈ 1.678 and SPI ≈ 0.596.
-  it("100%-done project past planned end returns SPI << 1.0, NOT 1.0", () => {
-    // The exact Calculator scenario the user caught. Budget/AC zero so CPI
-    // is excluded and re-normalisation leaves IPI = spiFinal × 100 for a
-    // clean assertion.
+describe("Baseline clamp — planned% pins at 100% at the baseline", () => {
+  // Replaces the old uncapped Earned-Schedule behaviour. Planned% never exceeds
+  // 100% at the baseline, so schedule variance converges to zero at the plan:
+  //   • late-but-complete → SPI = 1.0 (no bonus, no penalty)
+  //   • late-but-incomplete → SPI = actual% (proportional shortfall)
+  //   • lateness itself is carried by daysLateVsPlan, not by driving SPI below
+  //     the shortfall.
+  it("100%-done project past planned end scores on duration (Option C), not a jump to 1.0", () => {
+    // Budget/AC zero so CPI is excluded and IPI = spiFinal × 100 for a clean
+    // assertion. baselineDur = 90d, actualDur (start→as-of) = 151d → SPI ≈ 0.596.
     const p = mk({
       startDate: "2025-11-01", plannedEnd: "2026-01-30",
       progress: 100,
       budget: 0, actualCost: 0, milestones: [], documents: [],
     });
     const r = calcProjectIPIFull(p, "2026-04-01");
-    // Planned duration: 90 days. Actual duration to as-of: 151 days.
-    // Raw SPI = 1.0 / (151/90) ≈ 0.596.
-    expect(r.components.spi).toBeGreaterThan(0.55);
-    expect(r.components.spi).toBeLessThan(0.65);
-    // With SPI as the only component, IPI = round(spi × 100) ≈ 60.
-    expect(r.ipi).toBeGreaterThan(55);
-    expect(r.ipi).toBeLessThan(65);
+    expect(r.components.spiFinal).toBeCloseTo(90 / 151, 2);   // ≈ 0.596
+    expect(r.ipi).toBe(60);
+    expect(r.daysLateVsPlan).toBeGreaterThan(0);
   });
 
-  it("in-progress project past planned end shows the shortfall (80% at 130% of plan)", () => {
+  it("in-progress project past planned end reads SPI = actual% (80% at 130% of plan)", () => {
     const p = mk({
       startDate: "2026-01-01", plannedEnd: "2026-04-10",   // 99 days planned
       progress: 80,
       budget: 0, actualCost: 0, milestones: [], documents: [],
     });
-    const r = calcProjectIPIFull(p, "2026-05-15");   // 134 days elapsed
-    // PV = 134/99 ≈ 1.353; SPI = 0.80 / 1.353 ≈ 0.591.
-    expect(r.components.spi).toBeGreaterThan(0.55);
-    expect(r.components.spi).toBeLessThan(0.65);
+    const r = calcProjectIPIFull(p, "2026-05-15");   // past plannedEnd → PV clamps at 1.0
+    expect(r.components.spi).toBeCloseTo(0.80, 2);   // 0.80 / 1.0
+    expect(r.daysLateVsPlan).toBeGreaterThan(0);
   });
 
   it("Completed project with actualFinishDate on time keeps SPI = 1.0 even reviewed later", () => {
