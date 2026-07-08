@@ -31,7 +31,7 @@
 // ============================================================================
 
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 import { useT, themeStore, ttStyle } from "../theme.js";
 import { useBp } from "../hooks/useBp.js";
 import { useDepts } from "../deptContext.js";
@@ -304,6 +304,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   // ── Layout ─────────────────────────────────────────────────────
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const isNarrow = bp === "mobile" || bp === "tablet";
+  // Chart bar fill per band (v2 design): On Track #007a62, Watch #d97706, Critical #FF5000.
+  const deptBarColor = (ipi) => ipi == null ? "#a1b9ab" : ipi >= 90 ? "#007a62" : ipi >= 70 ? "#d97706" : "#FF5000";
 
   // ── Reusable styles ────────────────────────────────────────────
   const heroGradient = `
@@ -312,10 +314,12 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     linear-gradient(135deg, #001f1a 0%, #003932 50%, #006b56 100%)
   `;
 
-  const tierLabel = (ix, title, meta, accent) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "32px 0 14px", flexWrap: "wrap" }}>
-      <span style={{ background: accent.bg, color: accent.text, fontFamily: "ui-monospace, monospace", fontSize: 10, fontWeight: 700, padding: "4px 9px", borderRadius: 6, letterSpacing: "0.5px" }}>{ix}</span>
-      <h2 style={{ fontSize: bp === "mobile" ? 15 : 17, fontWeight: 800, color: T.text, letterSpacing: "-0.3px", margin: 0 }}>{title}</h2>
+  // v2: no monospace TIER chips. Functional title (size varies by prominence),
+  // optional urgent pill, narrative subtitle right-aligned.
+  const tierLabel = (title, meta, { size = 15, pill = null } = {}) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "36px 0 14px", flexWrap: "wrap" }}>
+      <h2 style={{ fontSize: bp === "mobile" ? Math.min(size, 17) : size, fontWeight: 800, color: T.text, letterSpacing: "-0.3px", margin: 0 }}>{title}</h2>
+      {pill && <span style={{ background: pill.bg, color: pill.color, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{pill.text}</span>}
       {meta && <span style={{ fontSize: 12, color: T.muted, fontWeight: 500, marginLeft: "auto" }}>{meta}</span>}
     </div>
   );
@@ -326,11 +330,11 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       {/* ══════════ TIER 1 — HERO ══════════ */}
       <div style={{
         background: heroGradient, color: "white",
-        borderRadius: 20, padding: bp === "mobile" ? "20px 22px" : "28px 36px 30px",
+        borderRadius: 20, padding: bp === "mobile" ? "20px 22px" : "32px 40px 34px",
         position: "relative", overflow: "hidden",
         borderBottom: "4px solid #00FFB3",
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, position: "relative", zIndex: 2 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 26, position: "relative", zIndex: 2 }}>
           <div>
             <div style={{ color: "#00FFB3", fontSize: 11, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 4 }}>{greeting}</div>
             <h1 style={{ fontSize: bp === "mobile" ? 22 : 28, fontWeight: 800, color: "white", lineHeight: 1.1, letterSpacing: "-0.5px", margin: 0 }}>Enterprise Portfolio</h1>
@@ -339,7 +343,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           <img src="/tree-logo.png" alt="Tree" style={{ height: 34, opacity: 0.95 }} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "340px 1fr", gap: 36, alignItems: "center", position: "relative", zIndex: 2 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "340px 1fr", gap: 44, alignItems: "center", position: "relative", zIndex: 2 }}>
 
           {/* IPI block */}
           <div>
@@ -366,9 +370,10 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                   <div style={{ position: "absolute", left: "70%", top: -3, width: 1, height: 16, background: "rgba(255,255,255,0.25)" }} />
                   <div style={{ position: "absolute", left: "90%", top: -3, width: 1, height: 16, background: "rgba(255,255,255,0.25)" }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
-                  <span>0</span><span>At Risk · 70</span><span>Watch · 90</span><span>100</span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>
+                  <span>0</span><span>Critical · 70</span><span>On Track · 90</span><span>100</span>
                 </div>
+                <div style={{ marginTop: 10, fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 500 }}>IPI = SPI 50% + CPI 25% + MCI 25%</div>
               </div>
             )}
           </div>
@@ -383,7 +388,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                 {
                   label: "Need attention",
                   value: interventionFlags.length,
-                  color: interventionFlags.length > 0 ? "#fca5a5" : "white",
+                  color: interventionFlags.length > 0 ? "#ff9d7a" : "white",
                   sub: interventionFlags.length === 0
                     ? "all clear"
                     : interventionFlags.length === 1
@@ -407,33 +412,25 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                     : `${(pendingApprovals[0].projectCode || pendingApprovals[0].projectTitle || "—")} · ${pendingApprovals[0].daysAtGate || 0}d`,
                 },
               ].map(s => (
-                <div key={s.label} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "12px 14px" }}>
-                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
-                  <div style={{ color: s.color, fontSize: 22, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 10, marginTop: 4, fontWeight: 500 }}>{s.sub}</div>
+                <div key={s.label} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "16px 18px" }}>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 8 }}>{s.label}</div>
+                  <div style={{ color: s.color, fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontWeight: 500 }}>{s.sub}</div>
                 </div>
               ))}
-            </div>
-
-            {/* Composition strip */}
-            <div>
-              <div style={{ display: "flex", gap: 3, height: 8 }}>
-                <div style={{ height: "100%", borderRadius: 4, background: "#00FFB3", flex: 50 }} />
-                <div style={{ height: "100%", borderRadius: 4, background: "#FF5000", flex: 25 }} />
-                <div style={{ height: "100%", borderRadius: 4, background: "#C9D5C9", flex: 25 }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: 600, flexWrap: "wrap", gap: 6 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#00FFB3" }} /><strong style={{ color: "white", fontWeight: 800 }}>SPI</strong> 50% · schedule</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#FF5000" }} /><strong style={{ color: "white", fontWeight: 800 }}>CPI</strong> 25% · cost</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9D5C9" }} /><strong style={{ color: "white", fontWeight: 800 }}>MCI</strong> 25% · maturity</span>
-              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ══════════ TIER 2 — PRIORITIES ══════════ */}
-      {tierLabel("TIER 2", "Today's priorities", priorityStory, { bg: "#490300", text: "white" })}
+      {(() => {
+        const urgent = interventionFlags.filter(f => f.severity === "high").length;
+        return tierLabel("Decisions needed today", priorityStory, {
+          size: 19,
+          pill: urgent > 0 ? { text: `${urgent} urgent`, bg: "#ffe8de", color: "#b23800" } : null,
+        });
+      })()}
 
       {interventionFlags.length === 0 && (
         <div style={{ background: dark ? "rgba(22,163,74,0.08)" : "#f0fdf4", border: `1px solid ${dark ? "rgba(22,163,74,0.3)" : "#86efac"}`, borderRadius: 14, padding: "14px 24px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -443,33 +440,35 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         </div>
       )}
       {interventionFlags.length > 0 && (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: "4px solid #FF5000", borderRadius: 12, padding: "18px 22px", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <Ico name="siren" size={15} color="#FF5000" />
-            <span style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Requires Attention</span>
+        <div style={{
+          background: dark ? "rgba(255,80,0,0.06)" : "#fff8f4",
+          border: `1px solid ${dark ? "rgba(255,80,0,0.28)" : "#ffd9c7"}`,
+          borderLeft: "4px solid #FF5000", borderRadius: 14, padding: "22px 26px", marginBottom: 14,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <Ico name="siren" size={16} color="#FF5000" />
+            <span style={{ fontWeight: 800, fontSize: 15, color: T.text }}>Requires Attention</span>
             <span style={{ fontSize: 12, color: T.muted, marginLeft: "auto" }}>{interventionFlags.length} flagged across 8 signals</span>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "repeat(2, 1fr)", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "repeat(2, 1fr)", gap: 10 }}>
             {interventionFlags.slice(0, 8).map(({ project: p, reasons, severity }) => (
               <div key={p.id}
                 onClick={() => setRoute({ view: "project", projectId: p.id })}
                 style={{
-                  display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 10, cursor: "pointer",
-                  background: severity === "high"
-                    ? (dark ? "rgba(220,38,38,0.10)" : "#fef2f0")
-                    : (dark ? "rgba(217,119,6,0.10)"  : "#fff5ee"),
-                  border: `1px solid ${severity === "high" ? "#f5d4d0" : "#fed7aa"}`,
-                  transition: "transform 0.15s",
+                  display: "flex", alignItems: "flex-start", gap: 11, padding: "12px 16px", borderRadius: 10, cursor: "pointer",
+                  background: dark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                  border: `1px solid ${severity === "high" ? "#ffd0ba" : "#f2e3cf"}`,
+                  transition: "transform 0.15s, border-color 0.15s",
                 }}
-                onMouseEnter={e => e.currentTarget.style.transform = "translateX(2px)"}
-                onMouseLeave={e => e.currentTarget.style.transform = "translateX(0)"}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateX(2px)"; e.currentTarget.style.borderColor = "#FF5000"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "translateX(0)"; e.currentTarget.style.borderColor = severity === "high" ? "#ffd0ba" : "#f2e3cf"; }}
               >
-                <span style={{ width: 9, height: 9, borderRadius: "50%", background: severity === "high" ? "#dc2626" : "#eab308", flexShrink: 0, marginTop: 4, display: "inline-block" }} />
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: severity === "high" ? "#FF5000" : "#d97706", flexShrink: 0, marginTop: 5, display: "inline-block" }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.code} — {p.name}</div>
-                  <div style={{ fontSize: 11, color: T.muted }}>{reasons.map((r, i) => (<span key={i}>{i > 0 && <span style={{ margin: "0 4px", opacity: 0.4 }}>·</span>}{r}</span>))}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: T.text, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.code} — {p.name}</div>
+                  <div style={{ fontSize: 11.5, color: T.muted }}>{reasons.map((r, i) => (<span key={i}>{i > 0 && <span style={{ margin: "0 4px", opacity: 0.4 }}>·</span>}{r}</span>))}</div>
                 </div>
-                <span style={{ color: T.muted, fontSize: 12, flexShrink: 0 }}>→</span>
+                <span style={{ color: "#b23800", fontSize: 13, flexShrink: 0, fontWeight: 700 }}>→</span>
               </div>
             ))}
           </div>
@@ -479,17 +478,17 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       {/* Watchlist — early warning, projects not yet in the intervention panel. */}
       {userRole !== ROLE_PM && watchlistRisks.length > 0 && (
         <details style={{ marginBottom: 14 }}>
-          <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 22px", background: T.surface, borderLeft: "4px solid #490300", border: `1px solid ${T.border}`, borderLeftWidth: 4, borderLeftColor: "#490300", borderRadius: 12, fontSize: 14, fontWeight: 800, color: T.text, flexWrap: "wrap" }}>
-            <Ico name="eye" size={15} color="#490300" />
+          <summary style={{ cursor: "pointer", userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 10, padding: "14px 22px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, fontSize: 13, fontWeight: 700, color: T.text, flexWrap: "wrap" }}>
+            <Ico name="eye" size={15} color="#5a7a6e" />
             <span>Risk Watchlist</span>
             {watchlistRisks.filter(r => r.level === "Critical").length > 0 && (
-              <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "Critical").length} Critical</span>
+              <span style={{ background: "#ffe8de", color: "#b23800", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "Critical").length} Critical</span>
             )}
             {watchlistRisks.filter(r => r.level === "High").length > 0 && (
-              <span style={{ background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "High").length} High</span>
+              <span style={{ background: "#fdf1dd", color: "#b45309", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{watchlistRisks.filter(r => r.level === "High").length} High</span>
             )}
-            <span style={{ fontSize: 11, color: T.muted, fontWeight: 400, flex: 1, minWidth: 200 }}>· early warning — open risks on projects not yet flagged above</span>
-            <span style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>click to expand ▼</span>
+            <span style={{ fontSize: 11, color: T.muted, fontWeight: 400, flex: 1, minWidth: 200 }}>early warning — open risks on projects not yet flagged above</span>
+            <span style={{ width: 24, height: 24, borderRadius: "50%", background: dark ? "rgba(255,255,255,0.06)" : "#f4f6f4", border: `1px solid ${T.border}`, display: "inline-flex", alignItems: "center", justifyContent: "center", color: T.muted, fontSize: 11, flexShrink: 0 }}>▾</span>
           </summary>
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 12px 12px", overflow: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -522,12 +521,12 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       )}
 
       {/* ══════════ TIER 3 — WORKFLOW ══════════ */}
-      {tierLabel("TIER 3", "Workflow & approvals", workflowStory, { bg: "#003932", text: "#00FFB3" })}
+      {tierLabel("Approvals & workflow", workflowStory, { size: 15 })}
 
       <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "2fr 1fr", gap: 14, marginBottom: 14 }}>
 
         {/* Gate Pipeline */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "3px solid #00b894", borderRadius: 12, padding: "18px 22px" }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px" }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Gate Pipeline</h3>
           <p style={{ margin: "0 0 16px", fontSize: 11, color: T.muted }}>Active projects by current gate — bottlenecks show where work is stacking</p>
           {gatePipeline.every(g => g.count === 0) && (<p style={{ margin: 0, fontSize: 13, color: T.muted }}>No active projects currently in any gate.</p>)}
@@ -535,19 +534,23 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
             {gatePipeline.map(g => {
               const barPct = (g.count / maxGateCount) * 100;
               const isBN  = bottleneckGate && g.id === bottleneckGate.id;
+              const isEmpty = g.count === 0;
               return (
-                <div key={g.id}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div key={g.id} style={{ opacity: isEmpty ? 0.55 : 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isEmpty ? 0 : 4 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: T.text, minWidth: 50 }}>{g.label}</span>
                       <span style={{ fontSize: 11, color: T.muted }}>{g.name}</span>
-                      {isBN && <span style={{ fontSize: 9.5, fontWeight: 700, background: "#fef9c3", color: "#854d0e", padding: "1px 7px", borderRadius: 8 }}>BOTTLENECK</span>}
+                      {isBN && <span style={{ fontSize: 10, fontWeight: 800, background: "#fdf1dd", color: "#b45309", padding: "1px 7px", borderRadius: 8 }}>BOTTLENECK</span>}
+                      {isEmpty && <span style={{ fontSize: 11, color: "#a1b9ab" }}>— empty</span>}
                     </div>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: g.count > 0 ? T.primary : T.muted, minWidth: 18, textAlign: "right" }}>{g.count}</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: isEmpty ? "#a1b9ab" : T.text, minWidth: 18, textAlign: "right" }}>{g.count}</span>
                   </div>
-                  <div style={{ background: T.border, borderRadius: 5, height: 10, overflow: "hidden" }}>
-                    <div style={{ width: `${barPct}%`, height: "100%", borderRadius: 5, transition: "width 0.4s", background: isBN ? "#eab308" : g.count > 0 ? "#00b894" : "transparent" }} />
-                  </div>
+                  {!isEmpty && (
+                    <div style={{ background: "#eef3ee", borderRadius: 5, height: 10, overflow: "hidden" }}>
+                      <div style={{ width: `${barPct}%`, height: "100%", borderRadius: 5, transition: "width 0.4s", background: isBN ? "#d97706" : "#00b894" }} />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -555,7 +558,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         </div>
 
         {/* Pending Approvals */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "3px solid #00b894", borderRadius: 12, padding: "18px 22px" }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px" }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Pending Approvals</h3>
           <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>Awaiting decision · oldest first</p>
           {pendingApprovals.length === 0 ? (
@@ -564,12 +567,15 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
             <>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {pendingApprovals.slice(0, 4).map(g => (
-                  <div key={g.id} onClick={() => setRoute({ view: "actions" })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 8, background: T.bg, cursor: "pointer" }}>
+                  <div key={g.id} onClick={() => setRoute({ view: "actions" })}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 8, background: T.bg, cursor: "pointer", transition: "background 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = dark ? "rgba(0,184,148,0.10)" : "#eef6f1"}
+                    onMouseLeave={e => e.currentTarget.style.background = T.bg}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.projectTitle || g.projectCode}</div>
-                      <div style={{ fontSize: 10.5, color: T.muted }}>{g.gateLabel}</div>
+                      <div style={{ fontSize: 11, color: T.muted }}>{g.gateLabel}</div>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: (g.daysAtGate || 0) > 10 ? "#dc2626" : "#d97706" }}>{g.daysAtGate || 0}d</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: (g.daysAtGate || 0) > 10 ? "#FF5000" : "#b45309" }}>{g.daysAtGate || 0}d</span>
                   </div>
                 ))}
               </div>
@@ -581,18 +587,18 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
 
       {/* Overdue Milestones — aged buckets */}
       {overdueMilestones.length > 0 && (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "3px solid #00b894", borderRadius: 12, padding: "18px 22px", marginBottom: 14 }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px", marginBottom: 14 }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Overdue Milestones</h3>
-          <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>Aged across the portfolio · {overdueMilestones.length} total across {overdueProjectCount} project{overdueProjectCount !== 1 ? "s" : ""}{maturating > 0 && <span style={{ color: "#c2410c", fontWeight: 700 }}> · {maturating} will cross 30d this week</span>}</p>
+          <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>Aged across the portfolio · {overdueMilestones.length} total across {overdueProjectCount} project{overdueProjectCount !== 1 ? "s" : ""}{maturating > 0 && <span style={{ color: "#b23800", fontWeight: 700 }}> · {maturating} will cross 30d this week</span>}</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {[
-              { label: "1–7 days",         items: overdue7,   bg: "#fef9c3", color: "#ca8a04" },
-              { label: "8–30 days",        items: overdue30,  bg: "#ffedd5", color: "#c2410c" },
-              { label: "30+ days · CRITICAL", items: overdueOld, bg: "#fee2e2", color: "#b91c1c" },
+              { label: "1–7 days",            items: overdue7,   bg: "#fdf1dd", color: "#b45309" },
+              { label: "8–30 days",           items: overdue30,  bg: "#fde8d8", color: "#b23800" },
+              { label: "30+ days · CRITICAL", items: overdueOld, bg: "#ffe8de", color: "#FF5000" },
             ].map(({ label, items, bg, color }) => (
               <div key={label} style={{ padding: 12, borderRadius: 10, background: bg, textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color }}>{items.length}</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, marginTop: 4 }}>{label}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginTop: 4 }}>{label}</div>
               </div>
             ))}
           </div>
@@ -600,45 +606,50 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       )}
 
       {/* ══════════ TIER 4 — PERFORMANCE ══════════ */}
-      {tierLabel("TIER 4", "Performance picture", performanceStory, { bg: "#00b894", text: "white" })}
+      {tierLabel("Performance picture", performanceStory, { size: 15 })}
 
       <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "2fr 1fr", gap: 14, marginBottom: 14 }}>
 
         {/* Dept IPI Chart */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "3px solid #00FFB3", borderRadius: 12, padding: "18px 22px" }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px" }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }} title="IPI: Schedule×50 + Cost×25 + Maturity×25">Department IPI Scores</h3>
-          <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>SPI×50% + CPI×25% + MCI×25% — click a bar to drill in</p>
+          <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>SPI×50% + CPI×25% + MCI×25%</p>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={deptPerf} barSize={32} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <BarChart data={deptPerf} barSize={32} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} width={38} />
               <Tooltip formatter={v => [v, "IPI Score"]} {...ttStyle()} />
               <Bar dataKey="ipi" radius={[6, 6, 0, 0]}>
-                {deptPerf.map((entry, i) => { const c = ipiColor(entry.ipi); return <Cell key={i} fill={c.color} />; })}
+                {deptPerf.map((entry, i) => <Cell key={i} fill={deptBarColor(entry.ipi)} />)}
+                <LabelList dataKey="ipi" position="top" content={(props) => {
+                  const { x, y, width, value } = props;
+                  if (value == null) return null;
+                  return <text x={x + width / 2} y={y - 6} textAnchor="middle" fontSize={11} fontWeight={800} fill={deptBarColor(value)}>{value}</text>;
+                }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
           <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
-            {[{ l: "On Track 100+", c: "#15803d" }, { l: "Watch 90–99", c: "#854d0e" }, { l: "At Risk 70–89", c: "#c2410c" }, { l: "Critical <70", c: "#991b1b" }].map(b => (
+            {[{ l: "On Track 90+", c: "#007a62" }, { l: "Watch 70–89", c: "#d97706" }, { l: "Critical <70", c: "#FF5000" }].map(b => (
               <div key={b.l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ width: 9, height: 9, borderRadius: "50%", background: b.c }} />
-                <span style={{ fontSize: 10, color: T.muted }}>{b.l}</span>
+                <span style={{ fontSize: 11, color: T.muted }}>{b.l}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Portfolio Budget */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "3px solid #00FFB3", borderRadius: 12, padding: "18px 22px", display: "flex", flexDirection: "column" }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px", display: "flex", flexDirection: "column" }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Portfolio Budget</h3>
           <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>Across all active projects</p>
           <div style={{ display: "flex", flexDirection: "column" }}>
             {[
               { label: "Approved",  value: fmtSAR(budgetTotal),              color: T.text },
               { label: "Spent",     value: fmtSAR(costTotal),                color: T.text },
-              { label: "Remaining", value: fmtSAR(budgetTotal - costTotal),  color: (budgetTotal - costTotal) >= 0 ? "#16a34a" : "#dc2626" },
+              { label: "Remaining", value: fmtSAR(budgetTotal - costTotal),  color: (budgetTotal - costTotal) >= 0 ? "#007a62" : "#FF5000" },
             ].map(({ label, value, color }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "11px 0", borderBottom: `1px solid ${T.border}` }}>
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "11px 0", borderBottom: "1px solid #eef3ee" }}>
                 <span style={{ fontSize: 12, color: T.muted }}>{label}</span>
                 <span style={{ fontSize: 13, fontWeight: 800, color }}>{value}</span>
               </div>
@@ -647,30 +658,30 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           <div style={{ marginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 11, color: T.muted }}>Utilisation</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: budgetUtilPct > 90 ? "#dc2626" : T.text }}>{budgetUtilPct}%</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: budgetUtilPct > 90 ? "#FF5000" : T.text }}>{budgetUtilPct}%</span>
             </div>
-            <Progress value={budgetUtilPct} height={10} color={budgetUtilPct > 90 ? "#dc2626" : budgetUtilPct > 75 ? "#eab308" : T.accent} />
+            <Progress value={budgetUtilPct} height={10} color={budgetUtilPct > 90 ? "#FF5000" : budgetUtilPct > 75 ? "#d97706" : "#00b894"} />
           </div>
         </div>
       </div>
 
       {/* ══════════ TIER 5 — INVENTORY (Department cards) ══════════ */}
-      {tierLabel("TIER 5", "Department portfolio overview", "click any department to drill in", { bg: "#5a7a6e", text: "white" })}
+      {tierLabel("Departments", "click any department to drill in →", { size: 15 })}
 
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : bp === "tablet" ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 14 }}>
-        {departments.map((d, i) => {
+        {departments.map((d) => {
           const stats = getDeptStats(d.id, allProjects);
           const ipi   = calcDeptIPI(d.id, allProjects);
           const band  = ipi != null ? ipiColor(ipi) : null;
-          // Rotating accent stripe so dept cards aren't all one color
-          const stripes = ["#00FFB3", "#00b894", "#007a62", "#FF5000", "#490300", "#5a7a6e"];
-          const stripe  = stripes[i % stripes.length];
+          // Left stripe in the department's own brand colour — ties the card to
+          // the dept identity instead of a random rotation.
+          const stripe = deptColor(d.id);
           return (
             <div key={d.id} onClick={() => setRoute({ view: "department", deptId: d.id })}
               style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 18, cursor: "pointer", transition: "all 0.18s", position: "relative", overflow: "hidden" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,57,50,0.10)"; }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "#00b894"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,57,50,0.10)"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: stripe }} />
+              <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: stripe }} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <DeptTile name={d.fullName || d.name} color={deptColor(d.id)} size={38} />
@@ -683,23 +694,23 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                   <span style={{ padding: "5px 10px", borderRadius: 10, fontSize: 12, fontWeight: 800, background: band.bg, color: band.color }}>{ipi}</span>
                 )}
               </div>
-              <Progress value={stats.health} color={stats.health > 70 ? T.accent : stats.health > 50 ? "#eab308" : "#dc2626"} height={6} />
+              <Progress value={stats.health} color={stats.health > 70 ? "#00b894" : stats.health > 50 ? "#d97706" : "#FF5000"} height={6} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 14 }}>
                 {[
-                  { label: "On Track", value: stats.onTrack,   color: "#16a34a" },
-                  { label: "At Risk",  value: stats.atRisk,    color: "#ea580c" },
-                  { label: "Delayed",  value: stats.delayed,   color: "#dc2626" },
-                  { label: "Done",     value: stats.completed, color: "#2563eb" },
+                  { label: "On Track", value: stats.onTrack,   color: "#007a62" },
+                  { label: "At Risk",  value: stats.atRisk,    color: "#b45309" },
+                  { label: "Delayed",  value: stats.delayed,   color: "#FF5000" },
+                  { label: "Done",     value: stats.completed, color: "#003932" },
                 ].map(s => (
                   <div key={s.label} style={{ textAlign: "center", padding: "7px 4px", background: T.bg, borderRadius: 8 }}>
                     <div style={{ fontSize: 15, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                    <div style={{ fontSize: 9.5, color: T.muted, fontWeight: 600, marginTop: 3 }}>{s.label}</div>
+                    <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, marginTop: 3 }}>{s.label}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}`, fontSize: 10.5, color: T.muted }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTop: "1px solid #eef3ee", fontSize: 11, color: T.muted }}>
                 <span>Budget: <span style={{ fontWeight: 700, color: T.text }}>{fmtSAR(stats.totalBudget)}</span></span>
-                <span>High Risk: <span style={{ fontWeight: 700, color: stats.highRisk > 0 ? "#dc2626" : T.text }}>{stats.highRisk}</span></span>
+                <span>High Risk: <span style={{ fontWeight: 700, color: stats.highRisk > 0 ? "#b23800" : T.text }}>{stats.highRisk}</span></span>
               </div>
             </div>
           );
