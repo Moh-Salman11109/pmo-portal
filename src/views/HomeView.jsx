@@ -38,7 +38,7 @@ import { useDepts } from "../deptContext.js";
 import { ROLE_PM } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
-import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark } from "../utils/metrics.js";
+import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, calcProjectIPIDisplay, calcProjectIPIFull } from "../utils/metrics.js";
 import { fmtSAR } from "../utils/format.js";
 import { Progress } from "../components/Progress.jsx";
 import { RiskBadge } from "../components/Badge.jsx";
@@ -301,6 +301,263 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     return bits.join(" ");
   }, [rankedDepts.length, leaderDept, laggardDept, overrunProjects.length, overrunExposure]);
 
+  // ── Monthly Portfolio Report — executive print, one click ──────
+  // Reuses the exact numbers this dashboard computes (portfolio IPI, dept
+  // IPIs, budget, overdue, risks) so the paper always matches the screen.
+  const printMonthlyReport = () => {
+    const now = new Date();
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    const monthName = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+    const dateStr   = now.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const fmtD      = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }) : "—";
+    const monthKey  = now.toISOString().slice(0, 7);
+
+    // Band → print colors (v2 3-band, same thresholds as every pill in the portal)
+    const band = (ipi) => ipi == null
+      ? { label: "Pending Plan", txt: "#5a7a6e", bg: "#eef3ee" }
+      : ipi >= 90 ? { label: "On Track", txt: "#007a62", bg: "#e0f8ee" }
+      : ipi >= 70 ? { label: "Watch",    txt: "#b45309", bg: "#fdf3e0" }
+      :             { label: "Critical", txt: "#c2410c", bg: "#ffe8de" };
+
+    // Per-project rows — time-weighted IPI (same as portal tables) + engine flags
+    const rows = allProjects.map(p => {
+      const full = calcProjectIPIFull(p);
+      const ipi  = calcProjectIPIDisplay(p).primary;
+      const b    = band(ipi);
+      const flags = [];
+      if (full.roadmapBreach) flags.push({ t: `Roadmap −${Math.round((1 - (full.roadmapPenalty ?? 1)) * 100)}%`, c: "#490300", bg: "#f0d4d0" });
+      if (full.complete && full.daysLateVsPlan > 0) flags.push({ t: `Late ${full.daysLateVsPlan}d`, c: "#b45309", bg: "#fdf3e0" });
+      if (!full.complete && p.plannedEnd && p.plannedEnd < TODAY) flags.push({ t: "Past planned end", c: "#b45309", bg: "#fdf3e0" });
+      if (full.complete && full.roadmapStatus === "met") flags.push({ t: "✓ Met roadmap", c: "#007a62", bg: "#e0f8ee" });
+      const deptName = (departments.find(d => d.id === p.deptId)?.name || p.deptId || "—");
+      return { p, full, ipi, b, flags, deptName };
+    });
+    const sevRank = (r) => r.ipi == null ? 3 : r.ipi >= 90 ? 2 : r.ipi >= 70 ? 1 : 0;
+    const sortedRows = [...rows].sort((a, b2) => sevRank(a) - sevRank(b2) || (a.ipi ?? 999) - (b2.ipi ?? 999));
+
+    const counts = { crit: rows.filter(r => r.ipi != null && r.ipi < 70).length,
+                     watch: rows.filter(r => r.ipi != null && r.ipi >= 70 && r.ipi < 90).length,
+                     ok: rows.filter(r => r.ipi != null && r.ipi >= 90).length };
+    const breaches = rows.filter(r => r.full.roadmapBreach);
+    const worstBreach = [...breaches].sort((a, b2) => (a.full.roadmapPenalty ?? 1) - (b2.full.roadmapPenalty ?? 1))[0];
+    const completedThisMonth = rows.filter(r => r.p.status === "Completed" && (r.p.actualFinishDate || "").startsWith(monthKey));
+
+    // Executive summary — honest, data-driven, max 5 lines
+    const insights = [];
+    const trend = prevIPI != null && portfolioIPI != null ? portfolioIPI - prevIPI : null;
+    insights.push(`Portfolio IPI is <b>${portfolioIPI ?? "—"}</b> (${band(portfolioIPI).label})${trend != null ? ` — ${trend >= 0 ? "up" : "down"} ${Math.abs(trend)} pts vs 30 days ago` : ""}.`);
+    if (counts.crit > 0) {
+      const names = sortedRows.filter(r => sevRank(r) === 0).slice(0, 3).map(r => esc(r.p.name)).join(", ");
+      insights.push(`<b>${counts.crit}</b> of ${allProjects.length} projects are Critical (&lt;70): ${names}.`);
+    }
+    if (breaches.length > 0) insights.push(`<b>${breaches.length}</b> project${breaches.length === 1 ? " is" : "s are"} past the roadmap commitment — worst: ${esc(worstBreach.p.name)} (IPI capped &amp; decaying −${Math.round((1 - (worstBreach.full.roadmapPenalty ?? 1)) * 100)}%).`);
+    insights.push(`Budget utilisation <b>${budgetUtilPct}%</b> (${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)})${overrunProjects.length ? ` · ${overrunProjects.length} project${overrunProjects.length === 1 ? "" : "s"} forecasting overrun, exposure ${fmtSAR(overrunExposure)}` : " · no forecast overruns"}.`);
+    if (overdueMilestones.length > 0) insights.push(`<b>${overdueMilestones.length}</b> milestone${overdueMilestones.length === 1 ? "" : "s"} overdue across ${overdueProjectCount} project${overdueProjectCount === 1 ? "" : "s"} — oldest ${overdueMilestones[0].daysOverdue}d.`);
+    if (leaderDept && laggardDept && leaderDept.id !== laggardDept.id) insights.push(`${esc(leaderDept.fullName)} leads at <b>${leaderDept.ipi}</b>; ${esc(laggardDept.fullName)} trails at <b>${laggardDept.ipi}</b>.`);
+
+    const kpiTiles = [
+      { l: "Active Projects", v: activeProjects.length, s: `${allProjects.length} total incl. completed` },
+      { l: "On Track ≥90",   v: counts.ok,    c: "#007a62" },
+      { l: "Watch 70–89",    v: counts.watch, c: "#b45309" },
+      { l: "Critical <70",   v: counts.crit,  c: "#c2410c" },
+      { l: "Budget Utilisation", v: budgetUtilPct + "%", s: fmtSAR(costTotal) + " spent" },
+      { l: "Overdue Milestones", v: overdueMilestones.length, c: overdueMilestones.length ? "#b45309" : "#007a62", s: overdueMilestones.length ? `oldest ${overdueMilestones[0].daysOverdue}d` : "all on schedule" },
+    ];
+
+    const deptBars = deptPerf.map(d => {
+      const b = band(d.ipi);
+      return `<div class="dept-row">
+        <span class="dept-name">${esc(d.fullName)}</span>
+        <div class="dept-track"><div class="dept-fill" style="width:${Math.min(100, d.ipi ?? 0)}%; background:${b.txt}"></div></div>
+        <span class="dept-val" style="color:${b.txt}">${d.ipi ?? "—"}</span>
+        <span class="dept-n">${d.projects} project${d.projects === 1 ? "" : "s"}</span>
+      </div>`;
+    }).join("");
+
+    const tableRows = sortedRows.map(r => `<tr>
+      <td class="mono">${esc(r.p.code)}</td>
+      <td class="pname">${esc(r.p.name)}</td>
+      <td>${esc(r.deptName)}</td>
+      <td>${esc(r.p.pm) || "—"}</td>
+      <td class="mono">${esc((r.p.gate || "—").replace("Gate ", "G"))}</td>
+      <td><div class="pbar"><div class="pfill" style="width:${r.full.progress ?? r.p.progress ?? 0}%"></div></div><span class="ppct mono">${r.full.progress ?? r.p.progress ?? 0}%</span></td>
+      <td><span class="chip" style="background:${r.b.bg}; color:${r.b.txt}">${r.ipi ?? "—"}</span></td>
+      <td>${esc(r.p.status)}</td>
+      <td class="mono">${fmtD(r.p.plannedEnd)}</td>
+      <td>${r.flags.map(f => `<span class="chip sm" style="background:${f.bg}; color:${f.c}">${f.t}</span>`).join(" ") || `<span class="dim">—</span>`}</td>
+    </tr>`).join("");
+
+    const attention = sortedRows.filter(r => sevRank(r) === 0 || r.full.roadmapBreach).slice(0, 5);
+    const attentionHtml = attention.length === 0
+      ? `<div class="empty-sub">No projects require escalation this month.</div>`
+      : attention.map(r => {
+          const why = [];
+          if (r.ipi != null && r.ipi < 70) why.push(`IPI ${r.ipi}`);
+          if (r.full.roadmapBreach) why.push(`${r.full.roadmapDaysLate}d past roadmap (−${Math.round((1 - (r.full.roadmapPenalty ?? 1)) * 100)}%)`);
+          if (!r.full.complete && r.p.plannedEnd && r.p.plannedEnd < TODAY) why.push("past planned end");
+          const od = (r.p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY).length;
+          if (od) why.push(`${od} overdue milestone${od === 1 ? "" : "s"}`);
+          if (r.p.budget > 0 && (r.p.forecast || 0) > r.p.budget) why.push(`forecast +${fmtSAR((r.p.forecast || 0) - r.p.budget)}`);
+          return `<div class="att-row"><span class="att-name">${esc(r.p.name)}</span><span class="att-pm">${esc(r.p.pm) || "—"}</span><span class="att-why">${why.join(" · ") || "—"}</span></div>`;
+        }).join("");
+
+    const completedHtml = completedThisMonth.length === 0
+      ? `<div class="empty-sub">No projects closed in ${esc(monthName)}.</div>`
+      : completedThisMonth.map(r => {
+          const d = r.full.scheduleDeltaDays;
+          const chip = d == null || d === 0 ? `<span class="chip sm" style="background:#e0f8ee;color:#007a62">on time</span>`
+            : d < 0 ? `<span class="chip sm" style="background:#e0f8ee;color:#007a62">${Math.abs(d)}d early</span>`
+            : `<span class="chip sm" style="background:#fdf3e0;color:#b45309">${d}d late</span>`;
+          return `<div class="done-row"><span class="att-name">${esc(r.p.name)}</span><span class="mono dim">${fmtD(r.p.actualFinishDate)}</span><span class="chip" style="background:${r.b.bg};color:${r.b.txt}">IPI ${r.ipi ?? "—"}</span>${chip}</div>`;
+        }).join("");
+
+    const riskRows = portfolioRisks.slice(0, 6).map(r => {
+      const rc = r.level === "Critical" ? { bg: "#f0d4d0", txt: "#490300" } : { bg: "#ffd9c2", txt: "#b45309" };
+      return `<div class="risk-row"><span class="chip sm" style="background:${rc.bg};color:${rc.txt}">${esc(r.level)}</span><span class="att-name">${esc(r.title)}</span><span class="dim">${esc(r.projectName)}</span></div>`;
+    }).join("") || `<div class="empty-sub">No open Critical or High risks.</div>`;
+
+    const pb = band(portfolioIPI);
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+      <title>PMO Monthly Report — ${esc(monthName)}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',sans-serif; font-size:11px; color:#0d1f1c; background:#fff; line-height:1.5; }
+        @page { size: A4 portrait; margin: 0; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        .mono { font-family:'JetBrains Mono',monospace; }
+        .dim { color:#7a9485; }
+
+        .cover { background: radial-gradient(circle at 85% 20%, rgba(0,255,179,0.12) 0%, transparent 45%), linear-gradient(135deg,#001f1a 0%,#003932 55%,#0a5448 100%); color:#fff; padding:30px 40px 26px; border-bottom:3px solid #00FFB3; display:flex; justify-content:space-between; align-items:flex-end; }
+        .cover .brand { color:#00FFB3; font-weight:900; font-size:17px; letter-spacing:-0.5px; margin-bottom:14px; }
+        .cover .rpt { font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.65); margin-bottom:4px; }
+        .cover h1 { font-size:30px; font-weight:900; letter-spacing:-0.8px; }
+        .cover .gen { font-size:10px; color:rgba(255,255,255,0.5); margin-top:6px; }
+        .cover .ipi-block { text-align:right; }
+        .cover .ipi-lbl { font-size:10px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#00FFB3; margin-bottom:2px; }
+        .cover .ipi-val { font-size:52px; font-weight:900; line-height:0.95; letter-spacing:-2px; }
+        .cover .ipi-band { display:inline-block; margin-top:6px; padding:3px 12px; border-radius:14px; font-size:10.5px; font-weight:800; background:rgba(255,255,255,0.12); }
+        .cover .ipi-trend { font-size:10px; color:rgba(255,255,255,0.6); margin-top:5px; }
+
+        .kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:1px; background:#C9D5C9; border-bottom:1px solid #C9D5C9; }
+        .kpi { background:#fff; padding:12px 14px; }
+        .kpi .l { font-size:8.5px; color:#3a5547; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:4px; }
+        .kpi .v { font-size:19px; font-weight:900; color:#003932; line-height:1; }
+        .kpi .s { font-size:8.5px; color:#7a9485; margin-top:3px; }
+
+        section { padding:16px 40px 0; }
+        .sec-head { display:flex; align-items:baseline; gap:8px; border-bottom:2px solid #003932; padding-bottom:5px; margin-bottom:10px; }
+        .sec-head h2 { font-size:12.5px; font-weight:900; color:#003932; letter-spacing:0.07em; text-transform:uppercase; }
+        .sec-head .m { margin-left:auto; font-size:9px; color:#7a9485; }
+
+        .insights { list-style:none; }
+        .insights li { position:relative; padding:5px 0 5px 16px; font-size:11.5px; color:#1b2420; border-bottom:1px solid #f0f4f1; }
+        .insights li:last-child { border-bottom:none; }
+        .insights li::before { content:''; position:absolute; left:2px; top:11px; width:6px; height:6px; border-radius:50%; background:#00b894; }
+        .insights b { color:#003932; }
+
+        .dept-row { display:grid; grid-template-columns:150px 1fr 34px 64px; gap:10px; align-items:center; padding:4.5px 0; border-bottom:1px solid #f0f4f1; }
+        .dept-row:last-child { border-bottom:none; }
+        .dept-name { font-size:10.5px; font-weight:700; color:#003932; }
+        .dept-track { height:9px; background:#eef3ee; border-radius:5px; overflow:hidden; }
+        .dept-fill { height:100%; border-radius:5px; }
+        .dept-val { font-size:11.5px; font-weight:900; text-align:right; font-family:'JetBrains Mono',monospace; }
+        .dept-n { font-size:9px; color:#7a9485; text-align:right; }
+
+        table.port { width:100%; border-collapse:collapse; font-size:9.5px; }
+        table.port th { background:#003932; color:#dff5ec; text-align:left; padding:6px 8px; font-size:8px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; }
+        table.port td { padding:6px 8px; border-bottom:1px solid #eef3ee; vertical-align:middle; }
+        table.port tr { break-inside:avoid; }
+        .pname { font-weight:700; color:#003932; }
+        .pbar { display:inline-block; width:46px; height:6px; background:#eef3ee; border-radius:3px; overflow:hidden; vertical-align:middle; margin-right:5px; }
+        .pfill { height:100%; background:#00b894; }
+        .ppct { font-size:8.5px; color:#3a5547; }
+        .chip { display:inline-block; padding:2px 9px; border-radius:11px; font-size:9.5px; font-weight:800; font-family:'JetBrains Mono',monospace; }
+        .chip.sm { font-size:8px; padding:1.5px 7px; font-family:'Inter',sans-serif; white-space:nowrap; }
+
+        .two-col { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:16px 40px 0; }
+        .card { border:1px solid #C9D5C9; border-radius:10px; padding:12px 14px; break-inside:avoid; }
+        .card h3 { font-size:10px; font-weight:900; color:#003932; letter-spacing:0.07em; text-transform:uppercase; padding-bottom:5px; margin-bottom:7px; border-bottom:1.5px solid #00b894; }
+        .att-row, .done-row, .risk-row { display:flex; align-items:center; gap:8px; padding:4.5px 0; border-bottom:1px solid #f0f4f1; font-size:10px; }
+        .att-row:last-child, .done-row:last-child, .risk-row:last-child { border-bottom:none; }
+        .att-name { font-weight:700; color:#003932; flex-shrink:0; }
+        .att-pm { color:#7a9485; font-size:9px; flex-shrink:0; }
+        .att-why { color:#843c0c; margin-left:auto; text-align:right; font-size:9px; }
+        .done-row .chip, .done-row .mono { margin-left:auto; }
+        .done-row .att-name { flex:1; }
+        .done-row .mono { flex:none; margin-left:0; }
+        .risk-row .dim { margin-left:auto; font-size:8.5px; }
+        .empty-sub { color:#7a9485; font-style:italic; font-size:9.5px; padding:6px 0; }
+
+        .footer { margin-top:18px; padding:10px 40px 14px; border-top:1px solid #C9D5C9; display:flex; justify-content:space-between; color:#7a9485; font-size:8.5px; }
+        .pagebreak { break-before:page; }
+      </style></head><body>
+
+      <div class="cover">
+        <div>
+          <div class="brand">tree</div>
+          <div class="rpt">PMO · Monthly Portfolio Report</div>
+          <h1>${esc(monthName)}</h1>
+          <div class="gen">Generated ${dateStr} · ${allProjects.length} projects · ${deptPerf.length} departments</div>
+        </div>
+        <div class="ipi-block">
+          <div class="ipi-lbl">Portfolio IPI</div>
+          <div class="ipi-val">${portfolioIPI ?? "—"}</div>
+          <div class="ipi-band">${pb.label}</div>
+          ${trend != null ? `<div class="ipi-trend">${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)} pts vs 30 days ago</div>` : ""}
+        </div>
+      </div>
+
+      <div class="kpis">${kpiTiles.map(k => `<div class="kpi"><div class="l">${k.l}</div><div class="v"${k.c ? ` style="color:${k.c}"` : ""}>${k.v}</div>${k.s ? `<div class="s">${k.s}</div>` : ""}</div>`).join("")}</div>
+
+      <section>
+        <div class="sec-head"><h2>Executive Summary</h2><span class="m">auto-computed from live portfolio data</span></div>
+        <ul class="insights">${insights.slice(0, 5).map(i => `<li>${i}</li>`).join("")}</ul>
+      </section>
+
+      <section>
+        <div class="sec-head"><h2>Department Performance</h2><span class="m">IPI · budget × priority weighted</span></div>
+        ${deptBars}
+      </section>
+
+      <section>
+        <div class="sec-head"><h2>Portfolio — All Projects</h2><span class="m">sorted worst-first · IPI is the 90-day weighted score</span></div>
+        <table class="port">
+          <thead><tr><th>Code</th><th>Project</th><th>Dept</th><th>PM</th><th>Gate</th><th>Progress</th><th>IPI</th><th>Status</th><th>Planned End</th><th>Flags</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </section>
+
+      <div class="two-col">
+        <div class="card">
+          <h3>Needs Attention</h3>
+          ${attentionHtml}
+        </div>
+        <div class="card">
+          <h3>Top Open Risks</h3>
+          ${riskRows}
+        </div>
+      </div>
+
+      <div class="two-col" style="padding-top:14px">
+        <div class="card" style="grid-column:1 / -1">
+          <h3>Closed in ${esc(monthName)}</h3>
+          ${completedHtml}
+        </div>
+      </div>
+
+      <div class="footer">
+        <span>Confidential — internal use only · PMO Enterprise Portal · Tree Digital Insurance Company</span>
+        <span>Generated ${dateStr}</span>
+      </div>
+    </body></html>`;
+
+    const win = window.open("", "_blank", "width=1100,height=900");
+    if (!win) { alert("Pop-up blocked — please allow pop-ups for this site."); return; }
+    win.document.write(html);
+    win.document.close();
+  };
+
   // ── Layout ─────────────────────────────────────────────────────
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
   const isNarrow = bp === "mobile" || bp === "tablet";
@@ -340,7 +597,17 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
             <h1 style={{ fontSize: bp === "mobile" ? 22 : 28, fontWeight: 800, color: "white", lineHeight: 1.1, letterSpacing: "-0.5px", margin: 0 }}>Enterprise Portfolio</h1>
             <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, marginTop: 4, fontWeight: 500 }}>{todayStr}{loadedAt && <span style={{ color: "#00FFB3", marginLeft: 8 }}>· Synced {loadedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>}</div>
           </div>
-          <img src="/tree-logo.png" alt="Tree" style={{ height: 34, opacity: 0.95 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {bp !== "mobile" && (
+              <button onClick={printMonthlyReport}
+                style={{ background: "rgba(0,255,179,0.10)", border: "1px solid rgba(0,255,179,0.45)", color: "#00FFB3", borderRadius: 9, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(0,255,179,0.22)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(0,255,179,0.10)"}>
+                ⎙ Print Monthly Report
+              </button>
+            )}
+            <img src="/tree-logo.png" alt="Tree" style={{ height: 34, opacity: 0.95 }} />
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "340px 1fr", gap: 44, alignItems: "center", position: "relative", zIndex: 2 }}>
