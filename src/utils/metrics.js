@@ -598,7 +598,7 @@ export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
  * Returns null when no measurable projects in the dept.
  */
 export function calcDeptIPI(deptId, projects) {
-  const dp = projects.filter(p => p.deptId === deptId && !p.archived);
+  const dp = projects.filter(p => p.deptId === deptId && !p.archived && p.status !== "Cancelled");
   // calcProjectIPI now returns the time-weighted score, so the dept rollup
   // reflects each project's performance across its update history rather
   // than the most recent snapshot. Matches the IPI column in tables
@@ -617,7 +617,7 @@ export function calcDeptIPI(deptId, projects) {
 // asOfDate uses time-weighted IPI, since that's the only way to reconstruct
 // a project's score on a past date.
 export function calcPortfolioIPI(projects, asOfDate = TODAY) {
-  const active = projects.filter(p => !p.archived);
+  const active = projects.filter(p => !p.archived && p.status !== "Cancelled");
   const isHistorical = asOfDate !== TODAY;
   const measured = active
     .map(p => ({ p, ipi: isHistorical ? calcTimeWeightedIPI(p, asOfDate) : calcProjectIPI(p) }))
@@ -755,6 +755,11 @@ export function trackMilestoneDateChanges(next = [], prev = []) {
  * (e.g. sponsor freeze, regulator pause) that the math cannot see.
  */
 export function deriveProjectStatus(project) {
+  // On Hold and Cancelled are governance decisions the performance signals
+  // can't infer — a manually-set status wins over derivation.
+  if (project.status === "On Hold")   return { status: "On Hold",   reason: "Temporarily suspended by decision" };
+  if (project.status === "Cancelled") return { status: "Cancelled", reason: "Permanently cancelled by decision" };
+
   const progress = effectiveProgress(project);
   const ipi      = calcProjectIPI(project);
   const gateNum  = parseGateNumber(project.gate);

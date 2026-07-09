@@ -3,6 +3,8 @@ export const statusColor = {
   "At Risk":    { bg: "#fef9c3", text: "#854d0e", dot: "#eab308" },
   "Delayed":    { bg: "#fee2e2", text: "#991b1b", dot: "#dc2626" },
   "Completed":  { bg: "#dbeafe", text: "#1e40af", dot: "#3b82f6" },
+  "On Hold":    { bg: "#eef2f6", text: "#475569", dot: "#64748b" },
+  "Cancelled":  { bg: "#e7e9ec", text: "#4b5563", dot: "#8b95a1" },
   "Not Started":{ bg: "#f3f4f6", text: "#4b5563", dot: "#9ca3af" },
 };
 
