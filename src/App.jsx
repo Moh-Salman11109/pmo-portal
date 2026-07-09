@@ -1885,15 +1885,19 @@ const PROJECT_TABS_EXEC  = ["Exec Summary"];
 // PMO tier edits; PM sees their project's actions read-only. Assigned items
 // also surface in the owner's My Actions queue.
 const ACTION_STATUSES = ["Open", "In Progress", "Closed"];
-const ActionsPanel = ({ project, canEdit, onSave }) => {
+const ActionsPanel = ({ project, canEdit, canRespond = false, onSave }) => {
   const T = useT();
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
-  const blank = { title: "", owner: "", ownerEmail: "", dueDate: "", status: "Open" };
+  const blank = { title: "", owner: "", ownerEmail: "", dueDate: "", status: "Open", note: "" };
   const [draft, setDraft] = useState(blank);
+  const [noteEditId, setNoteEditId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState("");
   const s = fInputStyle(T, false);
   const actions = project.actions || [];
   const today = new Date().toISOString().split("T")[0];
+  // PM responds (status + note); PMO edits everything.
+  const canRespondOrEdit = canEdit || canRespond;
 
   const persist = async (next) => {
     setSaving(true);
@@ -1903,14 +1907,16 @@ const ActionsPanel = ({ project, canEdit, onSave }) => {
     if (!draft.title.trim() || !draft.owner.trim()) return;
     const entry = {
       id: `AC${Date.now()}`, title: draft.title.trim(), owner: draft.owner.trim(),
-      ownerEmail: draft.ownerEmail.trim(), dueDate: draft.dueDate, status: "Open",
-      createdBy: "PMO", createdDate: today,
+      ownerEmail: draft.ownerEmail.trim(), dueDate: draft.dueDate, status: draft.status,
+      note: draft.note.trim(), createdBy: "PMO", createdDate: today,
+      ...(draft.status === "Closed" ? { closedDate: today } : {}),
     };
     await persist([...actions, entry]);
     setDraft(blank); setAdding(false);
   };
   const setStatus = (id, status) => persist(actions.map(a => a.id === id
     ? { ...a, status, ...(status === "Closed" ? { closedDate: today } : { closedDate: undefined }) } : a));
+  const saveNote = (id) => { persist(actions.map(a => a.id === id ? { ...a, note: noteDraft.trim() } : a)); setNoteEditId(null); };
   const removeAction = (id) => persist(actions.filter(a => a.id !== id));
 
   const stChip = (a) => {
@@ -1927,7 +1933,7 @@ const ActionsPanel = ({ project, canEdit, onSave }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Action Items</h3>
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{openCount} open · {actions.length - openCount} closed{canEdit ? "" : " · recorded by PMO"}</div>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{openCount} open · {actions.length - openCount} closed{canEdit ? "" : " · recorded by PMO — update the status and add your note"}</div>
         </div>
         {canEdit && !adding && (
           <button onClick={() => setAdding(true)} disabled={saving}
@@ -1937,7 +1943,7 @@ const ActionsPanel = ({ project, canEdit, onSave }) => {
 
       {adding && (
         <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${T.border}`, marginBottom: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Action *</div>
               <input autoFocus value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))} style={s} />
@@ -1954,6 +1960,16 @@ const ActionsPanel = ({ project, canEdit, onSave }) => {
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Due Date</div>
               <input type="date" value={draft.dueDate} onChange={e => setDraft(p => ({ ...p, dueDate: e.target.value }))} style={s} />
             </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Status</div>
+              <select value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value }))} style={{ ...s, background: T.selectBg }}>
+                {ACTION_STATUSES.map(x => <option key={x}>{x}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Note</div>
+            <input value={draft.note} onChange={e => setDraft(p => ({ ...p, note: e.target.value }))} placeholder="Context from the meeting (optional)" style={s} />
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button onClick={() => { setAdding(false); setDraft(blank); }} style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
@@ -1979,16 +1995,41 @@ const ActionsPanel = ({ project, canEdit, onSave }) => {
                 {a.createdDate && <span> · logged {a.createdDate}</span>}
                 {a.closedDate && <span> · closed {a.closedDate}</span>}
               </div>
+              {noteEditId === a.id ? (
+                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                  <input autoFocus value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") saveNote(a.id); if (e.key === "Escape") setNoteEditId(null); }}
+                    placeholder="Write a note…" style={{ ...s, fontSize: 12 }} />
+                  <button onClick={() => saveNote(a.id)} disabled={saving}
+                    style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Save</button>
+                  <button onClick={() => setNoteEditId(null)}
+                    style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Cancel</button>
+                </div>
+              ) : (
+                (a.note || canRespondOrEdit) && (
+                  <div style={{ fontSize: 11.5, color: a.note ? T.text : T.muted, marginTop: 4, fontStyle: a.note ? "italic" : "normal" }}>
+                    {a.note ? `“${a.note}”` : ""}
+                    {canRespondOrEdit && (
+                      <button onClick={() => { setNoteEditId(a.id); setNoteDraft(a.note || ""); }}
+                        style={{ background: "transparent", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: a.note ? 8 : 0 }}>
+                        {a.note ? "✎ Edit note" : "+ Add note"}
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
             </div>
             <span style={{ background: c.bg, color: c.txt, fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, flexShrink: 0 }}>{c.label}</span>
-            {canEdit && (
+            {canRespondOrEdit && (
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                 <select value={a.status} onChange={e => setStatus(a.id, e.target.value)} disabled={saving}
                   style={{ ...fInputStyle(T, false), width: "auto", padding: "4px 8px", fontSize: 11, background: T.selectBg }}>
                   {ACTION_STATUSES.map(x => <option key={x}>{x}</option>)}
                 </select>
-                <button onClick={() => removeAction(a.id)} disabled={saving} title="Remove"
-                  style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 13, padding: "3px 9px" }}>×</button>
+                {canEdit && (
+                  <button onClick={() => removeAction(a.id)} disabled={saving} title="Remove"
+                    style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 13, padding: "3px 9px" }}>×</button>
+                )}
               </div>
             )}
           </div>
@@ -3585,9 +3626,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
       )}
 
-      {/* ACTIONS TAB — meeting action items */}
+      {/* ACTIONS TAB — meeting action items. PMO edits; PM responds (status + note). */}
       {activeTab === "Actions" && (
-        <ActionsPanel project={project} canEdit={canSeeNotes} onSave={saveActions} />
+        <ActionsPanel project={project} canEdit={canSeeNotes} canRespond={userRole === ROLE_PM} onSave={saveActions} />
       )}
 
       {/* UPDATES TAB */}
