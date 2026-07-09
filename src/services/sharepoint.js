@@ -355,7 +355,10 @@ export const SPService = {
     if (USE_MOCK) return MOCK_PROJECTS;
     let filterQuery = "";
     if (role === "pm" && email) {
-      filterQuery = `ProjectManagerEmail eq '${email.replace(/'/g, "''")}'`;
+      // pmEmail may hold "primary, backup" — substringof catches either slot.
+      // The client-side visibleProjects filter re-checks with an exact
+      // split-and-match, so any substring false positive is dropped there.
+      filterQuery = `substringof('${email.replace(/'/g, "''")}', ProjectManagerEmail)`;
     } else if (role === "dept_head" && deptId) {
       const isMulti = deptId.includes(",") || deptId.trim().toLowerCase() === "all";
       if (!isMulti) filterQuery = `DepartmentID eq '${deptId.replace(/'/g, "''")}'`;

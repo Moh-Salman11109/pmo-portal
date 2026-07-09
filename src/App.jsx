@@ -6059,7 +6059,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     // No phase / riskLevel / budgetStatus / health / spi / cpi / daysRemaining /
     // daysDelayed / scheduleVariance: all derived from raw data at render time
     // (Phase 2 simplification). Seeding them here would create dead state.
-    milestones: [], risks: [], issues: [], updates: [], benefits: [], approvals: [],
+    milestones: [], risks: [], issues: [], updates: [], benefits: [], approvals: [], actions: [],
     documents: [...MANDATORY_DOCS], requiredDocs: [],
     gates: GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" })),
     updateCadence: "Biweekly", archived: false, pmoStatus: "Draft", dataReliabilityFlag: "Pending",
@@ -6111,16 +6111,32 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 
   const validate = () => {
     const e = {};
+    const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
     if (!form.name.trim()) e.name = "Required";
     if (!form.code.trim()) e.code = "Required";
+    else {
+      // ProjectCode doubles as the routing id — a duplicate silently collides.
+      const dup = projects.some(p => p.code?.trim().toLowerCase() === form.code.trim().toLowerCase() && p.id !== existing?.id);
+      if (dup) e.code = "Already used by another project";
+    }
     if (!form.deptId) e.deptId = "Required";
     if (!form.pm.trim()) e.pm = "Required";
+    const [pmMain = "", pmBackup = ""] = (form.pmEmail || "").split(/[,;]/).map(x => x.trim());
+    if (!pmMain) e.pmEmail = "Required — the PM sees their projects through this email";
+    else if (!emailOk(pmMain)) e.pmEmail = "Invalid email";
+    else if (pmBackup && !emailOk(pmBackup)) e.pmEmail = "Backup email is invalid";
+    if (form.startDate && form.plannedEnd && form.plannedEnd < form.startDate) e.plannedEnd = "Before the start date";
+    if (form.status === "Completed" && !form.actualFinishDate) e.actualFinishDate = "Required for a completed project — SPI is measured on it";
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return e;
   };
 
   const handleSave = async () => {
-    if (!validate()) { setStep(0); return; }
+    const e = validate();
+    if (Object.keys(e).length > 0) {
+      setStep(e.plannedEnd || e.actualFinishDate ? 1 : 0);
+      return;
+    }
     setSaving(true); setSaveError(null);
     try {
       // Auto-sync project.progress with WBS when milestones exist
@@ -6174,7 +6190,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
             const join = (a, b) => [a, b].map(x => (x || "").trim()).filter(Boolean).join(", ");
             return (
               <>
-                <FField label="PM Email"><input value={pmMain} onChange={e => set("pmEmail", join(e.target.value, pmBackup))} placeholder="pm@tree.com.sa" type="email" style={s} /></FField>
+                <FField label="PM Email" required error={errors.pmEmail}><input value={pmMain} onChange={e => set("pmEmail", join(e.target.value, pmBackup))} placeholder="pm@tree.com.sa" type="email" style={sErr("pmEmail")} /></FField>
                 <FField label="Backup PM Email"><input value={pmBackup} onChange={e => set("pmEmail", join(pmMain, e.target.value))} placeholder="Optional — can update when the PM is away" type="email" style={s} /></FField>
               </>
             );
@@ -6205,7 +6221,21 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     if (step === 1) return (
       <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "1fr 1fr", gap: 16 }}>
         <FField label="Start Date"><input type="date" value={form.startDate || ""} onChange={e => set("startDate", e.target.value)} style={s} /></FField>
-        <FField label="Planned End Date"><input type="date" value={form.plannedEnd || ""} onChange={e => set("plannedEnd", e.target.value)} style={s} /></FField>
+        <FField label="Planned End Date" error={errors.plannedEnd}>
+          <input type="date" value={form.plannedEnd || ""} onChange={e => set("plannedEnd", e.target.value)} style={sErr("plannedEnd")} />
+          {!form.plannedEnd && <div style={{ fontSize: 10, color: "#b45309", marginTop: 3 }}>Without it the project scores as Pending Plan (no IPI)</div>}
+        </FField>
+        {form.status === "Completed" && (
+          <FField label="Actual Finish Date" required error={errors.actualFinishDate}>
+            <input type="date" value={form.actualFinishDate || ""} onChange={e => set("actualFinishDate", e.target.value)} style={sErr("actualFinishDate")} />
+            <div style={{ fontSize: 10, color: "#5a7a6e", marginTop: 3 }}>SPI for a completed project = baseline duration ÷ actual duration to this date</div>
+          </FField>
+        )}
+        <FField label="Update Cadence" title="How often the PM is expected to submit an update — drives the data-reliability flag">
+          <select value={form.updateCadence || "Biweekly"} onChange={e => set("updateCadence", e.target.value)} style={ss}>
+            {["Weekly", "Biweekly", "Monthly"].map(o => <option key={o}>{o}</option>)}
+          </select>
+        </FField>
         <FField label="Roadmap Deadline" title="Strategic checkpoint. Overrunning it raises a Roadmap Breach flag — it does NOT change the IPI math."><input type="date" value={form.roadmapDeadline || ""} onChange={e => set("roadmapDeadline", e.target.value)} style={s} /></FField>
         {(() => {
           const gateN = parseGateNumber(form.gate);
