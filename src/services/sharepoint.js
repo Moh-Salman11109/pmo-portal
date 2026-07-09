@@ -84,6 +84,7 @@ export const SP_FIELD_MAP = {
   baselineEnd:         "BaselineEnd",
   baselineExceptionNote: "BaselineExceptionNote",
   isRoadmap:           "IsRoadmapProject",
+  excludeFromIPI:      "ExcludeFromIPI",
   actualFinishDate:    "ActualFinishDate",
   // JSON columns — stored as multi-line text in SP, parsed with safeJSON()
   gates:               "GatesJSON",
@@ -183,6 +184,7 @@ export function mapSPItemToProject(item) {
     baselineEnd:         safeDate(item[f.baselineEnd]) || safeDate(item[f.plannedEnd]),
     baselineExceptionNote: item[f.baselineExceptionNote] || "",
     isRoadmap:           Boolean(item[f.isRoadmap]),
+    excludeFromIPI:      Boolean(item[f.excludeFromIPI]),
     actualFinishDate:    safeDate(item[f.actualFinishDate]),
     // JSON sub-objects
     gates:               safeJSON(item[f.gates],       []),
@@ -309,6 +311,9 @@ export function mapProjectToSPItem(project) {
     // Conditional — only written once actions exist, so saves stay safe on
     // tenants where the ActionsJSON column has not been created yet.
     ...(Array.isArray(project.actions) && project.actions.length ? { [f.actions]: js(project.actions) } : {}),
+    // Conditional — only written when true, so saves stay safe until the
+    // ExcludeFromIPI (Yes/No) column is created in SharePoint.
+    ...(project.excludeFromIPI ? { [f.excludeFromIPI]: true } : {}),
   };
 }
 

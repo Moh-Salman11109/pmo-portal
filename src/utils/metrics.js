@@ -190,6 +190,11 @@ function _toMs(d) {
  * partial reporting now scores honestly on what's present.
  */
 export function calcProjectIPIFull(project, asOfDate = TODAY) {
+  // Side initiatives are tracked but not scored — no IPI, and excluded from
+  // every rollup (calcProjectIPI / calcTimeWeightedIPI return null too).
+  if (project && project.excludeFromIPI) {
+    return { ipi: null, status: "Not Scored", excluded: true, components: {}, complete: false, roadmapStatus: null };
+  }
   const { cap, weights } = IPI_DEFAULTS;
   const asOfMs = _toMs(asOfDate) ?? Date.now();
   // The MEASUREMENT date for SPI: if the project has already been marked
@@ -485,6 +490,7 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
  *  block for ipiHistory. Display surfaces should prefer calcProjectIPI, which
  *  returns the time-weighted view. */
 export function calcProjectIPISnapshot(project) {
+  if (project && project.excludeFromIPI) return null;
   return calcProjectIPIFull(project).ipi;
 }
 
@@ -534,6 +540,7 @@ function projectWeight(p) {
  * Falls back to current-snapshot IPI when no history exists yet.
  */
 export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
+  if (project && project.excludeFromIPI) return null;
   const { timeWeightedWindowDays } = IPI_DEFAULTS;
   let asOfMs = _toMs(asOfDate);
   if (asOfMs == null) return calcProjectIPISnapshot(project);

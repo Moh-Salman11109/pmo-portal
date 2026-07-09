@@ -22,7 +22,7 @@ import { calcProjectIPIFull } from "../utils/metrics.js";
 // (recomputes) or a precomputed calcProjectIPIFull result via `result`.
 export function scoreContext(project, result) {
   const r = result || (project ? calcProjectIPIFull(project) : null);
-  if (!r) return { daysLate: 0, roadmapStatus: null, roadmapDaysAhead: 0, complete: false };
+  if (!r) return { daysLate: 0, roadmapStatus: null, roadmapDaysAhead: 0, complete: false, excluded: false };
   return {
     daysLate:        r.complete && r.daysLateVsPlan > 0 ? r.daysLateVsPlan : 0,
     roadmapStatus:   r.roadmapStatus || null,        // "met" | "breach" | null
@@ -30,13 +30,14 @@ export function scoreContext(project, result) {
     roadmapDaysLate: r.roadmapDaysLate || 0,
     roadmapPenaltyPct: r.roadmapPenalty != null ? Math.round((1 - r.roadmapPenalty) * 100) : 0,
     complete:        !!r.complete,
+    excluded:        !!r.excluded,
   };
 }
 
 // size: "sm" (tables/cards) | "md" (hero). Chips share the pill's row.
 export const ScoreChips = ({ project, result, size = "sm", onDark = false }) => {
   const ctx = scoreContext(project, result);
-  if (!ctx.daysLate && !ctx.roadmapStatus) return null;
+  if (!ctx.daysLate && !ctx.roadmapStatus && !ctx.excluded) return null;
 
   const fs   = size === "md" ? 11 : 10;
   const pad  = size === "md" ? "2px 9px" : "2px 8px";
@@ -45,6 +46,11 @@ export const ScoreChips = ({ project, result, size = "sm", onDark = false }) => 
 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap, flexWrap: "wrap" }}>
+      {ctx.excluded && (
+        <span style={{ ...base, background: onDark ? "rgba(255,255,255,0.12)" : "#eef2f6", color: onDark ? "rgba(255,255,255,0.75)" : "#475569", fontWeight: 700 }}>
+          ◔ Tracking only · not in IPI
+        </span>
+      )}
       {ctx.daysLate > 0 && (
         <span style={{ ...base, background: "#fdf1dd", color: "#b45309", fontWeight: 800 }}>
           Late Delivery · {ctx.daysLate}d

@@ -6046,7 +6046,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     documents: [...MANDATORY_DOCS], requiredDocs: [],
     gates: GATE_DEFS.map(g => ({ id: g.id, status: "Pending", date: null, approver: "", notes: "" })),
     updateCadence: "Biweekly", archived: false, pmoStatus: "Draft", dataReliabilityFlag: "Pending",
-    isRoadmap: false,
+    isRoadmap: false, excludeFromIPI: false,
     _newUpdate: "",
   });
 
@@ -6197,6 +6197,17 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
           </div>
           <div style={{ width: 44, height: 24, borderRadius: 12, background: form.isRoadmap ? T.primary : T.border, position: "relative", flexShrink: 0, transition: "background 0.2s", marginLeft: 16 }}>
             <div style={{ position: "absolute", top: 2, left: form.isRoadmap ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
+          </div>
+        </div>
+        {/* Exclude-from-IPI toggle — side initiatives are tracked but not scored */}
+        <div onClick={() => set("excludeFromIPI", !form.excludeFromIPI)}
+          style={{ background: form.excludeFromIPI ? "#eef2f6" : T.bg, border: `1.5px solid ${form.excludeFromIPI ? "#64748b" : T.border}`, borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", transition: "all 0.15s", marginTop: 10 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 15, color: "#64748b" }}>⊘</span> Side Initiative — exclude from IPI</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Tracked in the portal but not scored — kept out of the department and portfolio IPI rollups</div>
+          </div>
+          <div style={{ width: 44, height: 24, borderRadius: 12, background: form.excludeFromIPI ? "#64748b" : T.border, position: "relative", flexShrink: 0, transition: "background 0.2s", marginLeft: 16 }}>
+            <div style={{ position: "absolute", top: 2, left: form.excludeFromIPI ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
           </div>
         </div>
       </div>
