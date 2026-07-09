@@ -1321,7 +1321,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 //
 const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const T = useT();
-  const [tab, setTab]                 = useState("Status");
+  const [tab, setTab]                 = useState(userRole === ROLE_PM ? "Activities" : "Status");
   const [phase, setPhase]             = useState(project.phase || "Execution");
   const [gate, setGate]               = useState(project.gate || "");
   const [priority, setPriority]       = useState(project.priority || "Medium");
@@ -1364,7 +1364,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     const synthetic = { ...project, milestones, plannedEnd, gate, documents, budget, actualCost, progress: autoProgress };
     return deriveProjectStatus(synthetic);
   }, [project, milestones, plannedEnd, gate, documents, budget, actualCost, autoProgress]);
-  const TABS = [
+  const ALL_TABS = [
     { key: "Status",     icon: "gauge" },
     { key: "Financials", icon: "coins" },
     { key: "Activities", icon: "target" },
@@ -1373,6 +1373,10 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     { key: "Documents",  icon: "doc" },
     { key: "Note",       icon: "note" },
   ];
+  // A PM updates delivery only — Status, Financials and Note stay PMO-controlled.
+  const TABS = userRole === ROLE_PM
+    ? ALL_TABS.filter(t => ["Activities", "Risks", "Benefits", "Documents"].includes(t.key))
+    : ALL_TABS;
 
   const handleSubmit = async () => {
     setSaving(true);
