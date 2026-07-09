@@ -3723,40 +3723,33 @@ const DeptCRUD = ({ projects }) => {
 };
 
 // ─── HELPERS FOR REQUESTS ────────────────────────────────────────
-// v2 palette: three brand families instead of the purple/cyan/blue rainbow —
-// in-progress stages = amber, approved/positive = green, rejected/returned =
-// orange. Label texts unchanged.
-const _amber   = { color: "#b45309", bg: "#fdf1dd" };
-const _green   = { color: "#007a62", bg: "#e0f8ee" };
-const _orange  = { color: "#b23800", bg: "#ffe8de" };
-const _neutral = { color: "#5a7a6e", bg: "#eef3ee" };
 const REQUEST_STATUS_META = {
   // ── New Project Request (intake) statuses ────────────────────────
-  Opened:                         { label: "Opened",                   ..._green },
-  "Under Review":                 { label: "Under Review",             ..._amber },
-  Approved:                       { label: "Approved",                 ..._green },
-  Rejected:                       { label: "Rejected",                 ..._orange },
-  Returned:                       { label: "Returned",                 ..._orange },
+  Opened:                         { label: "Opened",                   color: "#059669", bg: "#ecfdf5" },
+  "Under Review":                 { label: "Under Review",             color: "#7c3aed", bg: "#f5f3ff" },
+  Approved:                       { label: "Approved",                 color: "#16a34a", bg: "#f0fdf4" },
+  Rejected:                       { label: "Rejected",                 color: "#dc2626", bg: "#fef2f2" },
+  Returned:                       { label: "Returned",                 color: "#d97706", bg: "#fef3c7" },
   // ── G1 - Project Initiation statuses (Power Automate) ────────────
-  "Project Sponsor Review":       { label: "Sponsor Review",          ..._amber },
-  "Rejected By Project Sponsor":  { label: "Rejected by Sponsor",     ..._orange },
-  "Stakeholder Review":           { label: "Stakeholder Review",      ..._amber },
-  "Rejected By Stakeholder":      { label: "Rejected by Stakeholder", ..._orange },
-  "PMO Review":                   { label: "PMO Review",              ..._amber },
-  "Rejected By PMO":              { label: "Rejected by PMO",         ..._orange },
-  "Finance Review (Stage 1)":     { label: "Finance Review",          ..._amber },
-  "Finance Review (Final Stage)": { label: "Finance (Final)",         ..._amber },
-  "Approved - Capitalized Proj":  { label: "Approved (Capital)",      ..._green },
-  "Approved - Non-Capitalized":   { label: "Approved (Non-Capital)",  ..._green },
+  "Project Sponsor Review":       { label: "Sponsor Review",          color: "#d97706", bg: "#fffbeb" },
+  "Rejected By Project Sponsor":  { label: "Rejected by Sponsor",     color: "#dc2626", bg: "#fef2f2" },
+  "Stakeholder Review":           { label: "Stakeholder Review",      color: "#0891b2", bg: "#ecfeff" },
+  "Rejected By Stakeholder":      { label: "Rejected by Stakeholder", color: "#dc2626", bg: "#fef2f2" },
+  "PMO Review":                   { label: "PMO Review",              color: "#7c3aed", bg: "#f5f3ff" },
+  "Rejected By PMO":              { label: "Rejected by PMO",         color: "#dc2626", bg: "#fef2f2" },
+  "Finance Review (Stage 1)":     { label: "Finance Review",          color: "#2563eb", bg: "#eff6ff" },
+  "Finance Review (Final Stage)": { label: "Finance (Final)",         color: "#1d4ed8", bg: "#dbeafe" },
+  "Approved - Capitalized Proj":  { label: "Approved (Capital)",      color: "#15803d", bg: "#dcfce7" },
+  "Approved - Non-Capitalized":   { label: "Approved (Non-Capital)",  color: "#16a34a", bg: "#f0fdf4" },
   // ── Project Closure statuses ──────────────────────────────────────
-  "In Review":     { label: "In Review",       ..._amber },
-  Closed:          { label: "Closed",          ..._green },
+  "In Review":     { label: "In Review",       color: "#0891b2", bg: "#ecfeff" },
+  Closed:          { label: "Closed",          color: "#15803d", bg: "#dcfce7" },
   // ── Legacy / mock compatibility ───────────────────────────────────
-  Draft:           { label: "Draft",           ..._neutral },
-  Submitted:       { label: "Submitted",       ..._amber },
-  PendingOwner:    { label: "Pending Sponsor", ..._amber },
-  PendingPMO:      { label: "Pending PMO",     ..._amber },
-  PendingStrategy: { label: "Pending Strategy",..._amber },
+  Draft:           { label: "Draft",           color: "#6b7280", bg: "#f3f4f6" },
+  Submitted:       { label: "Submitted",       color: "#2563eb", bg: "#eff6ff" },
+  PendingOwner:    { label: "Pending Sponsor", color: "#d97706", bg: "#fffbeb" },
+  PendingPMO:      { label: "Pending PMO",     color: "#7c3aed", bg: "#f5f3ff" },
+  PendingStrategy: { label: "Pending Strategy",color: "#0891b2", bg: "#ecfeff" },
 };
 
 const RequestStatusBadge = ({ status }) => {
@@ -3889,8 +3882,6 @@ const ApprovalLogPanel = ({ log }) => {
 const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute, currentUserName, currentUserEmail, userRole }) => {
   const T = useT();
   const bp = useBp();
-  const dark = themeStore.dark;
-  const isNarrow = bp === "mobile" || bp === "tablet";
   const [expandedId, setExpandedId] = useState(null);
   const pad = bp === "mobile" ? "16px" : "32px";
 
@@ -3920,145 +3911,59 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
     .filter(c => c.status === "Closed")
     .sort((a, b) => (b.submissionDate || "").localeCompare(a.submissionDate || ""));
 
-  const isReturned = (s) => (s || "").toLowerCase().includes("returned");
-
-  // Returned items — surfaced at the top; removed from the in-review list.
-  const returnedItems = [
-    ...myRequests.filter(r => r.status === "Returned" || isReturned(r.status)).map(r => ({
-      key: `req-${r.id}`, source: "request", title: r.title, dept: r.deptId, date: r.requestDate,
-      reviewer: r.returnedBy || r.pendingWith || "PMO", reason: r.returnReason || r.note || "Returned for revision — see the PMO note.", raw: r,
-    })),
-    ...myGates.filter(g => isReturned(g.status)).map(g => ({
-      key: `gate-${g.id}`, source: "gate", title: g.projectTitle, dept: g.department, date: g.submissionDate,
-      reviewer: g.returnedBy || g.pendingWith || "PMO", reason: g.returnReason || "Returned for revision.", raw: g,
-    })),
-  ];
-  const returnedKeys = new Set(returnedItems.map(i => i.key));
-
-  // Type chips: Request = slate; Gate / Closure = brand green.
-  const REQ_TYPE = { bg: "#e8eef4", color: "#39566b" };
-  const GRN_TYPE = { bg: "#e0f8ee", color: "#007a62" };
-
-  // Unified in-review tracker (requests + gate submissions + closures), oldest first.
-  const inReview = [
-    ...pending.filter(r => !returnedKeys.has(`req-${r.id}`)).map(r => ({
-      key: `req-${r.id}`, source: "request", type: "Request", chip: REQ_TYPE, title: r.title,
-      meta: `${r.requestedBy || "—"} · ${r.deptId || "—"} · requested ${r.requestDate || "—"}`,
-      pendingWith: r.pendingWith || r.currentStage || "In review", days: r.daysInCurrentStage || 0, raw: r,
-    })),
-    ...pendingGates.filter(g => !returnedKeys.has(`gate-${g.id}`)).map(g => ({
-      key: `gate-${g.id}`, source: "gate", type: g.gateLabel || "Gate", chip: GRN_TYPE, title: g.projectTitle,
-      meta: `${g.projectManager || "—"}${g.projectCode ? " · " + g.projectCode : ""} · submitted ${g.submissionDate || "—"}`,
-      pendingWith: g.pendingWith || "In review", days: g.daysAtGate || 0, raw: g,
-    })),
-    ...pendingClosures.map(c => ({
-      key: `cl-${c.id}`, source: "closure", type: "Closure", chip: GRN_TYPE, title: c.projectTitle,
-      meta: `${c.projectManager || "—"}${c.department ? " · " + c.department : ""} · submitted ${c.submissionDate || "—"}`,
-      pendingWith: c.pendingWith || "In review", days: c.daysInClosure || 0, raw: c,
-    })),
-  ].sort((a, b) => b.days - a.days);
-
-  // Completed — approved/rejected requests + closed projects.
-  const completedList = [
-    ...completed.map(r => ({
-      key: `req-${r.id}`, source: "request", type: "Request", chip: REQ_TYPE, title: r.title,
-      meta: `${r.requestedBy || "—"} · ${r.deptId || "—"} · ${(r.status || "").startsWith("Rejected") ? "rejected" : "approved"} ${r.requestDate || ""}`.trim(),
-      approved: !(r.status || "").startsWith("Rejected"), linkedProjectId: r.linkedProjectId, raw: r,
-    })),
-    ...closedProjects.map(c => ({
-      key: `cl-${c.id}`, source: "closure", type: "Closure", chip: GRN_TYPE, title: c.projectTitle,
-      meta: `${c.projectManager || "—"}${c.department ? " · " + c.department : ""} · closed ${c.submissionDate || ""}`.trim(),
-      approved: true, linkedProjectId: c.projectId, raw: c,
-    })),
-  ];
-
-  const ageColor  = (d) => d > 14 ? "#FF5000" : d > 7 ? "#b45309" : "#5a7a6e";
-  const formUrlFor = (item) => item.source === "gate"
-    ? (/2/.test(item.type) ? FORM_URLS.gate1 : /3/.test(item.type) ? FORM_URLS.gate3 : FORM_URLS.intake)
-    : item.source === "closure" ? FORM_URLS.closure : FORM_URLS.intake;
-
-  // Small section header (v2): functional title + optional pill + optional meta.
-  const sectionHead = (title, { size = 15, pill = null, meta = null } = {}) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 14px", flexWrap: "wrap" }}>
-      <h2 style={{ fontSize: size, fontWeight: 800, color: T.text, letterSpacing: "-0.3px", margin: 0 }}>{title}</h2>
-      {pill && <span style={{ background: pill.bg, color: pill.color, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{pill.text}</span>}
-      {meta && <span style={{ fontSize: 12, color: T.muted, fontWeight: 500, marginLeft: "auto" }}>{meta}</span>}
-    </div>
-  );
-
-  const submitBtn = { padding: "10px 16px", background: "#003932", color: "#00ffb3", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" };
-
-  const steps = [
-    { n: "1", label: "Gate 1 · Start here", title: "Project Request", desc: "Submit a new project idea for PMO review and Strategy alignment", url: FORM_URLS.intake,  btn: "+ Submit Request",  primary: true },
-    { n: "2", label: "Gate 2",              title: "Initiation",      desc: "Submit the Project Charter for PMO and stakeholder alignment",      url: FORM_URLS.gate1,   btn: "Submit Initiation" },
-    { n: "3", label: "Gate 3",              title: "Planning",        desc: "Submit the Project Plan and Resource Plan for PMO review",          url: FORM_URLS.gate3,   btn: "Submit Plan" },
-    { n: "5", label: "Gate 5",              title: "Closure",         desc: "Submit the closure document once the project is completed",         url: FORM_URLS.closure, btn: "Submit Closure" },
-  ];
-
-  // Unified in-review / completed row.
-  const ReviewRow = ({ item, done = false }) => {
-    const open = expandedId === item.key;
+  // ── Request Card ─────────────────────────────────────────────────
+  const RequestCard = ({ req }) => {
+    const isExpanded = expandedId === req.id;
     return (
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", opacity: done ? 0.85 : 1, transition: "border-color 0.15s, box-shadow 0.15s" }}
-        onMouseEnter={e => { if (!done) { e.currentTarget.style.borderColor = "#00b894"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,57,50,0.07)"; } }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}>
-        <div onClick={() => !done && setExpandedId(open ? null : item.key)}
-          style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 16, cursor: done ? "default" : "pointer" }}>
-          <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 6, flexShrink: 0, letterSpacing: "0.04em", textTransform: "uppercase", background: item.chip.bg, color: item.chip.color }}>{item.type}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{item.meta}</div>
+      <div style={{ background: T.surface, border: req.status === "Returned" ? "1.5px solid #fcd34d" : `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+          onClick={() => setExpandedId(isExpanded ? null : req.id)}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{req.title}</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+              {req.requestedBy} · {req.requestDate}
+              {req.deptId && <span> · {req.deptId}</span>}
+            </div>
           </div>
-          {done ? (
-            <>
-              <span style={{ background: "#e0f8ee", color: "#007a62", border: "1px solid #b5ead7", fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap" }}>{item.approved ? "✓ Approved" : "Rejected"}</span>
-              {item.linkedProjectId && (
-                <button onClick={() => setRoute({ view: "project", projectId: item.linkedProjectId })}
-                  style={{ padding: "7px 14px", background: T.surface, color: "#003932", border: "1px solid #c4d6c9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = "#00b894"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "#c4d6c9"}>View Project →</button>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#00b894" }} />
-                <span style={{ width: 14, height: 1.5, background: "#dce8dc" }} />
-                <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#d97706" }} />
-                <span style={{ width: 14, height: 1.5, background: "#dce8dc" }} />
-                <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#dce8dc" }} />
-              </div>
-              <div style={{ flexShrink: 0, textAlign: "right", minWidth: 150 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.pendingWith}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, marginTop: 1, color: ageColor(item.days) }}>{item.days} day{item.days !== 1 ? "s" : ""} at this stage</div>
-              </div>
-              <span style={{ color: "#a1b9ab", fontSize: 13, flexShrink: 0 }}>{open ? "▴" : "▾"}</span>
-            </>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <RequestStatusBadge status={req.status} />
+            <span style={{ color: T.muted, fontSize: 13 }}>{isExpanded ? "▲" : "▼"}</span>
+          </div>
         </div>
-        {!done && open && (
-          <div style={{ padding: "0 18px 16px", borderTop: `1px solid ${T.border}` }}>
-            {item.source === "request" ? (
-              <>
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approval History</div>
-                  <ApprovalTimeline history={item.raw.approvalHistory} />
-                </div>
-                {item.raw.description && (
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Description</div>
-                    <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{item.raw.description}</div>
-                  </div>
-                )}
-                {item.raw.linkedProjectId && (
-                  <div style={{ marginTop: 14 }}>
-                    <button onClick={() => setRoute({ view: "project", projectId: item.raw.linkedProjectId })}
-                      style={{ padding: "7px 14px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>View Project →</button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <ApprovalLogPanel log={item.raw.approvalLog} />
+        {isExpanded && (
+          <div style={{ padding: "0 18px 18px", borderTop: `1px solid ${T.border}` }}>
+            {req.status === "Returned" && req.returnReason && (
+              <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", margin: "14px 0 12px", fontSize: 13 }}>
+                <div style={{ fontWeight: 700, color: "#92400e", marginBottom: 4 }}>↩ Returned — Action Required</div>
+                <div style={{ color: "#78350f" }}>{req.returnReason}</div>
+              </div>
+            )}
+            {req.currentStage && !["Approved","Rejected","Returned to Requester"].includes(req.currentStage) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 12px" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#d97706" }} />
+                <span style={{ fontSize: 13, color: T.text }}>
+                  Pending with <strong>{req.pendingWith || req.currentStage}</strong>
+                  {req.daysInCurrentStage > 0 && <span style={{ color: T.muted }}> · {req.daysInCurrentStage} day{req.daysInCurrentStage !== 1 ? "s" : ""}</span>}
+                </span>
+              </div>
+            )}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approval History</div>
+              <ApprovalTimeline history={req.approvalHistory} />
+            </div>
+            {req.description && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Description</div>
+                <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{req.description}</div>
+              </div>
+            )}
+            {req.linkedProjectId && (
+              <div style={{ marginTop: 14 }}>
+                <button onClick={() => setRoute({ view: "project", projectId: req.linkedProjectId })}
+                  style={{ padding: "7px 14px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  View Project →
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -4066,93 +3971,218 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
     );
   };
 
+  // Pending dot/colour escalates with age: red after 14d, amber after 7d,
+  // brand mint by default. Same rule we adopted on the My Actions queue
+  // so the two screens read consistently.
+  const urgencyForDays = (days) => {
+    if (days > 14) return { dot: "#dc2626", text: "#dc2626" };
+    if (days > 7)  return { dot: "#d97706", text: "#d97706" };
+    return { dot: "#0891b2", text: T.muted };
+  };
+  const GateCard = ({ gs }) => {
+    const isRejected = gs.status?.startsWith("Rejected");
+    const isApproved = gs.status?.startsWith("Approved");
+    const borderColor = isRejected ? "#fecaca" : isApproved ? "#bbf7d0" : T.border;
+    const u = urgencyForDays(gs.daysAtGate || 0);
+    return (
+      <div style={{ background: T.surface, border: `1px solid ${borderColor}`, borderRadius: 12, padding: "14px 18px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{gs.projectTitle}</span>
+              <span style={{ fontSize: 11, color: T.muted, background: T.bgAlt || "#f3f4f6", padding: "1px 7px", borderRadius: 6 }}>{gs.gateLabel}</span>
+              {gs.projectCode && <span style={{ fontSize: 11, color: T.muted }}>{gs.projectCode}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>
+              Submitted {gs.submissionDate}
+              {gs.projectManager && <span> · PM: {gs.projectManager}</span>}
+              {gs.projectSponsor && <span> · Sponsor: {gs.projectSponsor}</span>}
+            </div>
+            {gs.pendingWith && !isRejected && !isApproved && (
+              <div style={{ fontSize: 12, color: u.text, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: u.dot, display: "inline-block" }} />
+                Pending with {gs.pendingWith}
+                {gs.daysAtGate > 0 && <span style={{ color: T.muted }}> · {gs.daysAtGate} day{gs.daysAtGate !== 1 ? "s" : ""}</span>}
+              </div>
+            )}
+          </div>
+          <RequestStatusBadge status={gs.status} />
+        </div>
+        <ApprovalLogPanel log={gs.approvalLog} />
+      </div>
+    );
+  };
+
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
 
-      {/* ══════════ START A SUBMISSION ══════════ */}
-      {sectionHead("Start a submission", { size: 19, meta: "every project moves through these gates, left to right" })}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: bp === "mobile" ? "18px" : "24px 26px", marginBottom: 36 }}>
-        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 28px 1fr 28px 1fr 28px 1fr", alignItems: "stretch", gap: isNarrow ? 12 : 0 }}>
-          {steps.flatMap((s, i) => {
-            const card = (
-              <div key={s.n} style={{
-                border: s.primary ? "1.5px solid #00b894" : `1px solid ${T.border}`,
-                background: s.primary ? (dark ? "rgba(0,184,148,0.08)" : "#f2fcf8") : T.surface,
-                borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: "50%", background: s.primary ? "#003932" : "#eef3ee", color: s.primary ? "#00ffb3" : "#5a7a6e", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.n}</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: s.primary ? "#007a62" : "#5a7a6e", letterSpacing: "0.06em", textTransform: "uppercase" }}>{s.label}</span>
-                </div>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>{s.title}</div>
-                  <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>{s.desc}</div>
-                </div>
-                <button onClick={() => window.open(s.url, "_blank")} style={{ ...submitBtn, marginTop: "auto" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#00543f"}
-                  onMouseLeave={e => e.currentTarget.style.background = "#003932"}>{s.btn}</button>
-              </div>
-            );
-            const arrow = (!isNarrow && i < steps.length - 1)
-              ? <div key={`a${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#a1b9ab", fontSize: 14 }}>→</div>
-              : null;
-            return arrow ? [card, arrow] : [card];
-          })}
+      {/* ── Action cards row ── */}
+      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+
+        {/* Gate 1 — Project Request */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: T.primary }}><Ico name="clipboard" size={20} /></div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 1 — Project Request</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit a new project idea for PMO review and Strategy alignment</div>
+          </div>
+          <button onClick={() => window.open(FORM_URLS.intake, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            + Submit Request
+          </button>
         </div>
-        <div style={{ marginTop: 14, fontSize: 11, color: "#a1b9ab" }}>Gate 4 (Execution) has no submission — progress is tracked from project updates.</div>
+
+        {/* Gate 2 — Initiation */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: T.primary }}><Ico name="flag" size={20} /></div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 2 — Initiation</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Charter for PMO review and stakeholder alignment</div>
+          </div>
+          <button onClick={() => window.open(FORM_URLS.gate1, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Submit Initiation
+          </button>
+        </div>
+
+        {/* Gate 3 — Planning */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: T.primary }}><Ico name="calendar" size={20} /></div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 3 — Planning</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Plan and Resource Plan for PMO review</div>
+          </div>
+          <button onClick={() => window.open(FORM_URLS.gate3, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Submit Plan
+          </button>
+        </div>
+
+        {/* Gate 5 — Closure */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ color: T.primary }}><Ico name="check" size={20} /></div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 5 — Closure</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the closure document once the project is completed</div>
+          </div>
+          <button onClick={() => window.open(FORM_URLS.closure, "_blank")}
+            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Submit Closure
+          </button>
+        </div>
+
       </div>
 
-      {/* ══════════ NEEDS YOUR ACTION ══════════ */}
-      {returnedItems.length > 0 && (
-        <>
-          {sectionHead("Needs your action", { size: 15, pill: { text: String(returnedItems.length), bg: "#ffe8de", color: "#b23800" } })}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 36 }}>
-            {returnedItems.map(item => (
-              <div key={item.key} style={{ background: dark ? "rgba(255,80,0,0.06)" : "#fff8f4", border: `1px solid ${dark ? "rgba(255,80,0,0.28)" : "#ffd9c7"}`, borderLeft: "4px solid #FF5000", borderRadius: 14, padding: "18px 22px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 800, fontSize: 14, color: T.text }}>{item.title}</span>
-                      <span style={{ background: "#fdf1dd", color: "#b45309", fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, border: "1px solid #f0dcb8", whiteSpace: "nowrap", flexShrink: 0 }}>↩ Returned</span>
-                      <span style={{ fontSize: 11, color: T.muted }}>{item.dept || "—"}{item.date ? ` · requested ${item.date}` : ""}</span>
+      {/* ── Gate Reviews In Progress ── */}
+      {pendingGates.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Project Initiation In Progress</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingGates.map(gs => <GateCard key={gs.id} gs={gs} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ── Closure Reviews In Progress ── */}
+      {pendingClosures.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Closure Reviews In Progress</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingClosures.map(cl => {
+              const u = urgencyForDays(cl.daysInClosure || 0);
+              return (
+                <div key={cl.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cl.projectTitle}</span>
+                        <span style={{ fontSize: 11, color: T.muted, background: T.bgAlt || "#f3f4f6", border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>Project Closure</span>
+                        {cl.projectCode && <span style={{ fontSize: 11, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px" }}>{cl.projectCode}</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: T.muted }}>
+                        Submitted {cl.submissionDate} · PM: {cl.projectManager}
+                        {cl.department && <span> · {cl.department}</span>}
+                      </div>
+                      {cl.daysInClosure > 0 && (
+                        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: u.dot }} />
+                          <span style={{ fontSize: 12, color: u.text }}>
+                            {cl.pendingWith ? `Pending with ${cl.pendingWith}` : "In review"} · <strong>{cl.daysInClosure} day{cl.daysInClosure !== 1 ? "s" : ""}</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ background: T.surface, border: `1px solid ${dark ? "rgba(255,80,0,0.28)" : "#ffd9c7"}`, borderRadius: 8, padding: "10px 14px", marginTop: 10, fontSize: 12.5, color: dark ? "#ffb59a" : "#7c2d12", lineHeight: 1.5 }}>
-                      <strong>{item.reviewer}:</strong> {item.reason}
+                    <RequestStatusBadge status={cl.status || "In Review"} />
+                  </div>
+                  <ApprovalLogPanel log={cl.approvalLog} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Active Requests ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+          Active Requests
+          {pending.length > 0 && <span style={{ background: "#dbeafe", color: "#1d4ed8", padding: "1px 8px", borderRadius: 10, marginLeft: 8, fontSize: 11 }}>{pending.length}</span>}
+        </div>
+        {pending.length === 0
+          ? (
+            <div style={{ textAlign: "center", padding: "28px 20px", color: T.muted, background: T.surface, borderRadius: 12, border: `1px solid ${T.border}` }}>
+              <div style={{ marginBottom: 8, opacity: 0.45 }}><Ico name="inbox" size={26} /></div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>No active requests</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Click "Start New Request" above to begin</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pending.map(req => <RequestCard key={req.id} req={req} />)}
+            </div>
+          )}
+      </div>
+
+      {/* ── Completed ── */}
+      {completed.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Completed</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {completed.map(req => <RequestCard key={req.id} req={req} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ── Closed Projects — fully signed-off closures. The counterpart of
+             Active Requests: that list shows what's opening; this shows what
+             has formally closed, with the e-signoff trail expandable. ── */}
+      {closedProjects.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Closed Projects
+            <span style={{ background: "#f0fdf4", color: "#15803d", padding: "1px 8px", borderRadius: 10, marginLeft: 8, fontSize: 11 }}>{closedProjects.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {closedProjects.map(cl => (
+              <div key={cl.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{cl.projectTitle}</span>
+                      {cl.projectCode && <span style={{ fontSize: 11, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 8px" }}>{cl.projectCode}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: T.muted }}>
+                      {cl.submissionDate && <span>Closed {cl.submissionDate} · </span>}
+                      PM: {cl.projectManager}
+                      {cl.department && <span> · {cl.department}</span>}
                     </div>
                   </div>
-                  <button onClick={() => window.open(formUrlFor({ source: item.source, type: item.source === "gate" ? (item.raw.gateLabel || "") : "" }), "_blank")}
-                    style={{ ...submitBtn, fontSize: 12, whiteSpace: "nowrap", flexShrink: 0 }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#00543f"}
-                    onMouseLeave={e => e.currentTarget.style.background = "#003932"}>Fix &amp; Resubmit →</button>
+                  <span style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, whiteSpace: "nowrap" }}>✓ Closed</span>
                 </div>
+                <ApprovalLogPanel log={cl.approvalLog} />
               </div>
             ))}
           </div>
-        </>
-      )}
-
-      {/* ══════════ IN REVIEW ══════════ */}
-      {sectionHead("In review", { size: 15, pill: inReview.length > 0 ? { text: String(inReview.length), bg: "#e0f8ee", color: "#007a62" } : null, meta: "requests, gate submissions and closures — one list, oldest first" })}
-      {inReview.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "28px 20px", color: T.muted, background: T.surface, borderRadius: 12, border: `1px solid ${T.border}`, marginBottom: 36 }}>
-          <div style={{ marginBottom: 8, opacity: 0.45 }}><Ico name="inbox" size={26} /></div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Nothing in review</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Submissions you make will track here.</div>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 36 }}>
-          {inReview.map(item => <ReviewRow key={item.key} item={item} />)}
-        </div>
-      )}
-
-      {/* ══════════ COMPLETED ══════════ */}
-      {completedList.length > 0 && (
-        <>
-          {sectionHead("Completed", { size: 15, pill: { text: String(completedList.length), bg: "#eef3ee", color: "#5a7a6e" } })}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {completedList.map(item => <ReviewRow key={item.key} item={item} done />)}
-          </div>
-        </>
       )}
     </div>
   );
