@@ -35,7 +35,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelL
 import { useT, themeStore, ttStyle } from "../theme.js";
 import { useBp } from "../hooks/useBp.js";
 import { useDepts } from "../deptContext.js";
-import { ROLE_PM } from "../roles.js";
+import { ROLE_PM, ROLE_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
 import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, calcProjectIPIDisplay, calcProjectIPIFull } from "../utils/metrics.js";
@@ -598,7 +598,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
             <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, marginTop: 4, fontWeight: 500 }}>{todayStr}{loadedAt && <span style={{ color: "#00FFB3", marginLeft: 8 }}>· Synced {loadedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {bp !== "mobile" && (
+            {bp !== "mobile" && [ROLE_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF].includes(userRole) && (
               <button onClick={printMonthlyReport}
                 style={{ background: "rgba(0,255,179,0.10)", border: "1px solid rgba(0,255,179,0.45)", color: "#00FFB3", borderRadius: 9, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(0,255,179,0.22)"}
