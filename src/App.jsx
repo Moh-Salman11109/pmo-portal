@@ -3882,6 +3882,8 @@ const ApprovalLogPanel = ({ log }) => {
 const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRoute, currentUserName, currentUserEmail, userRole }) => {
   const T = useT();
   const bp = useBp();
+  const dark = themeStore.dark;
+  const isNarrow = bp === "mobile" || bp === "tablet";
   const [expandedId, setExpandedId] = useState(null);
   const pad = bp === "mobile" ? "16px" : "32px";
 
@@ -4013,64 +4015,59 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
     );
   };
 
+  const sectionHead = (title, { size = 15, pill = null, meta = null } = {}) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 14px", flexWrap: "wrap" }}>
+      <h2 style={{ fontSize: size, fontWeight: 800, color: T.text, letterSpacing: "-0.3px", margin: 0 }}>{title}</h2>
+      {pill && <span style={{ background: pill.bg, color: pill.color, fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20 }}>{pill.text}</span>}
+      {meta && <span style={{ fontSize: 12, color: T.muted, fontWeight: 500, marginLeft: "auto" }}>{meta}</span>}
+    </div>
+  );
+
+  const submitBtn = { padding: "10px 16px", background: "#003932", color: "#00ffb3", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" };
+
+  const steps = [
+    { n: "1", label: "Gate 1 · Start here", title: "Project Request", desc: "Submit a new project idea for PMO review and Strategy alignment", url: FORM_URLS.intake,  btn: "+ Submit Request",  primary: true },
+    { n: "2", label: "Gate 2",              title: "Initiation",      desc: "Submit the Project Charter for PMO and stakeholder alignment",      url: FORM_URLS.gate1,   btn: "Submit Initiation" },
+    { n: "3", label: "Gate 3",              title: "Planning",        desc: "Submit the Project Plan and Resource Plan for PMO review",          url: FORM_URLS.gate3,   btn: "Submit Plan" },
+    { n: "5", label: "Gate 5",              title: "Closure",         desc: "Submit the closure document once the project is completed",         url: FORM_URLS.closure, btn: "Submit Closure" },
+  ];
+
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
 
-      {/* ── Action cards row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: bp === "mobile" ? "1fr" : "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-
-        {/* Gate 1 — Project Request */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ color: T.primary }}><Ico name="clipboard" size={20} /></div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 1 — Project Request</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit a new project idea for PMO review and Strategy alignment</div>
-          </div>
-          <button onClick={() => window.open(FORM_URLS.intake, "_blank")}
-            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            + Submit Request
-          </button>
+      {/* ══════════ START A SUBMISSION ══════════ */}
+      {sectionHead("Start a submission", { size: 19, meta: "every project moves through these gates, left to right" })}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: bp === "mobile" ? "18px" : "24px 26px", marginBottom: 36 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 28px 1fr 28px 1fr 28px 1fr", alignItems: "stretch", gap: isNarrow ? 12 : 0 }}>
+          {steps.flatMap((s, i) => {
+            const card = (
+              <div key={s.n} style={{
+                border: s.primary ? "1.5px solid #00b894" : `1px solid ${T.border}`,
+                background: s.primary ? (dark ? "rgba(0,184,148,0.08)" : "#f2fcf8") : T.surface,
+                borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10, transition: "transform 0.15s, box-shadow 0.15s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,57,50,0.10)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: "50%", background: s.primary ? "#003932" : "#eef3ee", color: s.primary ? "#00ffb3" : "#5a7a6e", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.n}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: s.primary ? "#007a62" : "#5a7a6e", letterSpacing: "0.06em", textTransform: "uppercase" }}>{s.label}</span>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>{s.title}</div>
+                  <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>{s.desc}</div>
+                </div>
+                <button onClick={() => window.open(s.url, "_blank")} style={{ ...submitBtn, marginTop: "auto" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#00543f"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#003932"}>{s.btn}</button>
+              </div>
+            );
+            const arrow = (!isNarrow && i < steps.length - 1)
+              ? <div key={`a${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#a1b9ab", fontSize: 14 }}>→</div>
+              : null;
+            return arrow ? [card, arrow] : [card];
+          })}
         </div>
-
-        {/* Gate 2 — Initiation */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ color: T.primary }}><Ico name="flag" size={20} /></div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 2 — Initiation</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Charter for PMO review and stakeholder alignment</div>
-          </div>
-          <button onClick={() => window.open(FORM_URLS.gate1, "_blank")}
-            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            Submit Initiation
-          </button>
-        </div>
-
-        {/* Gate 3 — Planning */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ color: T.primary }}><Ico name="calendar" size={20} /></div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 3 — Planning</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the Project Plan and Resource Plan for PMO review</div>
-          </div>
-          <button onClick={() => window.open(FORM_URLS.gate3, "_blank")}
-            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            Submit Plan
-          </button>
-        </div>
-
-        {/* Gate 5 — Closure */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ color: T.primary }}><Ico name="check" size={20} /></div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: T.text }}>Gate 5 — Closure</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>Submit the closure document once the project is completed</div>
-          </div>
-          <button onClick={() => window.open(FORM_URLS.closure, "_blank")}
-            style={{ marginTop: "auto", padding: "9px 16px", background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            Submit Closure
-          </button>
-        </div>
-
+        <div style={{ marginTop: 14, fontSize: 11, color: "#a1b9ab" }}>Gate 4 (Execution) has no submission — progress is tracked from project updates.</div>
       </div>
 
       {/* ── Gate Reviews In Progress ── */}
