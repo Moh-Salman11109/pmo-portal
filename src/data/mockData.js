@@ -53,6 +53,10 @@ export const MOCK_PROJECTS = [
       { id: "D6", name: "Closure E-Document", type: "Closure",        required: true,  status: "Pending",  version: "",     lastUpdated: "" },
     ],
     updates: [],
+    actions: [
+      { id: "AC1", title: "Share vendor contract redlines with Legal", owner: "Mohammed", ownerEmail: "", dueDate: "2025-05-20", status: "Open",   createdBy: "PMO Team", createdDate: "2025-05-05" },
+      { id: "AC2", title: "Confirm training venue booking",            owner: "Munira",   ownerEmail: "", dueDate: "2025-05-10", status: "Closed", createdBy: "PMO Team", createdDate: "2025-04-28", closedDate: "2025-05-08" },
+    ],
     health: { scope: "Green", schedule: "Green", budget: "Green", risk: "Amber", quality: "Green", resource: "Amber", benefits: "Green", governance: "Green" },
     spi: 1.06, cpi: 1.03, daysRemaining: 243, daysDelayed: 0, scheduleVariance: "+4 days",
     updateCadence: "Biweekly", nextUpdateDue: "2025-05-15", dataReliabilityFlag: "Trusted",

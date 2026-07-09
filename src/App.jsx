@@ -1876,9 +1876,127 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
 };
 
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
-const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Activities", "Budget", "Risks & Issues", "Benefits", "Documents", "Updates"];
-const PROJECT_TABS_PM    = ["Overview", "Activities", "Risks & Issues", "Benefits", "Documents"];
+const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Activities", "Budget", "Risks & Issues", "Benefits", "Documents", "Actions", "Updates"];
+const PROJECT_TABS_PM    = ["Overview", "Activities", "Risks & Issues", "Benefits", "Documents", "Actions"];
 const PROJECT_TABS_EXEC  = ["Exec Summary"];
+
+// ─── ACTIONS PANEL — meeting action items on a project ──────────────────────
+// PMO records actions after governance meetings (what, on whom, due when).
+// PMO tier edits; PM sees their project's actions read-only. Assigned items
+// also surface in the owner's My Actions queue.
+const ACTION_STATUSES = ["Open", "In Progress", "Closed"];
+const ActionsPanel = ({ project, canEdit, onSave }) => {
+  const T = useT();
+  const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const blank = { title: "", owner: "", ownerEmail: "", dueDate: "", status: "Open" };
+  const [draft, setDraft] = useState(blank);
+  const s = fInputStyle(T, false);
+  const actions = project.actions || [];
+  const today = new Date().toISOString().split("T")[0];
+
+  const persist = async (next) => {
+    setSaving(true);
+    try { await onSave(project.id, next); } finally { setSaving(false); }
+  };
+  const add = async () => {
+    if (!draft.title.trim() || !draft.owner.trim()) return;
+    const entry = {
+      id: `AC${Date.now()}`, title: draft.title.trim(), owner: draft.owner.trim(),
+      ownerEmail: draft.ownerEmail.trim(), dueDate: draft.dueDate, status: "Open",
+      createdBy: "PMO", createdDate: today,
+    };
+    await persist([...actions, entry]);
+    setDraft(blank); setAdding(false);
+  };
+  const setStatus = (id, status) => persist(actions.map(a => a.id === id
+    ? { ...a, status, ...(status === "Closed" ? { closedDate: today } : { closedDate: undefined }) } : a));
+  const removeAction = (id) => persist(actions.filter(a => a.id !== id));
+
+  const stChip = (a) => {
+    const overdue = a.status !== "Closed" && a.dueDate && a.dueDate < today;
+    if (a.status === "Closed")     return { bg: "#e0f8ee", txt: "#007a62", label: "Closed" };
+    if (overdue)                   return { bg: "#ffe8de", txt: "#b23800", label: `Overdue` };
+    if (a.status === "In Progress")return { bg: "#fdf3e0", txt: "#b45309", label: "In Progress" };
+    return { bg: T.border, txt: T.muted, label: "Open" };
+  };
+  const openCount = actions.filter(a => a.status !== "Closed").length;
+
+  return (
+    <div style={{ background: T.surface, borderRadius: 14, padding: 24, border: `1px solid ${T.border}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Action Items</h3>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{openCount} open · {actions.length - openCount} closed{canEdit ? "" : " · recorded by PMO"}</div>
+        </div>
+        {canEdit && !adding && (
+          <button onClick={() => setAdding(true)} disabled={saving}
+            style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Action</button>
+        )}
+      </div>
+
+      {adding && (
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${T.border}`, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Action *</div>
+              <input autoFocus value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))} style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Owner *</div>
+              <input value={draft.owner} onChange={e => setDraft(p => ({ ...p, owner: e.target.value }))} placeholder="Name" style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Owner Email</div>
+              <input value={draft.ownerEmail} onChange={e => setDraft(p => ({ ...p, ownerEmail: e.target.value }))} placeholder="for My Actions routing" style={s} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Due Date</div>
+              <input type="date" value={draft.dueDate} onChange={e => setDraft(p => ({ ...p, dueDate: e.target.value }))} style={s} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => { setAdding(false); setDraft(blank); }} style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            <button onClick={add} disabled={saving || !draft.title.trim() || !draft.owner.trim()}
+              style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: (!draft.title.trim() || !draft.owner.trim()) ? 0.5 : 1 }}>{saving ? "Saving…" : "Add"}</button>
+          </div>
+        </div>
+      )}
+
+      {actions.length === 0 && !adding && (
+        <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 0" }}>No action items recorded{canEdit ? " — add the outcomes of your last governance meeting" : ""}.</div>
+      )}
+      {actions.map(a => {
+        const c = stChip(a);
+        return (
+          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${T.border}`, background: T.bg, marginBottom: 8, opacity: a.status === "Closed" ? 0.65 : 1 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: c.txt }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: T.text, textDecoration: a.status === "Closed" ? "line-through" : "none" }}>{a.title}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
+                On: <b style={{ color: T.text }}>{a.owner}</b>
+                {a.dueDate && <span> · due {a.dueDate}</span>}
+                {a.createdDate && <span> · logged {a.createdDate}</span>}
+                {a.closedDate && <span> · closed {a.closedDate}</span>}
+              </div>
+            </div>
+            <span style={{ background: c.bg, color: c.txt, fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, flexShrink: 0 }}>{c.label}</span>
+            {canEdit && (
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <select value={a.status} onChange={e => setStatus(a.id, e.target.value)} disabled={saving}
+                  style={{ ...fInputStyle(T, false), width: "auto", padding: "4px 8px", fontSize: 11, background: T.selectBg }}>
+                  {ACTION_STATUSES.map(x => <option key={x}>{x}</option>)}
+                </select>
+                <button onClick={() => removeAction(a.id)} disabled={saving} title="Remove"
+                  style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 13, padding: "3px 9px" }}>×</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 //  PROJECT VIEW — single-project detail page
@@ -1890,7 +2008,7 @@ const PROJECT_TABS_EXEC  = ["Exec Summary"];
 //  Activities (Gantt), Budget, Risks & Issues, Benefits, Documents, Updates.
 //  Roles other than admin/PMO see a read-only version.
 //
-const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote, userRole = ROLE_ADMIN }) => {
+const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote, saveActions, userRole = ROLE_ADMIN }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -3467,6 +3585,11 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
       )}
 
+      {/* ACTIONS TAB — meeting action items */}
+      {activeTab === "Actions" && (
+        <ActionsPanel project={project} canEdit={canSeeNotes} onSave={saveActions} />
+      )}
+
       {/* UPDATES TAB */}
       {activeTab === "Updates" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -4245,6 +4368,19 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
     ? (projects || []).filter(p => p.pmoStatus === "Submitted")
     : [];
 
+  // Meeting action items assigned to the current user (matched by owner
+  // email when the PMO recorded one, else by owner name). PMO tier sees all
+  // open actions across the portfolio so nothing slips between meetings.
+  const isPMOTier = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF;
+  const myActionItems = (projects || []).flatMap(p =>
+    (p.actions || [])
+      .filter(a => a.status !== "Closed")
+      .map(a => ({ ...a, projectId: p.id, projectName: p.name }))
+  ).filter(a => isMock || isPMOTier ||
+    (a.ownerEmail && a.ownerEmail.toLowerCase() === (currentUserEmail || "").toLowerCase()) ||
+    (a.owner || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
+  ).sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+
   // Overdue milestones in projects where PM matches current user
   const TODAY = new Date().toISOString().split("T")[0];
   const overdueMilestones = (projects || []).flatMap(p =>
@@ -4253,7 +4389,7 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
       .map(m => ({ ...m, projectId: p.id, projectName: p.name, pm: p.pm }))
   ).filter(m => isMock || m.pm === currentUserName);
 
-  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || pendingClosures.length > 0 || overdueMilestones.length > 0 || pendingValidations.length > 0;
+  const hasAnything = pendingRequests.length > 0 || pendingGates.length > 0 || pendingClosures.length > 0 || overdueMilestones.length > 0 || pendingValidations.length > 0 || myActionItems.length > 0;
 
   const handleValidate = async (project) => {
     setSaving(true);
@@ -4392,6 +4528,35 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
                 onClick={() => setRoute({ view: "project", projectId: m.projectId, from: "actions" })}
               />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Meeting action items assigned to me (all open items for PMO tier) */}
+      {myActionItems.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Action Items
+            <span style={{ background: "#e0f8ee", color: "#007a62", padding: "1px 8px", borderRadius: 10, marginLeft: 6, fontSize: 11 }}>{myActionItems.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {myActionItems.map(a => {
+              const overdue = a.dueDate && a.dueDate < TODAY;
+              return (
+                <div key={`${a.projectId}-${a.id}`} onClick={() => setRoute({ view: "project", projectId: a.projectId })}
+                  style={{ background: T.surface, border: `1px solid ${overdue ? "#f0b9a4" : T.border}`, borderLeft: overdue ? "4px solid #FF5000" : `4px solid #00b894`, borderRadius: 12, padding: "12px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: T.text }}>{a.title}</div>
+                    <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                      {a.projectName} · on <b style={{ color: T.text }}>{a.owner}</b>
+                      {a.dueDate && <span style={{ color: overdue ? "#b23800" : T.muted, fontWeight: overdue ? 700 : 400 }}> · due {a.dueDate}{overdue ? " — overdue" : ""}</span>}
+                    </div>
+                  </div>
+                  <span style={{ background: a.status === "In Progress" ? "#fdf3e0" : T.border, color: a.status === "In Progress" ? "#b45309" : T.muted, fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, flexShrink: 0 }}>{a.status}</span>
+                  <span style={{ color: T.muted, fontSize: 13 }}>→</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -6578,6 +6743,16 @@ export default function App() {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, ...stateUpdate } : p));
   }, [projects, currentUserName]);
 
+  // ── PMO meeting action items — targeted write to ActionsJSON only ──
+  const saveActions = useCallback(async (projectId, actions) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    if (!isUsingMock() && project.spId) {
+      await SPService.saveActionsSP(project.spId, actions);
+    }
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, actions } : p));
+  }, [projects]);
+
   const savePMONote = useCallback(async (projectId, note) => {
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
@@ -6751,7 +6926,7 @@ export default function App() {
           {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
           {route.view === "department"  && userRole !== ROLE_PM && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
           {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
-          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} savePMONote={savePMONote} userRole={userRole} />}
+          {route.view === "project"     && <ProjectView        projects={projects} projectId={route.projectId} setRoute={setRoute} submitUpdate={submitUpdate} savePMONote={savePMONote} saveActions={saveActions} userRole={userRole} />}
           {route.view === "requests"    && <MyRequestsView     requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} currentUserName={currentUserName} currentUserEmail={currentUserEmail} userRole={userRole} />}
           {route.view === "actions"     && <MyActionsView      requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} projects={visibleProjects} setRoute={setRoute} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} validateUpdate={validateUpdate} />}
           {route.view === "admin"       && (userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD) && <AdminView projects={projects} setRoute={setRoute} onSaveForm={onSaveForm} archiveProject={archiveProject} restoreProject={restoreProject} deleteForever={deleteForever} />}

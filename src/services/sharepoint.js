@@ -97,6 +97,7 @@ export const SP_FIELD_MAP = {
   health:              "HealthJSON",
   requiredDocs:        "RequiredDocsJSON",
   ipiHistory:          "IPIHistoryJSON",
+  actions:             "ActionsJSON",
 };
 
 // ─── HELPERS ─────────────────────────────────────────────────────
@@ -195,6 +196,7 @@ export function mapSPItemToProject(item) {
     health:              safeJSON(item[f.health],      {}),
     requiredDocs:        safeJSON(item[f.requiredDocs],[]),
     ipiHistory:          safeJSON(item[f.ipiHistory],  []),
+    actions:             safeJSON(item[f.actions],     []),
   };
 }
 
@@ -304,6 +306,9 @@ export function mapProjectToSPItem(project) {
     [f.health]:            js(project.health),
     [f.requiredDocs]:      js(project.requiredDocs),
     [f.ipiHistory]:        js(project.ipiHistory),
+    // Conditional — only written once actions exist, so saves stay safe on
+    // tenants where the ActionsJSON column has not been created yet.
+    ...(Array.isArray(project.actions) && project.actions.length ? { [f.actions]: js(project.actions) } : {}),
   };
 }
 
@@ -856,6 +861,31 @@ Object.assign(SPService, {
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(`validateUpdate failed: ${res.status} — ${body.slice(0, 300)}`);
+    }
+  },
+
+  /** Write meeting action items — only touches the ActionsJSON column. */
+  async saveActionsSP(spId, actions) {
+    if (USE_MOCK) return;
+    const { siteUrl, projectsListName } = SP_CONFIG;
+    const token = await acquireSpToken();
+    const res = await fetch(
+      `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          "Content-Type": "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-HTTP-Method": "MERGE",
+          "IF-MATCH": "*",
+        },
+        body: JSON.stringify({ ActionsJSON: (actions && actions.length) ? JSON.stringify(actions) : null }),
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`saveActions failed: ${res.status} — ${body.slice(0, 300)}`);
     }
   },
 

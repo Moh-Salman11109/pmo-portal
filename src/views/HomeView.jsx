@@ -330,7 +330,22 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       if (!full.complete && p.plannedEnd && p.plannedEnd < TODAY) flags.push({ t: "Past planned end", c: "#b45309", bg: "#fdf3e0" });
       if (full.complete && full.roadmapStatus === "met") flags.push({ t: "✓ Met roadmap", c: "#007a62", bg: "#e0f8ee" });
       const deptName = (departments.find(d => d.id === p.deptId)?.name || p.deptId || "—");
-      return { p, full, ipi, b, flags, deptName };
+      // Action items + the one-line story that sits under the project name
+      const acts        = p.actions || [];
+      const openActs    = acts.filter(a => a.status !== "Closed");
+      const overdueActs = openActs.filter(a => a.dueDate && a.dueDate < TODAY);
+      const odMs        = (p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY).length;
+      const bits = [];
+      const prog = full.progress ?? p.progress ?? 0;
+      if (!full.complete && p.plannedProgress > 0 && prog - p.plannedProgress !== 0) {
+        const gap = prog - p.plannedProgress;
+        bits.push(`${gap > 0 ? "+" : ""}${gap} pts vs planned progress`);
+      }
+      if (odMs) bits.push(`${odMs} overdue milestone${odMs === 1 ? "" : "s"}`);
+      if (openActs.length) bits.push(`${openActs.length} open action${openActs.length === 1 ? "" : "s"}${overdueActs.length ? ` (${overdueActs.length} overdue)` : ""}`);
+      if (p.budget > 0 && (p.forecast || 0) > p.budget) bits.push(`forecast +${fmtSAR((p.forecast || 0) - p.budget)}`);
+      if (full.complete) bits.push((full.daysLateVsPlan ?? 0) > 0 ? `delivered ${full.daysLateVsPlan}d late` : `delivered on/ahead of baseline`);
+      return { p, full, ipi, b, flags, deptName, openActs, overdueActs, insight: bits.slice(0, 3).join(" · ") };
     });
     const sevRank = (r) => r.ipi == null ? 3 : r.ipi >= 90 ? 2 : r.ipi >= 70 ? 1 : 0;
     const sortedRows = [...rows].sort((a, b2) => sevRank(a) - sevRank(b2) || (a.ipi ?? 999) - (b2.ipi ?? 999));
@@ -341,6 +356,21 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     const breaches = rows.filter(r => r.full.roadmapBreach);
     const worstBreach = [...breaches].sort((a, b2) => (a.full.roadmapPenalty ?? 1) - (b2.full.roadmapPenalty ?? 1))[0];
     const completedThisMonth = rows.filter(r => r.p.status === "Completed" && (r.p.actualFinishDate || "").startsWith(monthKey));
+    const openedThisMonth    = rows.filter(r => (r.p.startDate || "").startsWith(monthKey));
+
+    // Gate pipeline — where the live portfolio sits, with names (not just counts)
+    const GATES = [
+      { key: "Gate 1", label: "G1 · Request" }, { key: "Gate 2", label: "G2 · Initiation" },
+      { key: "Gate 3", label: "G3 · Planning" }, { key: "Gate 4", label: "G4 · Execution" },
+      { key: "Gate 5", label: "G5 · Closure" },
+    ];
+    const pipeline = GATES.map(g => ({ ...g, items: rows.filter(r => r.p.status !== "Completed" && (r.p.gate || "") === g.key) }));
+
+    // Meeting action items — portfolio-wide accountability
+    const allActs = rows.flatMap(r => (r.p.actions || []).map(a => ({ ...a, projectName: r.p.name })));
+    const actOpen    = allActs.filter(a => a.status !== "Closed");
+    const actOverdue = actOpen.filter(a => a.dueDate && a.dueDate < TODAY);
+    const actClosedThisMonth = allActs.filter(a => a.status === "Closed" && (a.closedDate || "").startsWith(monthKey));
 
     // Executive summary — honest, data-driven, max 5 lines
     const insights = [];
@@ -353,15 +383,16 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     if (breaches.length > 0) insights.push(`<b>${breaches.length}</b> project${breaches.length === 1 ? " is" : "s are"} past the roadmap commitment — worst: ${esc(worstBreach.p.name)} (IPI capped &amp; decaying −${Math.round((1 - (worstBreach.full.roadmapPenalty ?? 1)) * 100)}%).`);
     insights.push(`Budget utilisation <b>${budgetUtilPct}%</b> (${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)})${overrunProjects.length ? ` · ${overrunProjects.length} project${overrunProjects.length === 1 ? "" : "s"} forecasting overrun, exposure ${fmtSAR(overrunExposure)}` : " · no forecast overruns"}.`);
     if (overdueMilestones.length > 0) insights.push(`<b>${overdueMilestones.length}</b> milestone${overdueMilestones.length === 1 ? "" : "s"} overdue across ${overdueProjectCount} project${overdueProjectCount === 1 ? "" : "s"} — oldest ${overdueMilestones[0].daysOverdue}d.`);
+    if (actOpen.length || actClosedThisMonth.length) insights.push(`Meeting actions: <b>${actOpen.length}</b> open${actOverdue.length ? ` (<b>${actOverdue.length}</b> overdue)` : ""} · ${actClosedThisMonth.length} closed in ${esc(monthName)}.`);
     if (leaderDept && laggardDept && leaderDept.id !== laggardDept.id) insights.push(`${esc(leaderDept.fullName)} leads at <b>${leaderDept.ipi}</b>; ${esc(laggardDept.fullName)} trails at <b>${laggardDept.ipi}</b>.`);
 
     const kpiTiles = [
-      { l: "Active Projects", v: activeProjects.length, s: `${allProjects.length} total incl. completed` },
+      { l: "Active Projects", v: activeProjects.length, s: `${openedThisMonth.length} opened · ${completedThisMonth.length} closed this month` },
       { l: "On Track ≥90",   v: counts.ok,    c: "#007a62" },
       { l: "Watch 70–89",    v: counts.watch, c: "#b45309" },
       { l: "Critical <70",   v: counts.crit,  c: "#c2410c" },
       { l: "Budget Utilisation", v: budgetUtilPct + "%", s: fmtSAR(costTotal) + " spent" },
-      { l: "Overdue Milestones", v: overdueMilestones.length, c: overdueMilestones.length ? "#b45309" : "#007a62", s: overdueMilestones.length ? `oldest ${overdueMilestones[0].daysOverdue}d` : "all on schedule" },
+      { l: "Open Actions", v: actOpen.length, c: actOverdue.length ? "#b45309" : "#007a62", s: actOverdue.length ? `${actOverdue.length} overdue` : `${actClosedThisMonth.length} closed this month` },
     ];
 
     const deptBars = deptPerf.map(d => {
@@ -376,16 +407,40 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
 
     const tableRows = sortedRows.map(r => `<tr>
       <td class="mono">${esc(r.p.code)}</td>
-      <td class="pname">${esc(r.p.name)}</td>
+      <td><div class="pname">${esc(r.p.name)}</div>${r.insight ? `<div class="pins">${esc(r.insight)}</div>` : ""}</td>
       <td>${esc(r.deptName)}</td>
       <td>${esc(r.p.pm) || "—"}</td>
       <td class="mono">${esc((r.p.gate || "—").replace("Gate ", "G"))}</td>
       <td><div class="pbar"><div class="pfill" style="width:${r.full.progress ?? r.p.progress ?? 0}%"></div></div><span class="ppct mono">${r.full.progress ?? r.p.progress ?? 0}%</span></td>
       <td><span class="chip" style="background:${r.b.bg}; color:${r.b.txt}">${r.ipi ?? "—"}</span></td>
+      <td class="mono" style="text-align:center">${r.openActs.length ? `<span style="color:${r.overdueActs.length ? "#c2410c" : "#3a5547"};font-weight:800">${r.openActs.length}</span>` : `<span class="dim">0</span>`}</td>
       <td>${esc(r.p.status)}</td>
       <td class="mono">${fmtD(r.p.plannedEnd)}</td>
       <td>${r.flags.map(f => `<span class="chip sm" style="background:${f.bg}; color:${f.c}">${f.t}</span>`).join(" ") || `<span class="dim">—</span>`}</td>
     </tr>`).join("");
+
+    // Gate pipeline columns — count + the project names living at each gate
+    const pipelineHtml = pipeline.map(g => `<div class="gate-col">
+      <div class="gate-head"><span class="gate-lbl">${g.label}</span><span class="gate-count">${g.items.length}</span></div>
+      ${g.items.length === 0 ? `<div class="gate-empty">—</div>`
+        : g.items.map(r => `<div class="gate-item"><span class="gate-dot" style="background:${r.b.txt}"></span>${esc(r.p.name)}</div>`).join("")}
+    </div>`).join("");
+
+    const openedHtml = openedThisMonth.length === 0
+      ? `<div class="empty-sub">No new projects started in ${esc(monthName)}.</div>`
+      : openedThisMonth.map(r => `<div class="done-row"><span class="att-name">${esc(r.p.name)}</span><span class="dim">${esc(r.deptName)} · ${esc(r.p.pm) || "—"}</span><span class="mono dim" style="margin-left:auto">${fmtD(r.p.startDate)}</span></div>`).join("");
+
+    const actionRowsHtml = actOpen.length === 0
+      ? `<div class="empty-sub">No open action items.</div>`
+      : [...actOpen].sort((a, b2) => (a.dueDate || "9999").localeCompare(b2.dueDate || "9999")).slice(0, 8).map(a => {
+          const od = a.dueDate && a.dueDate < TODAY;
+          return `<div class="risk-row">
+            <span class="chip sm" style="background:${od ? "#ffe8de" : "#eef3ee"};color:${od ? "#b23800" : "#5a7a6e"}">${od ? "Overdue" : (a.status === "In Progress" ? "In Progress" : "Open")}</span>
+            <span class="att-name">${esc(a.title)}</span>
+            <span class="att-pm">on ${esc(a.owner)}</span>
+            <span class="dim" style="margin-left:auto">${esc(a.projectName)}${a.dueDate ? ` · due ${fmtD(a.dueDate)}` : ""}</span>
+          </div>`;
+        }).join("");
 
     const attention = sortedRows.filter(r => sevRank(r) === 0 || r.full.roadmapBreach).slice(0, 5);
     const attentionHtml = attention.length === 0
@@ -469,6 +524,16 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         table.port td { padding:6px 8px; border-bottom:1px solid #eef3ee; vertical-align:middle; }
         table.port tr { break-inside:avoid; }
         .pname { font-weight:700; color:#003932; }
+        .pins { font-size:8px; color:#7a9485; margin-top:1.5px; }
+        .gates-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+        .gate-col { border:1px solid #C9D5C9; border-radius:9px; overflow:hidden; break-inside:avoid; }
+        .gate-head { display:flex; justify-content:space-between; align-items:center; background:#003932; color:#dff5ec; padding:6px 9px; }
+        .gate-lbl { font-size:8.5px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; }
+        .gate-count { font-size:13px; font-weight:900; color:#00FFB3; font-family:'JetBrains Mono',monospace; }
+        .gate-item { display:flex; align-items:center; gap:5px; padding:4.5px 9px; font-size:8.5px; font-weight:600; color:#1b2420; border-bottom:1px solid #f0f4f1; }
+        .gate-item:last-child { border-bottom:none; }
+        .gate-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+        .gate-empty { padding:8px 9px; font-size:8.5px; color:#a1b9ab; font-style:italic; }
         .pbar { display:inline-block; width:46px; height:6px; background:#eef3ee; border-radius:3px; overflow:hidden; vertical-align:middle; margin-right:5px; }
         .pfill { height:100%; background:#00b894; }
         .ppct { font-size:8.5px; color:#3a5547; }
@@ -516,6 +581,11 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       </section>
 
       <section>
+        <div class="sec-head"><h2>Gate Pipeline</h2><span class="m">where the live portfolio sits · dot = IPI band</span></div>
+        <div class="gates-grid">${pipelineHtml}</div>
+      </section>
+
+      <section>
         <div class="sec-head"><h2>Department Performance</h2><span class="m">IPI · budget × priority weighted</span></div>
         ${deptBars}
       </section>
@@ -523,7 +593,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       <section>
         <div class="sec-head"><h2>Portfolio — All Projects</h2><span class="m">sorted worst-first · IPI is the 90-day weighted score</span></div>
         <table class="port">
-          <thead><tr><th>Code</th><th>Project</th><th>Dept</th><th>PM</th><th>Gate</th><th>Progress</th><th>IPI</th><th>Status</th><th>Planned End</th><th>Flags</th></tr></thead>
+          <thead><tr><th>Code</th><th>Project</th><th>Dept</th><th>PM</th><th>Gate</th><th>Progress</th><th>IPI</th><th>Actions</th><th>Status</th><th>Planned End</th><th>Flags</th></tr></thead>
           <tbody>${tableRows}</tbody>
         </table>
       </section>
@@ -540,9 +610,20 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       </div>
 
       <div class="two-col" style="padding-top:14px">
-        <div class="card" style="grid-column:1 / -1">
+        <div class="card">
+          <h3>Opened in ${esc(monthName)}</h3>
+          ${openedHtml}
+        </div>
+        <div class="card">
           <h3>Closed in ${esc(monthName)}</h3>
           ${completedHtml}
+        </div>
+      </div>
+
+      <div class="two-col" style="padding-top:14px">
+        <div class="card" style="grid-column:1 / -1">
+          <h3>Meeting Actions — ${actOpen.length} open${actOverdue.length ? ` · ${actOverdue.length} overdue` : ""} · ${actClosedThisMonth.length} closed this month</h3>
+          ${actionRowsHtml}
         </div>
       </div>
 
