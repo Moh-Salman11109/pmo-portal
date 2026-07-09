@@ -335,9 +335,27 @@ const IPICalculator = ({ onClose, onBack }) => {
                             ))}
                             )
                           </div>
-                          <div style={{ color: T.primary, fontWeight: 700, marginTop: 4 }}>
-                            = {(parts.reduce((s, p) => s + (p.w / sumW) * p.v, 0)).toFixed(4)} → <strong>{result.ipi}</strong>
-                          </div>
+                          {(() => {
+                            const raw = parts.reduce((s, p) => s + (p.w / sumW) * p.v, 0);
+                            if (result.roadmapBreach) {
+                              return (
+                                <>
+                                  <div style={{ color: T.text, marginTop: 4 }}>= {raw.toFixed(4)}</div>
+                                  <div style={{ color: "#b23800", fontWeight: 700, marginTop: 2 }}>
+                                    roadmap breach → cap 1.00 × (1 − {result.roadmapDaysLate}/100)
+                                  </div>
+                                  <div style={{ color: T.primary, fontWeight: 700, marginTop: 2 }}>
+                                    = {(Math.min(1, raw) * result.roadmapPenalty).toFixed(4)} → <strong>{result.ipi}</strong>
+                                  </div>
+                                </>
+                              );
+                            }
+                            return (
+                              <div style={{ color: T.primary, fontWeight: 700, marginTop: 4 }}>
+                                = {raw.toFixed(4)} → <strong>{result.ipi}</strong>
+                              </div>
+                            );
+                          })()}
                         </>
                       )}
                     </div>

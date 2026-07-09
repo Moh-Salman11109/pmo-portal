@@ -478,7 +478,10 @@ export const IPIBreakdownModal = ({ project, onClose }) => {
         <KV k="SPI reference (baseline)" v={(project.baselineEnd || project.plannedEnd || "—") + (project.baselineEnd ? " · locked baseline" : " · plannedEnd (no baseline)")} mono />
         <KV k="Schedule vs plan" v={full.scheduleDeltaDays > 0 ? `${full.scheduleDeltaDays} days late` : full.scheduleDeltaDays < 0 ? `${Math.abs(full.scheduleDeltaDays)} days early` : "on plan"} mono />
         <KV k="Roadmap deadline" v={roadmapDeadline || "(none set)"} mono />
-        <KV k="Roadmap status" v={full.roadmapStatus === "met" ? `Met${full.roadmapDaysAhead > 0 ? ` · ${full.roadmapDaysAhead}d ahead` : ""}` : full.roadmapStatus === "breach" ? "Breach" : roadmapDeadline ? "On track" : "—"} mono />
+        <KV k="Roadmap status" v={full.roadmapStatus === "met" ? `Met${full.roadmapDaysAhead > 0 ? ` · ${full.roadmapDaysAhead}d ahead` : ""}` : full.roadmapStatus === "breach" ? `Breach · ${full.roadmapDaysLate}d past` : roadmapDeadline ? "On track" : "—"} mono />
+        {full.roadmapBreach && (
+          <KV k="Roadmap breach penalty" v={`IPI capped at 100, ×${full.roadmapPenalty.toFixed(2)} (−${Math.round((1 - full.roadmapPenalty) * 100)}% · 1%/day)`} mono />
+        )}
       </Section>
 
       {/* ─── 02 SPI ─── */}
@@ -501,7 +504,9 @@ spiFinal = min(1.20, SPI)  =  ${num3(comp.spiFinal)}`}</Formula>
           SPI is measured against the project&rsquo;s own committed baseline, never the
           roadmap. In-progress lateness pins planned% at 100% (SPI = actual%); a completed
           project scores on how its actual duration compares to the baseline duration
-          (late lowers, early raises, capped 1.20). Roadmap is an informational checkpoint.
+          (late lowers, early raises, capped 1.20). The roadmap is a dormant checkpoint —
+          zero effect until crossed while incomplete, then the composite IPI is capped at 100
+          and decays 1% per day past the roadmap.
         </div>
         <KV k="SPI used in IPI" v={num3(comp.spiFinal ?? comp.spi)} mono />
       </Section>

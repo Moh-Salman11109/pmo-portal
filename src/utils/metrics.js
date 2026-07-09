@@ -367,19 +367,24 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   const penalty = 1;
   const spiFinal = spi === null ? null : Math.min(cap, spi);
 
-  // ── Roadmap = CHECKPOINT ONLY (no effect on any number) ───────────────────
-  // Commitment status against the strategic Roadmap Deadline. Purely
-  // informational — SPI already reflects delay against the baseline.
+  // ── Roadmap commitment status + BREACH PENALTY ────────────────────────────
+  // SPI stays measured against the baseline (schedule-vs-own-plan). The Roadmap
+  // Deadline is the strategic commitment; missing it is penalised at the IPI
+  // level, NOT inside SPI:
   //   • breach: incomplete and the clock has reached the roadmap, OR completed
-  //     after the roadmap (missed the commitment).
+  //     after the roadmap.
   //   • met:    completed on or before the roadmap.
-  // `roadmapDaysAhead` = days the finish beat the roadmap (met case).
+  // On breach, the composite IPI is capped at 100 (an over-achiever falls back
+  // to 100) and then decays 1% for every day past the roadmap, floored at 0
+  // (100 days past → IPI 0). This is applied below to ipiDecimal.
   const roadmapMs = _toMs(project.roadmapDeadline);
   const roadmapMet    = !!(roadmapMs && isComplete && nowMs <= roadmapMs);
   const roadmapBreach = !!(roadmapMs && (
     (isComplete && nowMs > roadmapMs) || (!isComplete && nowMs >= roadmapMs)
   ));
   const roadmapDaysAhead = roadmapMet ? Math.max(0, Math.floor((roadmapMs - nowMs) / 86_400_000)) : 0;
+  const roadmapDaysLate  = roadmapBreach && roadmapMs ? Math.max(0, Math.floor((nowMs - roadmapMs) / 86_400_000)) : 0;
+  const roadmapPenalty   = roadmapBreach ? Math.max(0, 1 - roadmapDaysLate / 100) : 1;
   const roadmapStatus = roadmapBreach ? "breach" : roadmapMet ? "met" : null;
 
   // ── Days late vs the baseline plan ────────────────────────────────────────
@@ -408,11 +413,17 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   if (mci      !== null) parts.push({ w: weights.mci, v: mci });
 
   const allNull = parts.length === 0;
-  let ipiDecimal = 0;
+  let ipiRaw = 0;
   if (!allNull) {
     const sumW = parts.reduce((s, p) => s + p.w, 0);
-    ipiDecimal = parts.reduce((s, p) => s + p.w * p.v, 0) / sumW;
+    ipiRaw = parts.reduce((s, p) => s + p.w * p.v, 0) / sumW;
   }
+
+  // ── Roadmap breach penalty (applied at the COMPOSITE level) ───────────────
+  // A breached project can never read above 100 (an over-achiever is pulled
+  // back to 100), and then loses 1% per day past the roadmap. SPI/CPI/MCI
+  // components are reported unpenalised; this adjusts only the headline IPI.
+  const ipiDecimal = roadmapBreach ? Math.min(1.0, ipiRaw) * roadmapPenalty : ipiRaw;
 
   // Data-reliability short-circuit — if the schedule inputs are broken, we
   // refuse to publish a composite score even when CPI and MCI look fine.
@@ -424,9 +435,10 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
             : scheduleBad         ? null
             :                       Math.max(0, Math.round(ipiDecimal * 100));
 
-  // Status follows the UNROUNDED ipiDecimal so adjacent projects whose
-  // displayed integers are 99 vs 100 don't flip into different bands purely
-  // from rounding noise. Data-reliability failures get their own statuses.
+  // Status follows the UNROUNDED (penalised) ipiDecimal so adjacent projects
+  // whose displayed integers are 99 vs 100 don't flip bands from rounding
+  // noise. A roadmap breach caps at 1.0, so "Over Achieved" can't show while
+  // breached. Data-reliability failures get their own statuses.
   const status = allNull            ? "Pending Plan"
                : datesInvalid        ? "Data Invalid"
                : tooEarly            ? "Baseline Forming"
@@ -460,6 +472,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     roadmapBreach,
     roadmapStatus,
     roadmapDaysAhead,
+    roadmapDaysLate,
+    roadmapPenalty: +roadmapPenalty.toFixed(3),
     daysLateVsPlan,
     scheduleDeltaDays,
     dataReliability,

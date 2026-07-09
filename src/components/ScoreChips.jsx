@@ -27,6 +27,8 @@ export function scoreContext(project, result) {
     daysLate:        r.complete && r.daysLateVsPlan > 0 ? r.daysLateVsPlan : 0,
     roadmapStatus:   r.roadmapStatus || null,        // "met" | "breach" | null
     roadmapDaysAhead: r.roadmapDaysAhead || 0,
+    roadmapDaysLate: r.roadmapDaysLate || 0,
+    roadmapPenaltyPct: r.roadmapPenalty != null ? Math.round((1 - r.roadmapPenalty) * 100) : 0,
     complete:        !!r.complete,
   };
 }
@@ -56,7 +58,7 @@ export const ScoreChips = ({ project, result, size = "sm", onDark = false }) => 
       )}
       {ctx.roadmapStatus === "breach" && (
         <span style={{ ...base, background: onDark ? "rgba(220,38,38,0.18)" : "#fee2e2", color: onDark ? "#fca5a5" : "#b91c1c", border: onDark ? "1px solid rgba(220,38,38,0.5)" : "1px solid #fecaca" }}>
-          ⚠ Roadmap Breach
+          ⚠ Roadmap Breach{ctx.roadmapPenaltyPct > 0 ? ` · −${ctx.roadmapPenaltyPct}%` : ""}
         </span>
       )}
     </span>

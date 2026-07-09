@@ -35,10 +35,11 @@ const setVal = (el, v) => {
     const inputs = [...document.querySelectorAll("input")];
     const dates = inputs.filter(i => i.type === "date");        // start, plannedEnd, roadmap, asOf
     const nums  = inputs.filter(i => i.type !== "date");        // progress, plannedProgress, budget, actualCost, req, approved
-    s(dates[0], "2026-07-01"); s(dates[1], "2026-07-30"); s(dates[2], "2026-08-15"); s(dates[3], "2026-08-05");
+    // Breach scenario: plannedEnd (30 Aug) AFTER roadmap (30 Jul); finish 25 Aug.
+    s(dates[0], "2026-07-01"); s(dates[1], "2026-08-30"); s(dates[2], "2026-07-30"); s(dates[3], "2026-08-25");
     s(nums[0], "100");   // actual progress
     // nums[1] = planned progress → leave blank (auto)
-    s(nums[2], "100"); s(nums[3], "100");   // budget, actual cost
+    s(nums[2], "22"); s(nums[3], "22");   // budget, actual cost
     s(nums[4], "2"); s(nums[5], "2");        // required, approved
     const sel = document.querySelector("select"); if (sel) s(sel, "Gate 4");
     return { dates: dates.length, nums: nums.length };

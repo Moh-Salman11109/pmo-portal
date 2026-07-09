@@ -44,14 +44,31 @@ spiFinal = clamp( baselineDuration / actualDuration , 0 , 1.20 )
   finish 05 Aug → SPI = 29 / 35 = **0.829** → IPI **91** (with CPI = MCI = 1.0),
   labelled **6 days late vs plan**.
 
-## 4. Roadmap = checkpoint only (no effect on any number)
+## 4. Roadmap as a dormant checkpoint — breach cap & decay
 
-- **Breach** (red): incomplete and the clock has reached the roadmap, **or**
-  completed after the roadmap.
-- **Met** (subtle green): completed on/before the roadmap →
-  "✓ Met Roadmap · X days ahead".
-- Exposed on the engine result as `roadmapStatus` / `roadmapBreach` /
-  `roadmapDaysAhead`. In‑progress projects only ever show the red breach chip.
+The Roadmap Deadline is **dormant**. It has **zero** effect on any number for as
+long as the project is on or before it — no anchoring, no reference, no bonus, no
+penalty. It **activates only at the moment it is crossed with the project
+incomplete**: from that point the composite **IPI is capped at 100** (a
+strategically late project can never be Over Achieved) and **decays 1% per day**
+past the roadmap, floored at 0 (100 days past → IPI 0). SPI/CPI/MCI components are
+reported unpenalised; only the headline IPI is capped and decayed.
+
+```
+if roadmapBreach:  IPI = min(100, IPI) × (1 − daysPastRoadmap / 100)   (floored at 0)
+```
+
+The plan approver knows the roadmap date and this penalty at Gate‑3 approval, so
+it is a **pre‑declared, consciously accepted consequence, not a surprise** — and
+it is distinct from the retired always‑on 1%/day model that anchored SPI to the
+roadmap.
+
+- **Breach** (red chip "⚠ Roadmap Breach · −X%"): incomplete and the clock has
+  reached the roadmap, **or** completed after it.
+- **Met** (subtle green "✓ Met Roadmap · X days ahead"): completed on/before it —
+  informational only, no bonus.
+- Engine fields: `roadmapStatus` / `roadmapBreach` / `roadmapDaysAhead` /
+  `roadmapDaysLate` / `roadmapPenalty`.
 
 ## 5. Display pairing rule (governance)
 

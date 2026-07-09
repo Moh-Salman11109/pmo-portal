@@ -365,19 +365,58 @@ describe("Baseline-anchored SPI — measure vs the locked baseline, clamp at pla
       .toBeCloseTo(calcProjectIPIFull(honest, "2026-06-19").components.spi, 3);
   });
 
-  it("roadmap is a checkpoint only — no effect on the numbers, raises roadmapBreach", () => {
+  it("roadmap never touches SPI, but a breach raises the flag", () => {
     const common = { startDate: "2026-01-01", plannedEnd: "2026-12-31", progress: 50, milestones: [], budget: 0, actualCost: 0, documents: [] };
     const withRm    = mk({ ...common, roadmapDeadline: "2026-06-30" });
     const withoutRm = mk({ ...common });
-    // Identical SPI with or without a roadmap — it never touches the math.
+    // SPI is measured vs the baseline — identical with or without a roadmap.
     expect(calcProjectIPIFull(withRm, "2026-07-15").components.spi)
       .toBe(calcProjectIPIFull(withoutRm, "2026-07-15").components.spi);
-    // Breach: as-of past roadmap while incomplete.
     expect(calcProjectIPIFull(withRm, "2026-07-15").roadmapBreach).toBe(true);
     expect(calcProjectIPIFull(withRm, "2026-06-01").roadmapBreach).toBe(false);   // before roadmap
-    // A completed project that finished before the roadmap never breaches.
     const done = mk({ ...common, roadmapDeadline: "2026-06-30", progress: 100, status: "Completed", actualFinishDate: "2026-06-15" });
     expect(calcProjectIPIFull(done, "2026-08-01").roadmapBreach).toBe(false);
+  });
+
+  it("roadmap breach penalty — cap at 100, then −1% per day past roadmap", () => {
+    // The scenario the user caught: early vs plan (SPI > 1 → IPI would be 105),
+    // but 26 days past the roadmap. Capped to 100, then −26% → IPI 74.
+    const p = mk({
+      startDate: "2026-07-01", plannedEnd: "2026-08-30", roadmapDeadline: "2026-07-30",
+      progress: 100, milestones: [], budget: 22, actualCost: 22, gate: "Gate 4",
+      documents: [
+        { name: "D1", required: true, requiredAtGate: 4, status: "Approved" },
+        { name: "D2", required: true, requiredAtGate: 4, status: "Approved" },
+      ],
+    });
+    const r = calcProjectIPIFull(p, "2026-08-25");
+    expect(r.roadmapBreach).toBe(true);
+    expect(r.roadmapDaysLate).toBe(26);                 // 30 Jul → 25 Aug
+    expect(r.components.spiFinal).toBeCloseTo(60 / 55, 2);   // 1.091 — SPI stays (early vs plan)
+    expect(r.roadmapPenalty).toBeCloseTo(0.74, 2);
+    expect(r.ipi).toBe(74);                             // min(100,105)=100 × 0.74
+    expect(r.status).toBe("At Risk");                   // engine status band (<0.9); display band (ipiColor 70-89) = Watch
+  });
+
+  it("roadmap breach penalty floors IPI at 0 after 100 days", () => {
+    const p = mk({
+      startDate: "2026-01-01", plannedEnd: "2026-06-30", roadmapDeadline: "2026-06-30",
+      progress: 100, milestones: [], budget: 0, actualCost: 0, documents: [],
+    });
+    // 120 days past the roadmap → penalty floors at 0 → IPI 0.
+    const r = calcProjectIPIFull(p, "2026-10-28");
+    expect(r.roadmapPenalty).toBe(0);
+    expect(r.ipi).toBe(0);
+  });
+
+  it("no breach → no penalty (roadmapPenalty = 1)", () => {
+    const p = mk({
+      startDate: "2026-07-01", plannedEnd: "2026-07-30", roadmapDeadline: "2026-08-15",
+      progress: 100, milestones: [], budget: 0, actualCost: 0, documents: [],
+    });
+    const r = calcProjectIPIFull(p, "2026-08-05");   // before roadmap 15 Aug
+    expect(r.roadmapBreach).toBe(false);
+    expect(r.roadmapPenalty).toBe(1);
   });
 
   it("daysLateVsPlan is 0 on/before plan and counts days past the baseline", () => {
