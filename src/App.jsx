@@ -4725,27 +4725,10 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
     setTimeout(() => setToast(null), 3000);
   };
 
-  const openAdd = () => {
-    setEditingProject(null);
-    // No initial values for phase / riskLevel / budgetStatus — those are derived
-    // from gate, open risks, and budget vs actualCost respectively (Phase 2
-    // simplification). Setting them here would create dead state.
-    setFormData({ name: "", code: "", deptId: "strategy", pm: "", sponsor: "", gate: "Gate 1", status: "Not Started", priority: "Medium", progress: 0, budget: 0, startDate: "", plannedEnd: "", objective: "", strategic: "" });
-    setShowForm(true);
-  };
-
-  const openEdit = (p) => {
-    setEditingProject(p.id);
-    // Initialise the toggle state from the project's current optional documents,
-    // so the chips reflect what's already on the project (otherwise the user has
-    // to re-pick them every time, and saving would silently lose them).
-    const currentOptional = (p.documents || [])
-      .filter(d => OPTIONAL_DOCS.includes(d.name))
-      .map(d => d.name);
-    setFormData({ ...p, requiredDocs: currentOptional });
-    setShowForm(true);
-  };
-
+  // Add/Edit now route to the full ProjectForm wizard (the quick-add modal
+  // below is retained inert — it lacked PM Email, Baseline End, Roadmap
+  // Deadline, Forecast/Actual Cost and validation, so a project created
+  // through it was invisible to its own PM).
   const handleSave = async () => {
     if (!formData.name || !formData.code) { showToast("Project name and code are required", "error"); return; }
     try {
@@ -4857,7 +4840,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
             <div style={{ fontSize: 14, color: T.muted }}>{activeProjects.length} active projects · <span style={{ color: T.danger }}>{archivedProjects.length} archived</span></div>
-            <button onClick={openAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Project</button>
+            <button onClick={() => setRoute({ view: "form", mode: "create" })} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add Project</button>
           </div>
 
           {showForm && (
@@ -4968,7 +4951,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                     <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.gate}</td>
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => openEdit(p)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
+                        <button onClick={() => setRoute({ view: "form", mode: "edit", projectId: p.id, from: "admin" })} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, color: T.text }}>Edit</button>
                         <button onClick={() => setRoute({ view: "project", projectId: p.id, from: "admin" })} style={{ background: "#e8f5f0", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: T.primary, fontWeight: 600 }}>View</button>
                         <button onClick={() => handleDelete(p.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: "#dc2626", fontWeight: 600 }}>Archive</button>
                       </div>
