@@ -87,10 +87,12 @@ field remains `1.0` for old audit‑modal compatibility.
 
 ---
 
-### PDF methodology — regeneration pending
+### PDF methodology — regenerated (rev 2026‑07)
 
-The PDF generators under `scripts/_build-ipi-methodology*.cjs` still describe the
-retired **1%/day roadmap‑penalty** model (Section 07, its decay diagram, worked
-example and parameter table). They need a dedicated regeneration pass to match
-this document. Not done here to avoid leaving their diagrams/tables internally
-inconsistent with a partial edit.
+The official PDF (`_build-ipi-methodology-v2.cjs`, generator kept local) has been
+aligned to this document as **IPI Methodology — Revision 2026‑07**: Chapter 07 is
+now "Baseline &amp; Roadmap Checkpoint" (the retired 1%/day penalty, its decay
+diagram and parameter table are gone), Chapter 03 documents the baseline
+reference + in‑progress clamp + Option C completion, and the worked example,
+audit‑test list and glossary follow suit. Output:
+`Desktop/PMO-Portal-Deliverables/PMO-Portal-IPI-Methodology-2026-07.pdf`.
