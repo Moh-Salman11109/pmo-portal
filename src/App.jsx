@@ -1539,7 +1539,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
       </div>
     );
 
-    if (tab === "Activities") return <MilestoneListEditor items={milestones} onChange={setMilestones} />;
+    if (tab === "Activities") return <MilestoneListEditor items={milestones} onChange={setMilestones} canRemove={userRole !== ROLE_PM} />;
     if (tab === "Risks")      return <RiskListEditor      items={risks}      onChange={setRisks} />;
     if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
 
@@ -4071,7 +4071,13 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
             return arrow ? [card, arrow] : [card];
           })}
         </div>
-        <div style={{ marginTop: 14, fontSize: 11, color: "#a1b9ab" }}>Gate 4 (Execution) has no submission — progress is tracked from project updates.</div>
+        <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: "#a1b9ab" }}>Gate 4 (Execution) has no submission — progress is tracked from project updates.</span>
+          <button onClick={() => window.open(FORM_URLS.changeRequest, "_blank")}
+            style={{ background: "transparent", border: "1px solid #00b894", color: "#007a62", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(0,184,148,0.08)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>⇄ Change Request</button>
+        </div>
       </div>
 
       {/* ── Gate Reviews In Progress ── */}
@@ -4408,6 +4414,20 @@ const MyActionsView = ({ requests, gateSubmissions, closureSubmissions, projects
                     {p.lastSubmittedBy && ` · Submitted by ${p.lastSubmittedBy}`}
                     {p.lastSubmittedDate && ` · ${p.lastSubmittedDate}`}
                   </div>
+                  {(() => {
+                    // Most recent change log from this submission — what actually changed.
+                    const ch = [...(p.updates || [])].reverse().find(u =>
+                      u.kind === "change" && (!p.lastSubmittedDate || u.date >= p.lastSubmittedDate));
+                    if (!ch) return null;
+                    return (
+                      <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Changes in this update</div>
+                        {ch.note.split("\n").map((l, i) => (
+                          <div key={i} style={{ fontSize: 12, color: T.text, lineHeight: 1.7 }}>• {l}</div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   <button
@@ -5384,7 +5404,7 @@ const STATUS_CHIP = {
   Delayed:       { bg: "#fee2e2", text: "#991b1b" },
 };
 
-const MilestoneRow = ({ item, isActivity, items, upd, remove, move }) => {
+const MilestoneRow = ({ item, isActivity, items, upd, remove, move, canRemove = true }) => {
   const T = useT();
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
@@ -5429,7 +5449,7 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove, move }) => {
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <button onClick={() => canUp && move(item.id, "up")} title="Move up" disabled={!canUp} style={arrowBtn(canUp)}>▲</button>
           <button onClick={() => canDown && move(item.id, "down")} title="Move down" disabled={!canDown} style={arrowBtn(canDown)}>▼</button>
-          <button onClick={() => remove(item.id)} title="Remove" style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px", marginLeft: 2 }}>×</button>
+          {canRemove && <button onClick={() => remove(item.id)} title="Remove" style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "4px 10px", marginLeft: 2 }}>×</button>}
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -5477,7 +5497,7 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove, move }) => {
   );
 };
 
-const MilestoneListEditor = ({ items, onChange }) => {
+const MilestoneListEditor = ({ items, onChange, canRemove = true }) => {
   const T = useT();
 
   const milestones = items.filter(m => !m.parentId);
@@ -5528,9 +5548,9 @@ const MilestoneListEditor = ({ items, onChange }) => {
       {milestones.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>No milestones yet — start by adding a milestone, then add activities under it</div>}
       {milestones.map(m => (
         <div key={m.id} style={{ marginBottom: 12 }}>
-          <MilestoneRow item={m} items={items} upd={upd} remove={remove} move={move} />
+          <MilestoneRow item={m} items={items} upd={upd} remove={remove} move={move} canRemove={canRemove} />
           <div style={{ marginLeft: 24, paddingLeft: 12, borderLeft: `2px dashed ${T.border}` }}>
-            {childrenOf(m.id).map(a => <MilestoneRow key={a.id} item={a} isActivity items={items} upd={upd} remove={remove} move={move} />)}
+            {childrenOf(m.id).map(a => <MilestoneRow key={a.id} item={a} isActivity items={items} upd={upd} remove={remove} move={move} canRemove={canRemove} />)}
             <button onClick={() => addActivity(m.id)}
               style={{ background: "transparent", border: `1px dashed ${T.accent}`, color: T.accent, borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
               + Add Activity under "{m.name || "this milestone"}"
@@ -6418,8 +6438,41 @@ export default function App() {
       ? trackMilestoneDateChanges(milestones, project.milestones || [])
       : milestones;
 
+    // Change summary — field-level diff of what this save actually changed,
+    // computed against the pre-save state. Logged with kind:"change" so the
+    // PMO validation queue can show "was X → now Y" instead of a silent flag.
+    const changeLines = [];
+    const lbl = (m) => `${m.parentId ? "Activity" : "Milestone"} "${m.name || "unnamed"}"`;
+    const beforeMs = project.milestones || [];
+    const afterMs  = Array.isArray(trackedMilestones) ? trackedMilestones : [];
+    const beforeById = Object.fromEntries(beforeMs.map(x => [x.id, x]));
+    const afterIds   = new Set(afterMs.map(x => x.id));
+    afterMs.forEach(a => {
+      const b = beforeById[a.id];
+      if (!b) { changeLines.push(`Added ${a.parentId ? "activity" : "milestone"} "${a.name || "unnamed"}"`); return; }
+      if ((b.name || "") !== (a.name || ""))           changeLines.push(`Renamed "${b.name || "unnamed"}" → "${a.name || "unnamed"}"`);
+      if ((b.startDate || "") !== (a.startDate || "")) changeLines.push(`${lbl(a)} start: ${b.startDate || "—"} → ${a.startDate || "—"}`);
+      if ((b.date || "") !== (a.date || ""))           changeLines.push(`${lbl(a)} ${a.parentId ? "end" : "target"} date: ${b.date || "—"} → ${a.date || "—"}`);
+      if ((b.status || "") !== (a.status || ""))       changeLines.push(`${lbl(a)} status: ${b.status || "—"} → ${a.status || "—"}`);
+      if ((b.progress ?? 0) !== (a.progress ?? 0))     changeLines.push(`${lbl(a)} progress: ${b.progress ?? 0}% → ${a.progress ?? 0}%`);
+    });
+    beforeMs.forEach(b => { if (!afterIds.has(b.id)) changeLines.push(`Removed ${lbl(b)}`); });
+    if ((project.startDate || "") !== (startDate || ""))   changeLines.push(`Project start: ${project.startDate || "—"} → ${startDate || "—"}`);
+    if ((project.plannedEnd || "") !== (plannedEnd || "")) changeLines.push(`Planned end: ${project.plannedEnd || "—"} → ${plannedEnd || "—"}`);
+    const diffIds = (before, after, kind, nameOf) => {
+      const bIds = new Set((before || []).map(x => x.id));
+      const aIds = new Set((after || []).map(x => x.id));
+      (after  || []).forEach(x => { if (!bIds.has(x.id)) changeLines.push(`Added ${kind} "${nameOf(x)}"`); });
+      (before || []).forEach(x => { if (!aIds.has(x.id)) changeLines.push(`Removed ${kind} "${nameOf(x)}"`); });
+    };
+    diffIds(project.risks,    risks,    "risk",    x => x.title || x.name || "unnamed");
+    diffIds(project.benefits, benefits, "benefit", x => x.name || x.title || "unnamed");
+
     // Build update log entries
     const logEntries = [];
+    if (changeLines.length) {
+      logEntries.push({ id: `U${Date.now() - 1}`, date: today, owner: currentUserName || project.pm, note: changeLines.join("\n"), kind: "change" });
+    }
     if (note?.trim()) {
       logEntries.push({ id: `U${Date.now()}`, date: today, owner: project.pm, note: note.trim() });
     }
