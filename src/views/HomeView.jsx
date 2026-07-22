@@ -716,7 +716,9 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       <div style={{
         background: heroGradient, color: "white",
         borderRadius: 20, padding: bp === "mobile" ? "20px 22px" : "32px 40px 34px",
-        position: "relative", overflow: "hidden",
+        // overflow visible so the Need-attention hover dropdown isn't clipped;
+        // the rounded corners still hold (border-radius clips the background).
+        position: "relative", overflow: "visible",
         borderBottom: "4px solid #00FFB3",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 26, position: "relative", zIndex: 2 }}>
