@@ -790,6 +790,10 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                       : interventionFlags.length === 2
                         ? `${interventionFlags[0].project.code} · ${interventionFlags[1].project.code}`
                         : `${interventionFlags[0].project.code} · ${interventionFlags[1].project.code} +${interventionFlags.length - 2} more`,
+                  // Full roster on hover so "+N more" isn't a dead end.
+                  hover: interventionFlags.length
+                    ? "Projects needing attention:\n" + interventionFlags.map(f => `• ${f.project.code} — ${f.project.name}`).join("\n")
+                    : undefined,
                 },
                 {
                   label: "Budget utilised",
@@ -806,10 +810,10 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                     : `${(pendingApprovals[0].projectCode || pendingApprovals[0].projectTitle || "—")} · ${pendingApprovals[0].daysAtGate || 0}d`,
                 },
               ].map(s => (
-                <div key={s.label} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "16px 18px" }}>
+                <div key={s.label} title={s.hover} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "16px 18px", cursor: s.hover ? "help" : "default" }}>
                   <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 8 }}>{s.label}</div>
                   <div style={{ color: s.color, fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontWeight: 500 }}>{s.sub}</div>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontWeight: 500 }}>{s.sub}{s.hover ? " · hover for all" : ""}</div>
                 </div>
               ))}
             </div>
