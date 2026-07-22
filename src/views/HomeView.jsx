@@ -329,6 +329,11 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       if (full.complete && full.daysLateVsPlan > 0) flags.push({ t: `Late ${full.daysLateVsPlan}d`, c: "#b45309", bg: "#fdf3e0" });
       if (!full.complete && p.plannedEnd && p.plannedEnd < TODAY) flags.push({ t: "Past planned end", c: "#b45309", bg: "#fdf3e0" });
       if (full.complete && full.roadmapStatus === "met") flags.push({ t: "✓ Met roadmap", c: "#007a62", bg: "#e0f8ee" });
+      // Scored vs unscored — a project either carries an IPI or it doesn't.
+      const scored = ipi != null;
+      if (!scored) flags.push(p.excludeFromIPI
+        ? { t: "◔ Tracking only", c: "#475569", bg: "#eef2f6" }
+        : { t: "○ Pending Plan",  c: "#5a7a6e", bg: "#eef3ee" });
       const deptName = (departments.find(d => d.id === p.deptId)?.name || p.deptId || "—");
       // Action items + the one-line story that sits under the project name
       const acts        = p.actions || [];
@@ -345,8 +350,19 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       if (openActs.length) bits.push(`${openActs.length} open action${openActs.length === 1 ? "" : "s"}${overdueActs.length ? ` (${overdueActs.length} overdue)` : ""}`);
       if (p.budget > 0 && (p.forecast || 0) > p.budget) bits.push(`forecast +${fmtSAR((p.forecast || 0) - p.budget)}`);
       if (full.complete) bits.push((full.daysLateVsPlan ?? 0) > 0 ? `delivered ${full.daysLateVsPlan}d late` : `delivered on/ahead of baseline`);
-      return { p, full, ipi, b, flags, deptName, openActs, overdueActs, insight: bits.slice(0, 3).join(" · ") };
+      return { p, full, ipi, b, flags, deptName, openActs, overdueActs, scored, insight: bits.slice(0, 3).join(" · ") };
     });
+
+    // Status → chip colours (matches the portal's status bands).
+    const statusStyle = (s) => ({
+      "Not Started": { bg: "#eef0f2", txt: "#4b5563" },   // grey
+      "On Track":    { bg: "#e0f8ee", txt: "#007a62" },   // green
+      "At Risk":     { bg: "#fbf0c4", txt: "#8a6d1a" },   // yellow
+      "Delayed":     { bg: "#fde3df", txt: "#b3261e" },   // red
+      "Completed":   { bg: "#dbeafe", txt: "#1e40af" },   // blue
+      "On Hold":     { bg: "#eef2f6", txt: "#475569" },   // slate
+      "Cancelled":   { bg: "#e7e9ec", txt: "#4b5563" },   // muted
+    }[s] || { bg: "#eef0f2", txt: "#4b5563" });
     const sevRank = (r) => r.ipi == null ? 3 : r.ipi >= 90 ? 2 : r.ipi >= 70 ? 1 : 0;
     const sortedRows = [...rows].sort((a, b2) => sevRank(a) - sevRank(b2) || (a.ipi ?? 999) - (b2.ipi ?? 999));
 
@@ -414,7 +430,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       <td><div class="pbar"><div class="pfill" style="width:${r.full.progress ?? r.p.progress ?? 0}%"></div></div><span class="ppct mono">${r.full.progress ?? r.p.progress ?? 0}%</span></td>
       <td><span class="chip" style="background:${r.b.bg}; color:${r.b.txt}">${r.ipi ?? "—"}</span></td>
       <td class="mono" style="text-align:center">${r.openActs.length ? `<span style="color:${r.overdueActs.length ? "#c2410c" : "#3a5547"};font-weight:800">${r.openActs.length}</span>` : `<span class="dim">0</span>`}</td>
-      <td>${esc(r.p.status)}</td>
+      <td><span class="chip sm" style="background:${statusStyle(r.p.status).bg};color:${statusStyle(r.p.status).txt}">${esc(r.p.status)}</span></td>
       <td class="mono">${fmtD(r.p.plannedEnd)}</td>
       <td>${r.flags.map(f => `<span class="chip sm" style="background:${f.bg}; color:${f.c}">${f.t}</span>`).join(" ") || `<span class="dim">—</span>`}</td>
     </tr>`).join("");
@@ -442,9 +458,14 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           </div>`;
         }).join("");
 
-    const attention = sortedRows.filter(r => sevRank(r) === 0 || r.full.roadmapBreach).slice(0, 5);
+    // Needs Attention — anything At Risk / Delayed, IPI-critical, or breaching
+    // the roadmap. Worst first (sortedRows already ranks by IPI severity).
+    const attention = sortedRows.filter(r =>
+      r.p.status === "At Risk" || r.p.status === "Delayed" ||
+      sevRank(r) === 0 || r.full.roadmapBreach
+    ).slice(0, 8);
     const attentionHtml = attention.length === 0
-      ? `<div class="empty-sub">No projects require escalation this month.</div>`
+      ? `<div class="empty-sub">Nothing needs attention — every project is on track.</div>`
       : attention.map(r => {
           const why = [];
           if (r.ipi != null && r.ipi < 70) why.push(`IPI ${r.ipi}`);
@@ -453,7 +474,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           const od = (r.p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY).length;
           if (od) why.push(`${od} overdue milestone${od === 1 ? "" : "s"}`);
           if (r.p.budget > 0 && (r.p.forecast || 0) > r.p.budget) why.push(`forecast +${fmtSAR((r.p.forecast || 0) - r.p.budget)}`);
-          return `<div class="att-row"><span class="att-name">${esc(r.p.name)}</span><span class="att-pm">${esc(r.p.pm) || "—"}</span><span class="att-why">${why.join(" · ") || "—"}</span></div>`;
+          const st = statusStyle(r.p.status);
+          return `<div class="att-row"><span class="chip sm" style="background:${st.bg};color:${st.txt}">${esc(r.p.status)}</span><span class="att-name">${esc(r.p.name)}</span><span class="att-pm">${esc(r.p.pm) || "—"}</span><span class="att-why">${why.join(" · ") || "—"}</span></div>`;
         }).join("");
 
     const completedHtml = completedThisMonth.length === 0
@@ -586,7 +608,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       </section>
 
       <section>
-        <div class="sec-head"><h2>Department Performance</h2><span class="m">IPI · budget × priority weighted</span></div>
+        <div class="sec-head"><h2>Department IPI Performance</h2><span class="m">IPI · budget × priority weighted</span></div>
         ${deptBars}
       </section>
 
