@@ -417,6 +417,14 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       { l: "Open Actions", v: actOpen.length, c: actOverdue.length ? "#b45309" : "#007a62", s: actOverdue.length ? `${actOverdue.length} overdue` : `${actClosedThisMonth.length} closed this month` },
     ];
 
+    // Delivery-status strip — the execution pulse (status), distinct from the
+    // IPI-score tiles above. Counts every project by its status.
+    const statusCounts = {};
+    rows.forEach(r => { const s = r.p.status || "Not Started"; statusCounts[s] = (statusCounts[s] || 0) + 1; });
+    const statusTiles = ["On Track", "At Risk", "Delayed", "On Hold", "Completed", "Not Started", "Cancelled"]
+      .filter(s => statusCounts[s])
+      .map(s => ({ label: s, v: statusCounts[s], ...statusStyle(s) }));
+
     const deptBars = deptPerf.map(d => {
       const b = band(d.ipi);
       return `<div class="dept-row">
@@ -527,6 +535,12 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         .kpi .l { font-size:8.5px; color:#3a5547; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:4px; }
         .kpi .v { font-size:19px; font-weight:900; color:#003932; line-height:1; }
         .kpi .s { font-size:8.5px; color:#7a9485; margin-top:3px; }
+        .strip-lbl { font-size:8px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#7a9485; padding:8px 40px 5px; }
+        .status-strip { display:flex; gap:8px; padding:0 40px 14px; flex-wrap:wrap; }
+        .st-tile { flex:1; min-width:110px; border-radius:9px; padding:9px 13px; display:flex; align-items:center; justify-content:space-between; }
+        .st-tile .st-v { font-size:20px; font-weight:900; line-height:1; }
+        .st-tile .st-l { font-size:9.5px; font-weight:800; letter-spacing:0.03em; }
+        .st-tile .st-dot { width:9px; height:9px; border-radius:50%; }
 
         section { padding:16px 40px 0; }
         .sec-head { display:flex; align-items:baseline; gap:8px; border-bottom:2px solid #003932; padding-bottom:5px; margin-bottom:10px; }
@@ -601,7 +615,11 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         </div>
       </div>
 
+      <div class="strip-lbl">Performance — by IPI score</div>
       <div class="kpis">${kpiTiles.map(k => `<div class="kpi"><div class="l">${k.l}</div><div class="v"${k.c ? ` style="color:${k.c}"` : ""}>${k.v}</div>${k.s ? `<div class="s">${k.s}</div>` : ""}</div>`).join("")}</div>
+
+      <div class="strip-lbl">Delivery — by project status</div>
+      <div class="status-strip">${statusTiles.map(t => `<div class="st-tile" style="background:${t.bg}"><span class="st-dot" style="background:${t.txt}"></span><div style="flex:1;margin-inline-start:9px"><div class="st-v" style="color:${t.txt}">${t.v}</div><div class="st-l" style="color:${t.txt}">${esc(t.label)}</div></div></div>`).join("") || `<div class="empty-sub" style="padding-inline:0">No projects yet.</div>`}</div>
 
       <section>
         <div class="sec-head"><h2>Executive Summary</h2><span class="m">auto-computed from live portfolio data</span></div>
