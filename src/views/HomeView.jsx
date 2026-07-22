@@ -824,17 +824,22 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                   <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontWeight: 500 }}>{s.sub}{isAttn ? " · hover for all" : ""}</div>
 
                   {isAttn && attnTip && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, minWidth: "max(100%, 300px)", zIndex: 60, marginTop: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,25,20,0.35)", padding: "10px 8px", maxHeight: 300, overflowY: "auto" }}>
+                    <div style={{ position: "absolute", top: "100%", left: 0, width: 440, maxWidth: "88vw", zIndex: 60, marginTop: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,25,20,0.35)", padding: "10px 8px", maxHeight: 360, overflowY: "auto" }}>
                       <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", padding: "2px 8px 8px" }}>Needs Attention · {interventionFlags.length}</div>
                       {interventionFlags.map((f, i) => (
                         <div key={i}
                           onClick={() => f.project.id && setRoute({ view: "project", projectId: f.project.id })}
-                          style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, cursor: "pointer", transition: "background 0.12s" }}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "8px 8px", borderRadius: 8, cursor: "pointer", transition: "background 0.12s" }}
                           onMouseEnter={e => e.currentTarget.style.background = T.bg}
                           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                          <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: f.severity === "high" ? "#FF5000" : "#d97706" }} />
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: T.muted, flexShrink: 0 }}>{f.project.code}</span>
-                          <span style={{ fontSize: 12.5, color: T.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.project.name}</span>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, marginTop: 5, background: f.severity === "high" ? "#FF5000" : "#d97706" }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: T.muted, flexShrink: 0 }}>{f.project.code}</span>
+                              <span style={{ fontSize: 12.5, color: T.text, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.project.name}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: f.severity === "high" ? "#c2410c" : T.muted, marginTop: 2, lineHeight: 1.55 }}>{f.reasons.join(" · ")}</div>
+                          </div>
                         </div>
                       ))}
                     </div>
