@@ -398,6 +398,35 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     const insights = [];
     const trend = prevIPI != null && portfolioIPI != null ? portfolioIPI - prevIPI : null;
     insights.push(`Portfolio IPI is <b>${portfolioIPI ?? "—"}</b> (${band(portfolioIPI).label})${trend != null ? ` — ${trend >= 0 ? "up" : "down"} ${Math.abs(trend)} pts vs 30 days ago` : ""}.`);
+
+    // ── Portfolio IPI trend sparkline — the score at 6 monthly checkpoints.
+    // Each past point is the time-weighted portfolio IPI as-of that month;
+    // needs ipiHistory to populate, so it degrades gracefully to nothing.
+    const trendPts = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now); d.setMonth(d.getMonth() - i); d.setDate(28);
+      const v = i === 0 ? portfolioIPI : calcPortfolioIPI(allProjects, d.toISOString().split("T")[0]);
+      trendPts.push({ m: d.toLocaleDateString("en-GB", { month: "short" }), v });
+    }
+    const sp = trendPts.filter(t => t.v != null);
+    let sparkSvg = "";
+    if (sp.length >= 2) {
+      const W = 172, H = 40, PT = 5, PB = 5;
+      const vals = sp.map(t => t.v), mn = Math.min(...vals), mx = Math.max(...vals);
+      const flat = mx === mn, range = Math.max(1, mx - mn);
+      const co = sp.map((t, i) => [
+        +((i / (sp.length - 1)) * W).toFixed(1),
+        +(flat ? H / 2 : PT + (1 - (t.v - mn) / range) * (H - PT - PB)).toFixed(1),
+      ]);
+      const line = co.map(([x, y], i) => `${i ? "L" : "M"}${x},${y}`).join(" ");
+      const [lx, ly] = co[co.length - 1];
+      sparkSvg = `<div class="spark"><div class="spark-lbl">${sp.length}-month IPI trend · ${sp[0].m}–${sp[sp.length - 1].m}</div>`
+        + `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">`
+        + `<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(0,255,179,0.30)"/><stop offset="1" stop-color="rgba(0,255,179,0)"/></linearGradient></defs>`
+        + `<path d="${line} L${W},${H} L0,${H} Z" fill="url(#sg)"/>`
+        + `<path d="${line}" fill="none" stroke="#00FFB3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+        + `<circle cx="${lx}" cy="${ly}" r="3.5" fill="#00FFB3"/></svg></div>`;
+    }
     if (counts.crit > 0) {
       const names = sortedRows.filter(r => sevRank(r) === 0).slice(0, 3).map(r => esc(r.p.name)).join(", ");
       insights.push(`<b>${counts.crit}</b> of ${allProjects.length} projects are Critical (&lt;70): ${names}.`);
@@ -529,6 +558,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         .cover .ipi-val { font-size:52px; font-weight:900; line-height:0.95; letter-spacing:-2px; }
         .cover .ipi-band { display:inline-block; margin-top:6px; padding:3px 12px; border-radius:14px; font-size:10.5px; font-weight:800; background:rgba(255,255,255,0.12); }
         .cover .ipi-trend { font-size:10px; color:rgba(255,255,255,0.6); margin-top:5px; }
+        .cover .spark { margin-top:12px; display:flex; flex-direction:column; align-items:flex-end; }
+        .cover .spark-lbl { font-size:8px; color:rgba(255,255,255,0.5); font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:5px; }
 
         .kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:1px; background:#C9D5C9; border-bottom:1px solid #C9D5C9; }
         .kpi { background:#fff; padding:12px 14px; }
@@ -612,6 +643,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           <div class="ipi-val">${portfolioIPI ?? "—"}</div>
           <div class="ipi-band">${pb.label}</div>
           ${trend != null ? `<div class="ipi-trend">${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)} pts vs 30 days ago</div>` : ""}
+          ${sparkSvg}
         </div>
       </div>
 
