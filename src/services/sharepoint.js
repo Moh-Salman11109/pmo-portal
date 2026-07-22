@@ -296,6 +296,7 @@ export function mapProjectToSPItem(project) {
     [f.baselineEnd]:       nd(project.baselineEnd),
     [f.baselineExceptionNote]: ns(project.baselineExceptionNote),
     [f.isRoadmap]:         Boolean(project.isRoadmap),
+    [f.excludeFromIPI]:    Boolean(project.excludeFromIPI),
     [f.actualFinishDate]:  nd(project.actualFinishDate),
     [f.gates]:             js(project.gates),
     [f.milestones]:        js(project.milestones),
@@ -311,9 +312,6 @@ export function mapProjectToSPItem(project) {
     // Conditional — only written once actions exist, so saves stay safe on
     // tenants where the ActionsJSON column has not been created yet.
     ...(Array.isArray(project.actions) && project.actions.length ? { [f.actions]: js(project.actions) } : {}),
-    // Conditional — only written when true, so saves stay safe until the
-    // ExcludeFromIPI (Yes/No) column is created in SharePoint.
-    ...(project.excludeFromIPI ? { [f.excludeFromIPI]: true } : {}),
   };
 }
 
