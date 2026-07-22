@@ -4071,10 +4071,12 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
   const myClosures  = filterByUser(closureSubmissions,["projectManager"],                            ["submittedByEmail"]);
 
   const isClosedReq    = (r) => r.status?.startsWith("Approved") || r.status?.startsWith("Rejected");
-  const pending        = myRequests.filter(r => !isClosedReq(r));
-  const completed      = myRequests.filter(r =>  isClosedReq(r));
-  const pendingGates   = myGates.filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected"));
-  const pendingClosures = myClosures.filter(c => c.status !== "Closed");
+  // Newest-first in every section — the most recent submission sits on top.
+  const byNewest = (dateField) => (a, b) => (b[dateField] || "").localeCompare(a[dateField] || "");
+  const pending        = myRequests.filter(r => !isClosedReq(r)).sort(byNewest("requestDate"));
+  const completed      = myRequests.filter(r =>  isClosedReq(r)).sort(byNewest("requestDate"));
+  const pendingGates   = myGates.filter(g => !g.status?.startsWith("Approved") && !g.status?.startsWith("Rejected")).sort(byNewest("submissionDate"));
+  const pendingClosures = myClosures.filter(c => c.status !== "Closed").sort(byNewest("submissionDate"));
   // Fully signed-off closures — the "opened" list's natural counterpart.
   // Sorted newest-first so the most recent closure sits on top.
   const closedProjects = myClosures
