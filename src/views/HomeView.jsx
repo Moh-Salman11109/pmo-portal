@@ -325,10 +325,16 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       const ipi  = calcProjectIPIDisplay(p).primary;
       const b    = band(ipi);
       const flags = [];
-      if (full.roadmapBreach) flags.push({ t: `Roadmap −${Math.round((1 - (full.roadmapPenalty ?? 1)) * 100)}%`, c: "#490300", bg: "#f0d4d0" });
-      if (full.complete && full.daysLateVsPlan > 0) flags.push({ t: `Late ${full.daysLateVsPlan}d`, c: "#b45309", bg: "#fdf3e0" });
-      if (!full.complete && p.plannedEnd && p.plannedEnd < TODAY) flags.push({ t: "Past planned end", c: "#b45309", bg: "#fdf3e0" });
-      if (full.complete && full.roadmapStatus === "met") flags.push({ t: "✓ Met roadmap", c: "#007a62", bg: "#e0f8ee" });
+      const done = full.complete || p.status === "Completed";   // a completed project is never "past planned end"
+      // Schedule/roadmap flags only apply to SCORED projects — a side
+      // initiative (excluded) isn't measured against schedule, so it never
+      // shows Past planned end / Late / Roadmap.
+      if (!full.excluded) {
+        if (full.roadmapBreach) flags.push({ t: `Roadmap −${Math.round((1 - (full.roadmapPenalty ?? 1)) * 100)}%`, c: "#490300", bg: "#f0d4d0" });
+        if (full.complete && full.daysLateVsPlan > 0) flags.push({ t: `Late ${full.daysLateVsPlan}d`, c: "#b45309", bg: "#fdf3e0" });
+        if (!done && p.plannedEnd && p.plannedEnd < TODAY) flags.push({ t: "Past planned end", c: "#b45309", bg: "#fdf3e0" });
+        if (full.complete && full.roadmapStatus === "met") flags.push({ t: "✓ Met roadmap", c: "#007a62", bg: "#e0f8ee" });
+      }
       // Scored vs unscored — a project either carries an IPI or it doesn't.
       const scored = ipi != null;
       if (!scored) flags.push(p.excludeFromIPI
