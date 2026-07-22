@@ -681,7 +681,7 @@ const GRCCorrectiveActionForm = ({ item = null, onSave, saving, error, onCancel 
   );
 };
 
-const GRCDashboard = ({ canEdit = false }) => {
+const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const T   = useT();
   const bp  = useBp();
   const [loading, setLoading]       = useState(true);
@@ -1831,6 +1831,9 @@ const GRCDashboard = ({ canEdit = false }) => {
             <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 2 }}>Last refreshed</div>
             <div style={{ fontSize: 12, fontWeight: 600 }}>{new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</div>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              {onViewProjects && (
+                <button onClick={onViewProjects} style={{ background: "#00ffb3", border: "none", color: "#061210", borderRadius: 7, padding: "5px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>View Projects →</button>
+              )}
               <button onClick={load} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>↻ Refresh</button>
               <button onClick={printGRCReport} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 7, padding: "5px 14px", fontSize: 11, cursor: "pointer" }}>Print Report</button>
               {canEdit && (

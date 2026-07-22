@@ -996,6 +996,9 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
   const [filterType, setFilterType] = useState("All");
   const [filterRoadmap, setFilterRoadmap] = useState(false);
   const [view, setView] = useState("table");
+  // GRC department shows its risk dashboard by default; this flips to the
+  // project table so PMO/GRC admins can reach the GRC projects too.
+  const [grcShowProjects, setGrcShowProjects] = useState(false);
 
   const filtered = useMemo(() => deptProjects.filter(p => {
     const matchSearch  = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
@@ -1020,7 +1023,11 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
         <div style={{ fontSize: 13, color: T.muted }}>GRC Dashboard is only available to authorized GRC personnel.</div>
       </div>
     );
-    return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_GRC_ADMIN} />;
+    // Default view = the risk dashboard. "View Projects" flips to the GRC
+    // project table (rendered below via the normal DepartmentView path).
+    if (!grcShowProjects) {
+      return <GRCDashboard canEdit={userRole === ROLE_ADMIN || userRole === ROLE_GRC_ADMIN} onViewProjects={() => setGrcShowProjects(true)} />;
+    }
   }
 
   const pad = bp === "mobile" ? "16px" : bp === "tablet" ? "24px" : "32px";
@@ -1065,6 +1072,14 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
 
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
+
+      {/* GRC: return to the risk dashboard from the project table */}
+      {deptId === "grc" && grcShowProjects && (
+        <button onClick={() => setGrcShowProjects(false)}
+          style={{ background: T.surface, color: T.primary, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 18, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Ico name="shield" size={14} /> ← Back to GRC Dashboard
+        </button>
+      )}
 
       {/* ══════ HERO ══════ */}
       <div style={{
