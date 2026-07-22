@@ -30,7 +30,7 @@
 //
 // ============================================================================
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 import { useT, themeStore, ttStyle } from "../theme.js";
 import { useBp } from "../hooks/useBp.js";
@@ -50,6 +50,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   const { departments } = useDepts();
   const T = useT();
   const dark = themeStore.dark;
+  const [attnTip, setAttnTip] = useState(false);
 
   // ── Derived data ────────────────────────────────────────────────
   const allProjects    = useMemo(() => projects.filter(p => !p.archived),                [projects]);
@@ -809,13 +810,35 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                     ? "queue clear"
                     : `${(pendingApprovals[0].projectCode || pendingApprovals[0].projectTitle || "—")} · ${pendingApprovals[0].daysAtGate || 0}d`,
                 },
-              ].map(s => (
-                <div key={s.label} title={s.hover} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "16px 18px", cursor: s.hover ? "help" : "default" }}>
+              ].map(s => {
+                const isAttn = !!s.hover;
+                return (
+                <div key={s.label}
+                  onMouseEnter={isAttn ? () => setAttnTip(true) : undefined}
+                  onMouseLeave={isAttn ? () => setAttnTip(false) : undefined}
+                  style={{ position: "relative", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "16px 18px", cursor: isAttn ? "pointer" : "default" }}>
                   <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 8 }}>{s.label}</div>
                   <div style={{ color: s.color, fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontWeight: 500 }}>{s.sub}{s.hover ? " · hover for all" : ""}</div>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontWeight: 500 }}>{s.sub}{isAttn ? " · hover for all" : ""}</div>
+
+                  {isAttn && attnTip && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, minWidth: "max(100%, 300px)", zIndex: 60, marginTop: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,25,20,0.35)", padding: "10px 8px", maxHeight: 300, overflowY: "auto" }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", padding: "2px 8px 8px" }}>Needs Attention · {interventionFlags.length}</div>
+                      {interventionFlags.map((f, i) => (
+                        <div key={i}
+                          onClick={() => f.project.id && setRoute({ view: "project", projectId: f.project.id })}
+                          style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, cursor: "pointer", transition: "background 0.12s" }}
+                          onMouseEnter={e => e.currentTarget.style.background = T.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: f.severity === "high" ? "#FF5000" : "#d97706" }} />
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: T.muted, flexShrink: 0 }}>{f.project.code}</span>
+                          <span style={{ fontSize: 12.5, color: T.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.project.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
+              );})}
             </div>
           </div>
         </div>
