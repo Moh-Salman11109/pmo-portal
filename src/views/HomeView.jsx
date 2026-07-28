@@ -72,10 +72,19 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     try { const saved = localStorage.getItem("pmo_report_opts"); if (saved) return { ...base, ...JSON.parse(saved) }; } catch { /* ignore */ }
     return base;
   });
+  // Manual, print-only actions typed straight into the report — not stored anywhere.
+  const [manualActions, setManualActions] = useState([]);
+  const [manualDraft, setManualDraft] = useState({ title: "", status: "Open", owner: "", dueDate: "", note: "" });
+  const addManualAction = () => {
+    if (!manualDraft.title.trim()) return;
+    setManualActions(a => [...a, { ...manualDraft, title: manualDraft.title.trim() }]);
+    setManualDraft({ title: "", status: "Open", owner: "", dueDate: "", note: "" });
+  };
   const runReport = () => {
+    // Persist section toggles + note only — manual actions are one-off print data.
     try { localStorage.setItem("pmo_report_opts", JSON.stringify(reportOpts)); } catch { /* ignore */ }
     setReportModal(false);
-    printMonthlyReport(reportOpts);
+    printMonthlyReport({ ...reportOpts, manualActions });
   };
 
   // ── Derived data ────────────────────────────────────────────────
@@ -563,6 +572,16 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       ? `<div class="two-col" style="padding-top:14px"><div class="card"><h3>Opened in ${esc(monthName)}</h3>${openedHtml}</div><div class="card"><h3>Closed in ${esc(monthName)}</h3>${completedHtml}</div></div>` : "";
     const actionsHtml = on("meetingActions")
       ? `<div class="two-col" style="padding-top:14px"><div class="card" style="grid-column:1 / -1"><h3>Meeting Actions — ${actOpen.length} open${actOverdue.length ? ` · ${actOverdue.length} overdue` : ""} · ${actClosedThisMonth.length} closed this month</h3>${actionRowsHtml}</div></div>` : "";
+    // Manual, print-only actions typed into the customise panel.
+    const ma = Array.isArray(opts.manualActions) ? opts.manualActions.filter(a => a && a.title) : [];
+    const manualActionsHtml = ma.length
+      ? `<section><div class="sec-head"><h2>Additional Actions</h2><span class="m">recorded for this report</span></div>
+         <table class="port"><thead><tr><th>Action</th><th>Owner</th><th>Due</th><th>Status</th><th>Note</th></tr></thead><tbody>${
+           ma.map(a => {
+             const st = statusStyle(a.status === "In Progress" ? "At Risk" : a.status === "Closed" ? "Completed" : a.status === "Open" ? "Not Started" : "Not Started");
+             return `<tr><td class="pname">${esc(a.title)}</td><td>${esc(a.owner) || "—"}</td><td class="mono">${a.dueDate ? fmtD(a.dueDate) : "—"}</td><td><span class="chip sm" style="background:${st.bg};color:${st.txt}">${esc(a.status || "Open")}</span></td><td>${esc(a.note) || "<span class='dim'>—</span>"}</td></tr>`;
+           }).join("")
+         }</tbody></table></section>` : "";
 
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
       <title>PMO Monthly Report — ${esc(monthName)}</title>
@@ -683,6 +702,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       ${nrHtml}
       ${monthHtml}
       ${actionsHtml}
+      ${manualActionsHtml}
 
       <div class="footer">
         <span>Confidential — internal use only · PMO Enterprise Portal · Tree Digital Insurance Company</span>
@@ -762,6 +782,44 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                 <textarea value={reportOpts.note || ""} onChange={e => setReportOpts(o => ({ ...o, note: e.target.value }))}
                   placeholder="e.g. Board focus this month is the two roadmap breaches — recovery plans attached."
                   style={{ width: "100%", minHeight: 72, resize: "vertical", padding: "10px 12px", borderRadius: 9, border: `1px solid ${T.border}`, fontSize: 13, background: T.inputBg, color: T.inputText, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Additional Actions <span style={{ fontWeight: 500, textTransform: "none" }}>(print-only — not saved)</span></div>
+                {manualActions.length > 0 && (
+                  <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {manualActions.map((a, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 10px" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</div>
+                          <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{a.status}{a.owner ? ` · ${a.owner}` : ""}{a.dueDate ? ` · due ${a.dueDate}` : ""}{a.note ? ` · ${a.note}` : ""}</div>
+                        </div>
+                        <button onClick={() => setManualActions(list => list.filter((_, j) => j !== i))} title="Remove" style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 13, padding: "3px 9px", flexShrink: 0 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginBottom: 8 }}>
+                    <input value={manualDraft.title} onChange={e => setManualDraft(d => ({ ...d, title: e.target.value }))} placeholder="Action *"
+                      style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${T.border}`, fontSize: 12.5, background: T.inputBg, color: T.inputText, outline: "none", boxSizing: "border-box" }} />
+                    <select value={manualDraft.status} onChange={e => setManualDraft(d => ({ ...d, status: e.target.value }))}
+                      style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${T.border}`, fontSize: 12.5, background: T.selectBg, color: T.inputText, outline: "none", boxSizing: "border-box" }}>
+                      {["Open", "In Progress", "Closed"].map(x => <option key={x}>{x}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 8, marginBottom: 8 }}>
+                    <input value={manualDraft.owner} onChange={e => setManualDraft(d => ({ ...d, owner: e.target.value }))} placeholder="Owner"
+                      style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${T.border}`, fontSize: 12.5, background: T.inputBg, color: T.inputText, outline: "none", boxSizing: "border-box" }} />
+                    <input type="date" value={manualDraft.dueDate} onChange={e => setManualDraft(d => ({ ...d, dueDate: e.target.value }))}
+                      style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${T.border}`, fontSize: 12.5, background: T.inputBg, color: T.inputText, outline: "none", boxSizing: "border-box" }} />
+                    <input value={manualDraft.note} onChange={e => setManualDraft(d => ({ ...d, note: e.target.value }))}
+                      onKeyDown={e => { if (e.key === "Enter") addManualAction(); }} placeholder="Note"
+                      style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${T.border}`, fontSize: 12.5, background: T.inputBg, color: T.inputText, outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                  <button onClick={addManualAction} disabled={!manualDraft.title.trim()}
+                    style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: manualDraft.title.trim() ? 1 : 0.5 }}>+ Add Action</button>
+                </div>
               </div>
             </div>
 
