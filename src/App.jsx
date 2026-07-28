@@ -5771,41 +5771,53 @@ const MilestoneListEditor = ({ items, onChange, canRemove = true }) => {
 const RiskListEditor = ({ items, onChange }) => {
   const T = useT();
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const blank = { title: "", probability: "Medium", impact: "Medium", level: "Medium", owner: "", status: "Open", mitigation: "", dueDate: "" };
   const [draft, setDraft] = useState(blank);
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
-  const add = () => {
+  const openAdd  = () => { setDraft(blank); setEditingId(null); setAdding(true); };
+  const openEdit = (r) => { setDraft({ ...blank, ...r }); setEditingId(r.id); setAdding(true); };
+  const save = () => {
     if (!draft.title.trim()) return;
-    onChange([...items, { ...draft, id: `R${Date.now()}` }]);
-    setDraft(blank);
-    setAdding(false);
+    onChange(editingId
+      ? items.map(x => x.id === editingId ? { ...draft, id: editingId } : x)
+      : [...items, { ...draft, id: `R${Date.now()}` }]);
+    setDraft(blank); setEditingId(null); setAdding(false);
   };
+  const cancel = () => { setDraft(blank); setEditingId(null); setAdding(false); };
   const remove = id => onChange(items.filter(r => r.id !== id));
   const levelC = { Critical: "#dc2626", High: "#f97316", Medium: "#eab308", Low: "#16a34a" };
+  const statusC = { Open: "#dc2626", "In Progress": "#d97706", Mitigated: "#2563eb", Closed: "#16a34a" };
+  const btnSm = { border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11, fontWeight: 700, padding: "2px 8px" };
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Risks</div>
-        {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Risk</button>}
+        {!adding && <button onClick={openAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Risk</button>}
       </div>
       {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px 0" }}>No risks yet</div>}
-      {items.map(r => (
+      {items.map(r => editingId === r.id ? null : (
         <div key={r.id} style={{ background: T.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 8, border: `1px solid ${T.border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{r.title}</div>
-            <button onClick={() => remove(r.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 4, cursor: "pointer", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px" }}>Remove</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: T.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button onClick={() => openEdit(r)} disabled={adding} style={{ ...btnSm, background: T.surface, border: `1px solid ${T.border}`, color: T.text, opacity: adding ? 0.5 : 1 }}>Edit</button>
+              <button onClick={() => remove(r.id)} style={{ ...btnSm, background: "#fee2e2", color: "#dc2626" }}>Remove</button>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: 11 }}>
             {[["Prob", r.probability], ["Impact", r.impact]].map(([k,v]) => <span key={k} style={{ background: T.border, borderRadius: 10, padding: "2px 8px" }}>{k}: {v}</span>)}
             <span style={{ background: levelC[r.level] || T.border, color: "#fff", borderRadius: 10, padding: "2px 8px" }}>{r.level}</span>
+            {r.status && <span style={{ background: (statusC[r.status] || "#6b7280") + "22", color: statusC[r.status] || "#6b7280", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>{r.status}</span>}
             {r.owner && <span style={{ background: T.border, borderRadius: 10, padding: "2px 8px" }}>Owner: {r.owner}</span>}
           </div>
           {r.mitigation && <div style={{ fontSize: 11, color: T.muted, marginTop: 5 }}>Mitigation: {r.mitigation}</div>}
         </div>
       ))}
       {adding && (
-        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${editingId ? T.accent : T.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 12 }}>{editingId ? "Edit Risk" : "New Risk"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div style={{ gridColumn: "span 2" }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Risk Title *</div>
@@ -5831,8 +5843,8 @@ const RiskListEditor = ({ items, onChange }) => {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add Risk</button>
-            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+            <button onClick={save} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{editingId ? "Save Changes" : "Add Risk"}</button>
+            <button onClick={cancel} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
           </div>
         </div>
       )}
@@ -5844,29 +5856,38 @@ const IssueListEditor = ({ items, onChange }) => {
   const T = useT();
   const today = new Date().toISOString().split("T")[0];
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const blank = { title: "", severity: "Medium", status: "Open", owner: "", raised: today, escalated: false, targetDate: "" };
   const [draft, setDraft] = useState(blank);
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
-  const add = () => {
+  const openAdd  = () => { setDraft(blank); setEditingId(null); setAdding(true); };
+  const openEdit = (it) => { setDraft({ ...blank, ...it }); setEditingId(it.id); setAdding(true); };
+  const save = () => {
     if (!draft.title.trim()) return;
-    onChange([...items, { ...draft, id: `I${Date.now()}` }]);
-    setDraft(blank);
-    setAdding(false);
+    onChange(editingId
+      ? items.map(x => x.id === editingId ? { ...draft, id: editingId } : x)
+      : [...items, { ...draft, id: `I${Date.now()}` }]);
+    setDraft(blank); setEditingId(null); setAdding(false);
   };
+  const cancel = () => { setDraft(blank); setEditingId(null); setAdding(false); };
   const remove = id => onChange(items.filter(i => i.id !== id));
+  const iBtnSm = { border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11, fontWeight: 700, padding: "2px 8px" };
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Issues</div>
-        {!adding && <button onClick={() => setAdding(true)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Issue</button>}
+        {!adding && <button onClick={openAdd} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add Issue</button>}
       </div>
       {items.length === 0 && !adding && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px 0" }}>No issues yet</div>}
-      {items.map(i => (
+      {items.map(i => editingId === i.id ? null : (
         <div key={i.id} style={{ background: "#fef2f2", borderRadius: 8, padding: "10px 14px", marginBottom: 8, border: "1px solid #fecaca" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{i.title}</div>
-            <button onClick={() => remove(i.id)} style={{ background: "#fee2e2", border: "none", borderRadius: 4, cursor: "pointer", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px" }}>Remove</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{i.title}</div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button onClick={() => openEdit(i)} disabled={adding} style={{ ...iBtnSm, background: "#fff", border: "1px solid #fecaca", color: "#991b1b", opacity: adding ? 0.5 : 1 }}>Edit</button>
+              <button onClick={() => remove(i.id)} style={{ ...iBtnSm, background: "#fee2e2", color: "#dc2626" }}>Remove</button>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 5, fontSize: 11, flexWrap: "wrap" }}>
             <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.severity}</span>
@@ -5877,7 +5898,8 @@ const IssueListEditor = ({ items, onChange }) => {
         </div>
       ))}
       {adding && (
-        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${T.border}` }}>
+        <div style={{ background: T.cardHover, borderRadius: 10, padding: 16, border: `1px solid ${editingId ? "#dc2626" : T.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 12 }}>{editingId ? "Edit Issue" : "New Issue"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div style={{ gridColumn: "span 2" }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Issue Title *</div>
@@ -5913,8 +5935,8 @@ const IssueListEditor = ({ items, onChange }) => {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={add} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add Issue</button>
-            <button onClick={() => setAdding(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
+            <button onClick={save} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{editingId ? "Save Changes" : "Add Issue"}</button>
+            <button onClick={cancel} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: T.text }}>Cancel</button>
           </div>
         </div>
       )}
