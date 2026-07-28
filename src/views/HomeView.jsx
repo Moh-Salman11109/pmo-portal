@@ -45,12 +45,38 @@ import { RiskBadge } from "../components/Badge.jsx";
 import { Ico, DeptTile } from "../components/Icon.jsx";
 import { deptColor } from "../utils/colors.js";
 
+// Toggleable sections of the Monthly Report (cover + footer always print).
+const REPORT_SECTIONS = [
+  { key: "kpiStrip",       label: "Performance strip (IPI bands)" },
+  { key: "statusStrip",    label: "Delivery strip (statuses)" },
+  { key: "execSummary",    label: "Executive summary" },
+  { key: "gatePipeline",   label: "Gate pipeline" },
+  { key: "deptIPI",        label: "Department IPI performance" },
+  { key: "portfolioTable", label: "Portfolio — all projects table" },
+  { key: "needsAttention", label: "Needs attention" },
+  { key: "topRisks",       label: "Top open risks" },
+  { key: "monthMovement",  label: "Opened / Closed this month" },
+  { key: "meetingActions", label: "Meeting actions" },
+];
+const ALL_REPORT_SECTIONS_ON = Object.fromEntries(REPORT_SECTIONS.map(s => [s.key, true]));
+
 const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, setRoute, loadedAt, userRole }) => {
   const bp = useBp();
   const { departments } = useDepts();
   const T = useT();
   const dark = themeStore.dark;
   const [attnTip, setAttnTip] = useState(false);
+  const [reportModal, setReportModal] = useState(false);
+  const [reportOpts, setReportOpts] = useState(() => {
+    const base = { ...ALL_REPORT_SECTIONS_ON, note: "" };
+    try { const saved = localStorage.getItem("pmo_report_opts"); if (saved) return { ...base, ...JSON.parse(saved) }; } catch { /* ignore */ }
+    return base;
+  });
+  const runReport = () => {
+    try { localStorage.setItem("pmo_report_opts", JSON.stringify(reportOpts)); } catch { /* ignore */ }
+    setReportModal(false);
+    printMonthlyReport(reportOpts);
+  };
 
   // ── Derived data ────────────────────────────────────────────────
   const allProjects    = useMemo(() => projects.filter(p => !p.archived),                [projects]);
@@ -305,7 +331,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   // ── Monthly Portfolio Report — executive print, one click ──────
   // Reuses the exact numbers this dashboard computes (portfolio IPI, dept
   // IPIs, budget, overdue, risks) so the paper always matches the screen.
-  const printMonthlyReport = () => {
+  const printMonthlyReport = (opts = ALL_REPORT_SECTIONS_ON) => {
+    const on = (k) => opts[k] !== false;   // default-on when unspecified
     const now = new Date();
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
     const monthName = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -509,6 +536,34 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     }).join("") || `<div class="empty-sub">No open Critical or High risks.</div>`;
 
     const pb = band(portfolioIPI);
+
+    // ── Section composition — each block is emitted only if its toggle is on.
+    const kpiStripHtml = on("kpiStrip")
+      ? `<div class="strip-lbl">Performance — by IPI score</div>
+         <div class="kpis">${kpiTiles.map(k => `<div class="kpi"><div class="l">${k.l}</div><div class="v"${k.c ? ` style="color:${k.c}"` : ""}>${k.v}</div>${k.s ? `<div class="s">${k.s}</div>` : ""}</div>`).join("")}</div>` : "";
+    const statusStripHtml = on("statusStrip")
+      ? `<div class="strip-lbl">Delivery — by project status</div>
+         <div class="status-strip">${statusTiles.map(t => `<div class="st-tile" style="background:${t.bg}"><span class="st-dot" style="background:${t.txt}"></span><div style="flex:1;margin-inline-start:9px"><div class="st-v" style="color:${t.txt}">${t.v}</div><div class="st-l" style="color:${t.txt}">${esc(t.label)}</div></div></div>`).join("") || `<div class="empty-sub" style="padding-inline:0">No projects yet.</div>`}</div>` : "";
+    const noteHtml = (opts.note && opts.note.trim())
+      ? `<section><div class="pmo-note"><div class="pmo-note-lbl">PMO Note</div>${esc(opts.note.trim()).replace(/\n/g, "<br>")}</div></section>` : "";
+    const execSummaryHtml = on("execSummary")
+      ? `<section><div class="sec-head"><h2>Executive Summary</h2><span class="m">auto-computed from live portfolio data</span></div><ul class="insights">${insights.slice(0, 5).map(i => `<li>${i}</li>`).join("")}</ul></section>` : "";
+    const gatePipelineHtml = on("gatePipeline")
+      ? `<section><div class="sec-head"><h2>Gate Pipeline</h2><span class="m">where the live portfolio sits · dot = IPI band</span></div><div class="gates-grid">${pipelineHtml}</div></section>` : "";
+    const deptSectionHtml = on("deptIPI")
+      ? `<section><div class="sec-head"><h2>Department IPI Performance</h2><span class="m">IPI · budget × priority weighted</span></div>${deptBars}</section>` : "";
+    const portfolioSectionHtml = on("portfolioTable")
+      ? `<section><div class="sec-head"><h2>Portfolio — All Projects</h2><span class="m">sorted worst-first · IPI is the 90-day weighted score</span></div>
+         <table class="port"><thead><tr><th>Code</th><th>Project</th><th>Dept</th><th>PM</th><th>Gate</th><th>Progress</th><th>IPI</th><th>Actions</th><th>Status</th><th>Planned End</th><th>Flags</th></tr></thead><tbody>${tableRows}</tbody></table></section>` : "";
+    const nrCards = [];
+    if (on("needsAttention")) nrCards.push(`<div class="card"><h3>Needs Attention</h3>${attentionHtml}</div>`);
+    if (on("topRisks"))       nrCards.push(`<div class="card"><h3>Top Open Risks</h3>${riskRows}</div>`);
+    const nrHtml = nrCards.length ? `<div class="two-col"${nrCards.length === 1 ? ' style="grid-template-columns:1fr"' : ""}>${nrCards.join("")}</div>` : "";
+    const monthHtml = on("monthMovement")
+      ? `<div class="two-col" style="padding-top:14px"><div class="card"><h3>Opened in ${esc(monthName)}</h3>${openedHtml}</div><div class="card"><h3>Closed in ${esc(monthName)}</h3>${completedHtml}</div></div>` : "";
+    const actionsHtml = on("meetingActions")
+      ? `<div class="two-col" style="padding-top:14px"><div class="card" style="grid-column:1 / -1"><h3>Meeting Actions — ${actOpen.length} open${actOverdue.length ? ` · ${actOverdue.length} overdue` : ""} · ${actClosedThisMonth.length} closed this month</h3>${actionRowsHtml}</div></div>` : "";
+
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
       <title>PMO Monthly Report — ${esc(monthName)}</title>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -597,6 +652,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         .risk-row .dim { margin-left:auto; font-size:8.5px; }
         .empty-sub { color:#7a9485; font-style:italic; font-size:9.5px; padding:6px 0; }
 
+        .pmo-note { background:#eafaf3; border:1px solid #bfe9d8; border-inline-start:4px solid #00b894; border-radius:10px; padding:12px 16px; font-size:12px; color:#0b3b2f; line-height:1.65; }
+        .pmo-note-lbl { font-size:8px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:#046a52; margin-bottom:5px; }
         .footer { margin-top:18px; padding:10px 40px 14px; border-top:1px solid #C9D5C9; display:flex; justify-content:space-between; color:#7a9485; font-size:8.5px; }
         .pagebreak { break-before:page; }
       </style></head><body>
@@ -616,63 +673,16 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
         </div>
       </div>
 
-      <div class="strip-lbl">Performance — by IPI score</div>
-      <div class="kpis">${kpiTiles.map(k => `<div class="kpi"><div class="l">${k.l}</div><div class="v"${k.c ? ` style="color:${k.c}"` : ""}>${k.v}</div>${k.s ? `<div class="s">${k.s}</div>` : ""}</div>`).join("")}</div>
-
-      <div class="strip-lbl">Delivery — by project status</div>
-      <div class="status-strip">${statusTiles.map(t => `<div class="st-tile" style="background:${t.bg}"><span class="st-dot" style="background:${t.txt}"></span><div style="flex:1;margin-inline-start:9px"><div class="st-v" style="color:${t.txt}">${t.v}</div><div class="st-l" style="color:${t.txt}">${esc(t.label)}</div></div></div>`).join("") || `<div class="empty-sub" style="padding-inline:0">No projects yet.</div>`}</div>
-
-      <section>
-        <div class="sec-head"><h2>Executive Summary</h2><span class="m">auto-computed from live portfolio data</span></div>
-        <ul class="insights">${insights.slice(0, 5).map(i => `<li>${i}</li>`).join("")}</ul>
-      </section>
-
-      <section>
-        <div class="sec-head"><h2>Gate Pipeline</h2><span class="m">where the live portfolio sits · dot = IPI band</span></div>
-        <div class="gates-grid">${pipelineHtml}</div>
-      </section>
-
-      <section>
-        <div class="sec-head"><h2>Department IPI Performance</h2><span class="m">IPI · budget × priority weighted</span></div>
-        ${deptBars}
-      </section>
-
-      <section>
-        <div class="sec-head"><h2>Portfolio — All Projects</h2><span class="m">sorted worst-first · IPI is the 90-day weighted score</span></div>
-        <table class="port">
-          <thead><tr><th>Code</th><th>Project</th><th>Dept</th><th>PM</th><th>Gate</th><th>Progress</th><th>IPI</th><th>Actions</th><th>Status</th><th>Planned End</th><th>Flags</th></tr></thead>
-          <tbody>${tableRows}</tbody>
-        </table>
-      </section>
-
-      <div class="two-col">
-        <div class="card">
-          <h3>Needs Attention</h3>
-          ${attentionHtml}
-        </div>
-        <div class="card">
-          <h3>Top Open Risks</h3>
-          ${riskRows}
-        </div>
-      </div>
-
-      <div class="two-col" style="padding-top:14px">
-        <div class="card">
-          <h3>Opened in ${esc(monthName)}</h3>
-          ${openedHtml}
-        </div>
-        <div class="card">
-          <h3>Closed in ${esc(monthName)}</h3>
-          ${completedHtml}
-        </div>
-      </div>
-
-      <div class="two-col" style="padding-top:14px">
-        <div class="card" style="grid-column:1 / -1">
-          <h3>Meeting Actions — ${actOpen.length} open${actOverdue.length ? ` · ${actOverdue.length} overdue` : ""} · ${actClosedThisMonth.length} closed this month</h3>
-          ${actionRowsHtml}
-        </div>
-      </div>
+      ${noteHtml}
+      ${kpiStripHtml}
+      ${statusStripHtml}
+      ${execSummaryHtml}
+      ${gatePipelineHtml}
+      ${deptSectionHtml}
+      ${portfolioSectionHtml}
+      ${nrHtml}
+      ${monthHtml}
+      ${actionsHtml}
 
       <div class="footer">
         <span>Confidential — internal use only · PMO Enterprise Portal · Tree Digital Insurance Company</span>
@@ -712,6 +722,60 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   return (
     <div style={{ padding: pad, maxWidth: 1500 }}>
 
+      {/* ══════════ MONTHLY REPORT — CUSTOMISE MODAL ══════════ */}
+      {reportModal && (
+        <div onClick={() => setReportModal(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,20,16,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: T.surface, borderRadius: 16, width: 560, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,0.4)" }}>
+            <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Customise Monthly Report</div>
+                <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Pick the sections and add a note — the cover always prints.</div>
+              </div>
+              <button onClick={() => setReportModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.muted }}>×</button>
+            </div>
+
+            <div style={{ padding: "16px 24px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Sections</div>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button onClick={() => setReportOpts(o => ({ ...o, ...ALL_REPORT_SECTIONS_ON }))} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Select all</button>
+                  <button onClick={() => setReportOpts(o => ({ ...o, ...Object.fromEntries(REPORT_SECTIONS.map(s => [s.key, false])) }))} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Clear all</button>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {REPORT_SECTIONS.map(s => {
+                  const checked = reportOpts[s.key] !== false;
+                  return (
+                    <label key={s.key} onClick={() => setReportOpts(o => ({ ...o, [s.key]: !checked }))}
+                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderRadius: 9, cursor: "pointer", userSelect: "none", background: checked ? T.washMint || "#eafaf3" : T.bg, border: `1px solid ${checked ? "#bfe9d8" : T.border}` }}>
+                      <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: checked ? "#00b894" : "transparent", border: `1.5px solid ${checked ? "#00b894" : T.border}`, color: "#fff", fontSize: 11, fontWeight: 900 }}>{checked ? "✓" : ""}</span>
+                      <span style={{ fontSize: 12.5, color: T.text, fontWeight: 600 }}>{s.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>PMO Note <span style={{ fontWeight: 500, textTransform: "none" }}>(optional — prints near the top)</span></div>
+                <textarea value={reportOpts.note || ""} onChange={e => setReportOpts(o => ({ ...o, note: e.target.value }))}
+                  placeholder="e.g. Board focus this month is the two roadmap breaches — recovery plans attached."
+                  style={{ width: "100%", minHeight: 72, resize: "vertical", padding: "10px 12px", borderRadius: 9, border: `1px solid ${T.border}`, fontSize: 13, background: T.inputBg, color: T.inputText, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
+            </div>
+
+            <div style={{ padding: "14px 24px 20px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: T.muted }}>Your choices are remembered for next time.</span>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setReportModal(false)} style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: T.text }}>Cancel</button>
+                <button onClick={runReport} style={{ background: "#003932", color: "#00ffb3", border: "none", borderRadius: 9, padding: "9px 22px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>⎙ Generate Report</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══════════ TIER 1 — HERO ══════════ */}
       <div style={{
         background: heroGradient, color: "white",
@@ -729,7 +793,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {bp !== "mobile" && [ROLE_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF].includes(userRole) && (
-              <button onClick={printMonthlyReport}
+              <button onClick={() => setReportModal(true)}
                 style={{ background: "rgba(0,255,179,0.10)", border: "1px solid rgba(0,255,179,0.45)", color: "#00FFB3", borderRadius: 9, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(0,255,179,0.22)"}
                 onMouseLeave={e => e.currentTarget.style.background = "rgba(0,255,179,0.10)"}>
