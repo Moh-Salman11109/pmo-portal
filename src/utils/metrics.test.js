@@ -175,6 +175,34 @@ describe("calcAnticipatedMCI — early-warning for future-gate docs", () => {
   });
 });
 
+describe("SPI/CPI are execution-phase — measured from Gate 4 only", () => {
+  it("a pre-Gate-4 project reports null SPI and CPI (not 'behind' during planning)", () => {
+    const p = mk({ gate: "Gate 2", progress: 0, milestones: [], documents: [] });
+    const r = ipi(p);
+    expect(r.components.spi).toBeNull();
+    expect(r.components.cpi).toBeNull();
+    expect(r.inExecution).toBe(false);
+  });
+  it("pre-Gate-4 IPI is driven by MCI alone (docs), not a premature schedule variance", () => {
+    const p = mk({
+      gate: "Gate 3", progress: 0, budget: 1_000_000, actualCost: 0, milestones: [],
+      documents: [
+        { name: "A", required: true, requiredAtGate: 1, status: "Approved" },
+        { name: "B", required: true, requiredAtGate: 1, status: "Approved" },
+      ],
+    });
+    const r = ipi(p);
+    expect(r.components.spi).toBeNull();
+    expect(r.ipi).toBe(100);   // MCI = 2/2 = 1.0 → IPI 100, no SPI drag
+  });
+  it("at Gate 4 the SPI and CPI re-enter the score", () => {
+    const p = mk({ gate: "Gate 4" });
+    const r = ipi(p);
+    expect(r.inExecution).toBe(true);
+    expect(r.components.spi).not.toBeNull();
+  });
+});
+
 describe("deriveProjectStatus — auto status from performance signals", () => {
   it("returns Completed when progress=100 and project is at Gate 5", () => {
     const p = mk({
@@ -721,6 +749,7 @@ describe("Audit fix — date normalisation accepts strings, ISO datetimes, Date 
   });
   it("ISO datetime (T...Z) doesn't break planned% interpolation", () => {
     const p = {
+      gate: "Gate 4",   // SPI is an execution-phase metric — measured from Gate 4
       milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01T00:00:00Z", date: "2026-12-31T00:00:00Z" }],
     };
     const r = calcProjectIPIFull(p, "2026-06-19");
@@ -743,6 +772,7 @@ describe("Audit fix — time-weighted IPI honours a 90-day moving window", () =>
   });
   it("falls back to the current snapshot when every history entry is outside the window", () => {
     const p = {
+      gate: "Gate 4",   // execution phase so the SPI-driven snapshot is measured
       ipiHistory: [{ date: "2025-01-01", ipi: 30 }],   // way outside 90d window
       milestones: [{ id: "M1", weight: 1, progress: 100, startDate: "2026-01-01", date: "2026-06-01" }],
     };

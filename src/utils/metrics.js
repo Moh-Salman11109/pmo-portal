@@ -412,9 +412,16 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // from the rollup and the remaining weights are re-normalised to sum to 1.
   // A project with only SPI data shows that SPI as its IPI, full credit; a
   // PM cannot game the score by withholding inputs.
+  // SPI & CPI are EXECUTION-phase metrics — the framework monitors them from
+  // Gate 4 (Execution) onward; the baseline is only set at Gate 3 (Planning).
+  // Before execution the project is still being planned, so a schedule/cost
+  // variance is premature and misleading (a Gate-2 project at 0% progress is
+  // NOT "behind"). Pre-Gate-4 the IPI is driven by MCI (gate/document
+  // compliance) alone; SPI/CPI join once the project reaches Execution.
+  const inExecution = parseGateNumber(project.gate) >= 4;
   const parts = [];
-  if (spiFinal !== null) parts.push({ w: weights.spi, v: spiFinal });
-  if (cpi      !== null) parts.push({ w: weights.cpi, v: cpi });
+  if (inExecution && spiFinal !== null) parts.push({ w: weights.spi, v: spiFinal });
+  if (inExecution && cpi      !== null) parts.push({ w: weights.cpi, v: cpi });
   if (mci      !== null) parts.push({ w: weights.mci, v: mci });
 
   const allNull = parts.length === 0;
@@ -435,7 +442,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // Otherwise a project with impossible dates or a day-old baseline would
   // ship a green IPI on the strength of its cost & doc numbers alone,
   // which is exactly the "false-positive green" case the audit flagged.
-  const scheduleBad = datesInvalid || tooEarly;
+  // Schedule-data problems only matter once SPI is actually in the score.
+  const scheduleBad = inExecution && (datesInvalid || tooEarly);
   const ipi = allNull            ? null
             : scheduleBad         ? null
             :                       Math.max(0, Math.round(ipiDecimal * 100));
@@ -464,15 +472,16 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     ipi,
     status,
     components: {
-      spi:      spi     === null ? null : +spi.toFixed(3),
+      spi:      (!inExecution || spi === null)      ? null : +spi.toFixed(3),
       penalty:  +penalty.toFixed(3),
-      spiFinal: spiFinal === null ? null : +spiFinal.toFixed(3),
-      cpi:      cpi     === null ? null : +cpi.toFixed(3),
-      mci:      mci     === null ? null : +mci.toFixed(3),
+      spiFinal: (!inExecution || spiFinal === null) ? null : +spiFinal.toFixed(3),
+      cpi:      (!inExecution || cpi === null)      ? null : +cpi.toFixed(3),
+      mci:      mci === null ? null : +mci.toFixed(3),
     },
     ev: +ev.toFixed(3),
     pv: +pv.toFixed(3),
     scheduleAnchor: "baseline",
+    inExecution,
     complete: isComplete,
     roadmapBreach,
     roadmapStatus,
