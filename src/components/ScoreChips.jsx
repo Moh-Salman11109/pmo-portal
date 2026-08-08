@@ -80,4 +80,30 @@ export const ScoreChips = ({ project, result, size = "sm", onDark = false }) => 
   );
 };
 
+// ─── Data Confidence chip ──────────────────────────────────────────────────
+// A SEPARATE signal from the score: how much real data backs the number. Shown
+// beside the IPI so a thin-data 100 (schedule-only) can't read as a well-
+// evidenced 100. Never affects the score — presentation of engine.dataConfidence.
+export const ConfidenceChip = ({ project, result, size = "sm", onDark = false }) => {
+  const r = result || (project ? calcProjectIPIFull(project) : null);
+  const dc = r && r.dataConfidence;
+  if (!dc || dc.level === "n/a") return null;
+  const map = {
+    High:   { c: onDark ? "#7dffd9" : "#007a62", b: onDark ? "rgba(0,255,179,0.12)" : "#e0f8ee" },
+    Medium: { c: onDark ? "#fcd34d" : "#b45309", b: onDark ? "rgba(217,119,6,0.15)" : "#fdf3e0" },
+    Low:    { c: onDark ? "#ff9d7a" : "#b23800", b: onDark ? "rgba(255,80,0,0.15)" : "#ffe8de" },
+  };
+  const m = map[dc.level] || map.Low;
+  const fs = size === "md" ? 11 : 10;
+  const title = `Data confidence: ${dc.level}. Based on ${dc.basis.join(", ") || "—"}${dc.missing.length ? ` · missing ${dc.missing.join(", ")}` : ""}.`;
+  return (
+    <span title={title} style={{
+      fontSize: fs, fontWeight: 700, padding: size === "md" ? "2px 9px" : "2px 8px", borderRadius: 10,
+      background: m.b, color: m.c, display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1.3,
+    }}>
+      ◍ Data {dc.level}{dc.missing.length ? ` · −${dc.missing.join("/")}` : ""}
+    </span>
+  );
+};
+
 export default ScoreChips;

@@ -175,6 +175,55 @@ describe("calcAnticipatedMCI — early-warning for future-gate docs", () => {
   });
 });
 
+describe("Data Confidence — separate from the score, never multiplied in (P3)", () => {
+  const withDocs = [
+    { name: "D1", required: true, requiredAtGate: 1, status: "Approved" },
+    { name: "D2", required: true, requiredAtGate: 1, status: "Approved" },
+  ];
+  it("High when all three components present in execution", () => {
+    const p = mk({ gate: "Gate 4",
+      milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-12-31", progress: 50, weight: 1 }],
+      documents: withDocs });
+    const dc = ipi(p).dataConfidence;
+    expect(dc.level).toBe("High");
+    expect(dc.basis).toEqual(["Schedule", "Cost", "Governance"]);
+    expect(dc.missing).toEqual([]);
+  });
+  it("Medium and flags the missing component when actualCost is absent", () => {
+    const p = mk({ gate: "Gate 4", actualCost: 0,
+      milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-12-31", progress: 50, weight: 1 }],
+      documents: withDocs });
+    const dc = ipi(p).dataConfidence;
+    expect(dc.level).toBe("Medium");
+    expect(dc.missing).toEqual(["Cost"]);
+  });
+  it("Low when only one component backs the score (schedule-only)", () => {
+    const p = mk({ gate: "Gate 4", actualCost: 0,
+      milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-12-31", progress: 50, weight: 1 }],
+      documents: [] });
+    const dc = ipi(p).dataConfidence;
+    expect(dc.level).toBe("Low");
+    expect(dc.missing).toEqual(["Cost", "Governance"]);
+  });
+  it("planning phase (MCI-only) is Medium, not Low — schedule/cost not yet expected", () => {
+    const p = mk({ gate: "Gate 2", progress: 0, milestones: [], documents: withDocs });
+    const dc = ipi(p).dataConfidence;
+    expect(dc.level).toBe("Medium");
+    expect(dc.basis).toEqual(["Governance"]);
+    expect(dc.missing).toEqual([]);   // schedule/cost aren't "missing" pre-execution
+  });
+  it("n/a when the project isn't scored (pending plan / excluded)", () => {
+    expect(ipi(mk({ gate: "Gate 1", milestones: [], documents: [] })).dataConfidence.level).toBe("n/a");
+    expect(ipi(mk({ excludeFromIPI: true })).dataConfidence.level).toBe("n/a");
+  });
+  it("n/a on invalid dates in execution — the score itself is refused (null)", () => {
+    const p = mk({ gate: "Gate 4", startDate: "2026-12-31", plannedEnd: "2026-01-01", documents: withDocs });
+    const r = ipi(p);
+    expect(r.ipi).toBeNull();
+    expect(r.dataConfidence.level).toBe("n/a");
+  });
+});
+
 describe("Governance gate — strong schedule/cost can't mask missing docs (P2)", () => {
   // A Gate-4 project flying on schedule + cost but with only 25% of its
   // mandatory docs approved. Numeric IPI stays green-range (schedule & cost

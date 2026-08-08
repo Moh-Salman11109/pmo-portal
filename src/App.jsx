@@ -50,7 +50,7 @@ import { getDeptStats, calcProjectIPI, calcProjectIPIFull, calcProjectIPIDisplay
 import { exportExcel } from "./utils/export.js";
 import { TypeBadge, Badge, RiskBadge } from "./components/Badge.jsx";
 import { Ico, DeptTile } from "./components/Icon.jsx";
-import { ScoreChips } from "./components/ScoreChips.jsx";
+import { ScoreChips, ConfidenceChip } from "./components/ScoreChips.jsx";
 import { Progress } from "./components/Progress.jsx";
 import IPICalculator from "./components/IPICalculator.jsx";
 import CostCalculator from "./components/CostCalculator.jsx";
@@ -2600,7 +2600,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
                 {trend != null && trend !== 0 ? `${trend < 0 ? "▼" : "▲"} ${Math.abs(trend)} vs last month · ` : ""}90-day weighted
               </div>
-              <div style={{ marginTop: 8 }}><ScoreChips result={ipiResult} size="md" onDark /></div>
+              <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                <ConfidenceChip result={ipiResult} size="md" onDark />
+                <ScoreChips result={ipiResult} size="md" onDark />
+              </div>
             </button>
 
             {/* Snapshot tile */}

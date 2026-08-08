@@ -671,6 +671,16 @@ IPI  =  ${parts.reduce((s, p) => s + p.w * p.v, 0).toFixed(4)} ÷ ${sumW.toFixed
         <KV k="Displayed IPI (primary)" v={display.primary ?? "—"} mono />
         <KV k="Latest snapshot (info)" v={snapshot ?? "—"} mono />
         <KV k="Band" v={sc.label} />
+        {full.dataConfidence && full.dataConfidence.level !== "n/a" && (
+          <>
+            <KV k="Data confidence (separate from score)" v={full.dataConfidence.level} />
+            <KV k="Based on" v={full.dataConfidence.basis.join(" + ") || "—"} />
+            {full.dataConfidence.missing.length > 0 && <KV k="Missing component(s)" v={full.dataConfidence.missing.join(", ")} />}
+          </>
+        )}
+        {full.governanceBreach && (
+          <KV k="⚠ Governance gate" v={`MCI ${Math.round((comp.mci || 0) * 100)}% < ${Math.round(full.mciFloor * 100)}% floor — band capped, score unchanged`} />
+        )}
         <div style={{ fontSize: 10, color: PAL.muted, marginTop: 8 }}>
           Generated {new Date().toLocaleString("en-GB")}
         </div>

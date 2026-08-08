@@ -202,7 +202,7 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // Side initiatives are tracked but not scored — no IPI, and excluded from
   // every rollup (calcProjectIPI / calcTimeWeightedIPI return null too).
   if (project && project.excludeFromIPI) {
-    return { ipi: null, status: "Not Scored", excluded: true, components: {}, complete: false, roadmapStatus: null, governanceBreach: false };
+    return { ipi: null, status: "Not Scored", excluded: true, components: {}, complete: false, roadmapStatus: null, governanceBreach: false, dataConfidence: { level: "n/a", basis: [], missing: [] } };
   }
   const { cap, weights } = IPI_DEFAULTS;
   const asOfMs = _toMs(asOfDate) ?? Date.now();
@@ -465,6 +465,30 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // and render a mandatory chip via ScoreChips.
   const governanceBreach = !!(inExecution && mci !== null && mci < IPI_DEFAULTS.mciGreenFloor && ipi !== null);
 
+  // ── Data Confidence — a SEPARATE signal from the performance score ─────────
+  // Answers "how much real data backs this number?" independently of how high
+  // the number is. It is NEVER multiplied into the IPI (the engine already
+  // refuses meaningless inputs by returning null); it travels beside the score
+  // so a thin-data 100 (e.g. schedule-only) can't be read as a well-evidenced
+  // 100. Basis = components actually present; missing = expected-but-absent.
+  // Pre-execution, only Governance (MCI) is expected, so MCI-only is "Medium"
+  // (planning), not "Low".
+  const confBasis = [];
+  const confMissing = [];
+  if (inExecution) {
+    (spiFinal !== null ? confBasis : confMissing).push("Schedule");
+    (cpi      !== null ? confBasis : confMissing).push("Cost");
+  }
+  (mci !== null ? confBasis : confMissing).push("Governance");
+  // Level = how many EXPECTED components actually back the score. A refused
+  // score (invalid dates / baseline forming in execution) is already null →
+  // "n/a", so it needs no separate handling here.
+  let confLevel;
+  if (ipi === null)     confLevel = "n/a";
+  else if (inExecution) confLevel = confBasis.length >= 3 ? "High" : confBasis.length === 2 ? "Medium" : "Low";
+  else                  confLevel = mci !== null ? "Medium" : "Low";
+  const dataConfidence = { level: confLevel, basis: confBasis, missing: confMissing };
+
   // Status follows the UNROUNDED (penalised) ipiDecimal so adjacent projects
   // whose displayed integers are 99 vs 100 don't flip bands from rounding
   // noise. A roadmap breach caps at 1.0, so "Over Achieved" can't show while
@@ -502,6 +526,7 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     complete: isComplete,
     governanceBreach,
     mciFloor: IPI_DEFAULTS.mciGreenFloor,
+    dataConfidence,
     roadmapBreach,
     roadmapStatus,
     roadmapDaysAhead,
