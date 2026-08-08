@@ -449,8 +449,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // Data-reliability short-circuit — if the schedule inputs are broken, we
   // refuse to publish a composite score even when CPI and MCI look fine.
   // Otherwise a project with impossible dates or a day-old baseline would
-  // ship a green IPI on the strength of its cost & doc numbers alone,
-  // which is exactly the "false-positive green" case the audit flagged.
+  // ship a green IPI on the strength of its cost & doc numbers alone — the
+  // false-positive-green case this guard exists to prevent.
   // Schedule-data problems only matter once SPI is actually in the score.
   const scheduleBad = inExecution && (datesInvalid || tooEarly);
   const ipi = allNull            ? null

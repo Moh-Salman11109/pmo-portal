@@ -91,9 +91,9 @@ describe("MCI — gate-aware document compliance", () => {
 
   it("returns null when docs exist but none are required (governance not measurable)", () => {
     // Old behaviour returned 1.0 (assumed full compliance) — a PM could
-    // uncheck every "required" flag and get free MCI credit. Post-audit
-    // change: return null so the component is excluded from the rollup
-    // instead of falsely rewarded.
+    // uncheck every "required" flag and get free MCI credit. Now returns
+    // null so the component is excluded from the rollup instead of falsely
+    // rewarded.
     const p = mk({
       gate: "Gate 4",
       documents: [
@@ -567,8 +567,8 @@ describe("Baseline-anchored SPI — measure vs the locked baseline, clamp at pla
   });
 
   it("roadmap breach penalty — cap at 100, then −1% per day past roadmap", () => {
-    // The scenario the user caught: early vs plan (SPI > 1 → IPI would be 105),
-    // but 26 days past the roadmap. Capped to 100, then −26% → IPI 74.
+    // Early vs plan (SPI > 1 → IPI would be 105), but 26 days past the
+    // roadmap. Capped to 100, then −26% → IPI 74.
     const p = mk({
       startDate: "2026-07-01", plannedEnd: "2026-08-30", roadmapDeadline: "2026-07-30",
       progress: 100, milestones: [], budget: 22, actualCost: 22, gate: "Gate 4",
@@ -747,7 +747,7 @@ describe("effectiveProgress — single source of truth for progress%", () => {
   });
 });
 
-describe("Audit fix — Data reliability guards refuse to score bad inputs", () => {
+describe("Regression — Data reliability guards refuse to score bad inputs", () => {
   it("Impossible dates (end before start) → IPI is null and dataReliability = 'invalid_dates'", () => {
     // Even with a healthy CPI and MCI, an IPI must not be published on a
     // project whose dates cannot possibly be right. Previously this
@@ -832,12 +832,11 @@ describe("ipiColor — strict 3-band scale (v2 design)", () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// Post-audit regression suite — covers the issues raised in the deep IPI audit.
-// Every test here exists to lock in a fix; if any of these fail, the engine
-// has regressed against an explicitly-defended decision.
+// Regression suite — schedule / cost / document edge cases. Every test here
+// locks in a defended behaviour; if any of these fail, the engine has regressed.
 // ════════════════════════════════════════════════════════════════════════════
 
-describe("Audit fix — negative actualCost is treated as missing data", () => {
+describe("Regression — negative actualCost is treated as missing data", () => {
   it("a negative actualCost produces cpi=null, not a negative CPI poisoning IPI", () => {
     const p = mk({ budget: 1_000_000, actualCost: -50_000,
       milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
@@ -849,7 +848,7 @@ describe("Audit fix — negative actualCost is treated as missing data", () => {
   });
 });
 
-describe("Audit fix — same-day (instant) milestone behaves as a real instant", () => {
+describe("Regression — same-day (instant) milestone behaves as a real instant", () => {
   it("a past instant milestone (start==end) is fully planned (PV=1) in an in-progress project", () => {
     // Two leaves keep the project < 100% so the leaf-PV path runs (not the
     // Option C completion branch). M1 is a done past-instant; M2 is unstarted.
@@ -879,7 +878,7 @@ describe("Audit fix — same-day (instant) milestone behaves as a real instant",
   });
 });
 
-describe("Audit fix — unscheduled leaves are excluded from the SPI aggregator", () => {
+describe("Regression — unscheduled leaves are excluded from the SPI aggregator", () => {
   it("a leaf with no startDate/date is dropped, not silently inflating SPI via dilution", () => {
     const withUnsched = mk({
       milestones: [
@@ -898,7 +897,7 @@ describe("Audit fix — unscheduled leaves are excluded from the SPI aggregator"
   });
 });
 
-describe("Audit fix — date normalisation accepts strings, ISO datetimes, Date objects", () => {
+describe("Regression — date normalisation accepts strings, ISO datetimes, Date objects", () => {
   it("Date object as asOfDate works the same as the ISO-string equivalent", () => {
     const p = mk({
       milestones: [{ id: "M1", weight: 1, progress: 50, startDate: "2026-04-01", date: "2026-12-31" }],
@@ -917,7 +916,7 @@ describe("Audit fix — date normalisation accepts strings, ISO datetimes, Date 
   });
 });
 
-describe("Audit fix — time-weighted IPI honours a 90-day moving window", () => {
+describe("Regression — time-weighted IPI honours a 90-day moving window", () => {
   it("a snapshot older than 90 days from asOfDate is excluded from the average", () => {
     // Two snapshots: one 200 days ago at IPI=20 (should be ignored),
     // one 30 days ago at IPI=100. The weighted average should be ≈ 100, not 60.
@@ -942,7 +941,7 @@ describe("Audit fix — time-weighted IPI honours a 90-day moving window", () =>
   });
 });
 
-describe("Audit fix — IPI status band uses unrounded decimal, not the displayed integer", () => {
+describe("Regression — IPI status band uses unrounded decimal, not the displayed integer", () => {
   // ipiDecimal exactly at 0.995 (i.e. ipi rounds to 100 but math says still < 1.00).
   // Old behaviour: rounded ipi=100 → "On Track" banner. New: ipiDecimal < 1.00 →
   // "Watch", preventing the boundary flip.
@@ -1011,7 +1010,7 @@ describe("Baseline clamp — planned% pins at 100% at the baseline", () => {
   });
 });
 
-describe("Audit fix — multi-snapshot-per-day uses fractional days", () => {
+describe("Regression — multi-snapshot-per-day uses fractional days", () => {
   // Append-every-save semantics: a frenzy of 10 saves in 10 minutes must
   // not dominate the trailing 90-day average. Each non-final snapshot now
   // contributes its actual fractional day weight; only the final snapshot
@@ -1055,7 +1054,7 @@ describe("Audit fix — multi-snapshot-per-day uses fractional days", () => {
   });
 });
 
-describe("Audit fix — re-normalisation in the IPI rollup", () => {
+describe("Regression — re-normalisation in the IPI rollup", () => {
   it("only-SPI present: IPI equals 100 × spiFinal (full credit, no neutral filler)", () => {
     const p = mk({
       budget: 0, actualCost: 0, documents: [],

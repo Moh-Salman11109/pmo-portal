@@ -367,7 +367,7 @@ export const IPIBreakdownModal = ({ project, onClose }) => {
 
   // Time-weighted history reconstruction (mirrors calcTimeWeightedIPI exactly,
   // including the 90-day moving window — snapshots dated before today−90d are
-  // excluded entirely, not clipped, to match the engine's audit-fix policy).
+  // excluded entirely, not clipped, to match the engine's 90-day window policy).
   const TIME_WINDOW_DAYS = 90;
   const todayMsForHistory = new Date(TODAY).getTime();
   const windowStartForHistory = todayMsForHistory - TIME_WINDOW_DAYS * 86_400_000;
@@ -597,9 +597,8 @@ IPI  =  ${parts.reduce((s, p) => s + p.w * p.v, 0).toFixed(4)} ÷ ${sumW.toFixed
      × 100  =  ${snapshot ?? Math.round(dec * 100)}`}</Formula>
               <div style={{ fontSize: 10, color: PAL.muted, marginTop: 6, lineHeight: 1.6 }}>
                 Re-normalisation policy: missing components (null) are <strong>excluded</strong> from the
-                rollup; weights of present components rescale to sum to 1. Replaces an older
-                neutral-1.0 default that rewarded withholding data — fix logged in the post-audit
-                regression suite.
+                rollup; weights of present components rescale to sum to 1. A missing component is
+                never treated as a neutral 1.0, so withholding data cannot inflate the score.
               </div>
             </>
           );
