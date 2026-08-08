@@ -139,6 +139,15 @@ const IPI_DEFAULTS = {
   // forever. 90 days mirrors standard trailing-performance reporting in
   // mature EVM tools (Primavera Risk Analysis defaults to 90).
   timeWeightedWindowDays: 90,
+  // Governance floor (NON-COMPENSATORY band gate). Once a project is in
+  // execution (Gate ≥ 4), if its mandatory artefact compliance (MCI) is below
+  // this, the project can NEVER display green — strong SPI/CPI must not mask a
+  // governance failure. This adjusts the BAND/flag only; the numeric IPI is
+  // left unchanged (schedule & cost really are strong), so ipiHistory stays
+  // comparable and no historical recompute is needed. Threshold is governance-
+  // grade — change only with PMO sign-off. 0.60 = "at least 60% of docs due at
+  // this gate are approved/credited". Recommended default, pending PMO review.
+  mciGreenFloor: 0.60,
 };
 
 // Date normalisation — accepts ISO date strings ("2026-06-30"), ISO datetimes
@@ -193,7 +202,7 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // Side initiatives are tracked but not scored — no IPI, and excluded from
   // every rollup (calcProjectIPI / calcTimeWeightedIPI return null too).
   if (project && project.excludeFromIPI) {
-    return { ipi: null, status: "Not Scored", excluded: true, components: {}, complete: false, roadmapStatus: null };
+    return { ipi: null, status: "Not Scored", excluded: true, components: {}, complete: false, roadmapStatus: null, governanceBreach: false };
   }
   const { cap, weights } = IPI_DEFAULTS;
   const asOfMs = _toMs(asOfDate) ?? Date.now();
@@ -448,6 +457,14 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
             : scheduleBad         ? null
             :                       Math.max(0, Math.round(ipiDecimal * 100));
 
+  // ── Governance breach (NON-COMPENSATORY band gate) ────────────────────────
+  // In execution, mandatory-doc compliance below the floor means the project
+  // must not read as healthy no matter how strong its schedule/cost. This is a
+  // BAND/flag signal only — `ipi` above is untouched (and so is ipiHistory).
+  // Callers gate the displayed band via ipiColor(score, { governanceBreach })
+  // and render a mandatory chip via ScoreChips.
+  const governanceBreach = !!(inExecution && mci !== null && mci < IPI_DEFAULTS.mciGreenFloor && ipi !== null);
+
   // Status follows the UNROUNDED (penalised) ipiDecimal so adjacent projects
   // whose displayed integers are 99 vs 100 don't flip bands from rounding
   // noise. A roadmap breach caps at 1.0, so "Over Achieved" can't show while
@@ -483,6 +500,8 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
     scheduleAnchor: "baseline",
     inExecution,
     complete: isComplete,
+    governanceBreach,
+    mciFloor: IPI_DEFAULTS.mciGreenFloor,
     roadmapBreach,
     roadmapStatus,
     roadmapDaysAhead,
@@ -830,8 +849,16 @@ export function deriveBudgetStatus(project) {
 // `color` = text/label, `bar` = bar/accent fill, `bg` = chip background.
 // The old "Over Achieved" (>100) and "Watch 90-99"/"At Risk 70-89" split is
 // intentionally merged: On Track ≥90, Watch 70-89, Critical <70.
-export function ipiColor(score) {
+export function ipiColor(score, opts = {}) {
   if (score == null) return { color: "#5a7a6e", bg: "#eef3ee", bar: "#a1b9ab", label: "No Data" };
+  // Governance gate (band only): a project that is failing mandatory artefact
+  // compliance in execution can never render green, however strong its
+  // schedule/cost. The score itself is unchanged — only the band it displays
+  // in is pulled down to amber "Governance Risk". Pass { governanceBreach }
+  // from calcProjectIPIFull; rollup (dept/portfolio) call sites omit it.
+  if (opts.governanceBreach && score >= 90) {
+    return { color: "#b45309", bg: "#fdf1dd", bar: "#d97706", label: "Governance Risk" };
+  }
   if (score >= 90) return { color: "#007a62", bg: "#e0f8ee", bar: "#00b894", label: "On Track" };
   if (score >= 70) return { color: "#b45309", bg: "#fdf1dd", bar: "#d97706", label: "Watch" };
   return             { color: "#b23800", bg: "#ffe8de", bar: "#FF5000", label: "Critical" };
@@ -839,11 +866,12 @@ export function ipiColor(score) {
 
 // Same 3-band mapping as ipiColor() but tuned for dark hero gradients.
 // Returns translucent pill colours and a gauge gradient pair.
-export function ipiColorDark(score) {
-  const band = ipiColor(score).label;
+export function ipiColorDark(score, opts = {}) {
+  const band = ipiColor(score, opts).label;
   switch (band) {
     case "On Track":
       return { bg: "rgba(0,255,179,0.12)", border: "rgba(0,255,179,0.45)", text: "#7dffd9", gaugeFrom: "#00b894", gaugeTo: "#00FFB3" };
+    case "Governance Risk":
     case "Watch":
       return { bg: "rgba(217,119,6,0.15)", border: "rgba(217,119,6,0.45)", text: "#fcd34d", gaugeFrom: "#b45309", gaugeTo: "#d97706" };
     case "Critical":

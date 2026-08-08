@@ -31,13 +31,15 @@ export function scoreContext(project, result) {
     roadmapPenaltyPct: r.roadmapPenalty != null ? Math.round((1 - r.roadmapPenalty) * 100) : 0,
     complete:        !!r.complete,
     excluded:        !!r.excluded,
+    governanceBreach: !!r.governanceBreach,
+    mciPct:          r.components && r.components.mci != null ? Math.round(r.components.mci * 100) : null,
   };
 }
 
 // size: "sm" (tables/cards) | "md" (hero). Chips share the pill's row.
 export const ScoreChips = ({ project, result, size = "sm", onDark = false }) => {
   const ctx = scoreContext(project, result);
-  if (!ctx.daysLate && !ctx.roadmapStatus && !ctx.excluded) return null;
+  if (!ctx.daysLate && !ctx.roadmapStatus && !ctx.excluded && !ctx.governanceBreach) return null;
 
   const fs   = size === "md" ? 11 : 10;
   const pad  = size === "md" ? "2px 9px" : "2px 8px";
@@ -49,6 +51,13 @@ export const ScoreChips = ({ project, result, size = "sm", onDark = false }) => 
       {ctx.excluded && (
         <span style={{ ...base, background: onDark ? "rgba(255,255,255,0.12)" : "#eef2f6", color: onDark ? "rgba(255,255,255,0.75)" : "#475569", fontWeight: 700 }}>
           ◔ Tracking only · not in IPI
+        </span>
+      )}
+      {ctx.governanceBreach && (
+        // Non-compensatory governance flag — mandatory companion so a green
+        // schedule/cost score can never travel alone while docs are missing.
+        <span style={{ ...base, background: onDark ? "rgba(220,38,38,0.18)" : "#fee2e2", color: onDark ? "#fca5a5" : "#b91c1c", border: onDark ? "1px solid rgba(220,38,38,0.5)" : "1px solid #fecaca", fontWeight: 800 }}>
+          ⚠ Governance Risk{ctx.mciPct != null ? ` · docs ${ctx.mciPct}%` : ""}
         </span>
       )}
       {ctx.daysLate > 0 && (

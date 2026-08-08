@@ -349,9 +349,11 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     const fmtD      = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }) : "—";
     const monthKey  = now.toISOString().slice(0, 7);
 
-    // Band → print colors (v2 3-band, same thresholds as every pill in the portal)
-    const band = (ipi) => ipi == null
+    // Band → print colors (v2 3-band, same thresholds as every pill in the portal).
+    // Governance gate mirrors ipiColor: a governance-breached project can't print green.
+    const band = (ipi, governanceBreach = false) => ipi == null
       ? { label: "Pending Plan", txt: "#5a7a6e", bg: "#eef3ee" }
+      : (governanceBreach && ipi >= 90) ? { label: "Governance Risk", txt: "#b45309", bg: "#fdf3e0" }
       : ipi >= 90 ? { label: "On Track", txt: "#007a62", bg: "#e0f8ee" }
       : ipi >= 70 ? { label: "Watch",    txt: "#b45309", bg: "#fdf3e0" }
       :             { label: "Critical", txt: "#c2410c", bg: "#ffe8de" };
@@ -360,13 +362,14 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     const rows = allProjects.map(p => {
       const full = calcProjectIPIFull(p);
       const ipi  = calcProjectIPIDisplay(p).primary;
-      const b    = band(ipi);
+      const b    = band(ipi, full.governanceBreach);
       const flags = [];
       const done = full.complete || p.status === "Completed";   // a completed project is never "past planned end"
       // Schedule/roadmap flags only apply to SCORED projects — a side
       // initiative (excluded) isn't measured against schedule, so it never
       // shows Past planned end / Late / Roadmap.
       if (!full.excluded) {
+        if (full.governanceBreach) flags.push({ t: `Governance ${full.components?.mci != null ? Math.round(full.components.mci * 100) + "% docs" : "docs"}`, c: "#b91c1c", bg: "#fee2e2" });
         if (full.roadmapBreach) flags.push({ t: `Roadmap −${Math.round((1 - (full.roadmapPenalty ?? 1)) * 100)}%`, c: "#490300", bg: "#f0d4d0" });
         if (full.complete && full.daysLateVsPlan > 0) flags.push({ t: `Late ${full.daysLateVsPlan}d`, c: "#b45309", bg: "#fdf3e0" });
         if (!done && p.plannedEnd && p.plannedEnd < TODAY) flags.push({ t: "Past planned end", c: "#b45309", bg: "#fdf3e0" });

@@ -1274,7 +1274,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}>
-                    {(() => { const ipiVal = calcProjectIPI(p); const sc = ipiColor(ipiVal); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipiVal ?? "—"}</span>; })()}
+                    {(() => { const ipiVal = calcProjectIPI(p); const sc = ipiColor(ipiVal, { governanceBreach: calcProjectIPIFull(p).governanceBreach }); return <span style={{ background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 10 }}>{ipiVal ?? "—"}</span>; })()}
                   </td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
@@ -2095,7 +2095,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const ipiSnapshot   = ipiResult.ipi;
   const ipiDisplay    = project ? calcProjectIPIDisplay(project) : { primary: 0, snapshot: 0, delta: 0, hasHistory: false };
   const ipi           = ipiDisplay.primary;
-  const ipiC          = ipiColor(ipi);
+  const ipiC          = ipiColor(ipi, { governanceBreach: ipiResult.governanceBreach });
   const countedIPI    = useCountUp(ipi);
 
   if (!project) return <div style={{ padding: 32 }}>Project not found</div>;
@@ -2540,7 +2540,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         {(() => {
           const plannedNow = plannedProgressAt(project);
           const progVar    = plannedNow != null ? effectiveProgress - plannedNow : null;
-          const bandDark   = ipiColorDark(ipi);
+          const bandDark   = ipiColorDark(ipi, { governanceBreach: ipiResult.governanceBreach });
           const trend      = ipiDisplay?.hasHistory ? ipiDisplay.delta : null;
           const spiF = ipiResult.components.spiFinal ?? ipiResult.components.spi;
           const cpiV = ipiResult.components.cpi;
@@ -4941,7 +4941,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
               </tr></thead>
               <tbody>{activeProjects.map(p => {
                 const ipi = calcProjectIPI(p);
-                const ipiC = ipiColor(ipi);
+                const ipiC = ipiColor(ipi, { governanceBreach: calcProjectIPIFull(p).governanceBreach });
                 return (
                   <tr key={p.id} style={{ borderTop: `1px solid ${T.border}` }}>
                     <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 700, color: T.primary }}>{p.code}</td>
@@ -5510,7 +5510,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
             {sorted.map((p, i) => {
               const dept = departments.find(d => d.id === p.deptId);
               const ipi = calcProjectIPI(p);
-              const ipiC = ipiColor(ipi);
+              const ipiC = ipiColor(ipi, { governanceBreach: calcProjectIPIFull(p).governanceBreach });
               const staleDays = daysSince(p.lastUpdate);
               return (
                 <tr key={p.id} onClick={() => setRoute({ view: "project", projectId: p.id, from: "projects" })}

@@ -175,6 +175,75 @@ describe("calcAnticipatedMCI — early-warning for future-gate docs", () => {
   });
 });
 
+describe("Governance gate — strong schedule/cost can't mask missing docs (P2)", () => {
+  // A Gate-4 project flying on schedule + cost but with only 25% of its
+  // mandatory docs approved. Numeric IPI stays green-range (schedule & cost
+  // are genuinely strong) but the band must be gated and the flag raised.
+  const gamed = () => mk({
+    gate: "Gate 4", progress: 60, actualCost: 250_000,   // very cheap → CPI capped high
+    milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-05-01", progress: 100, weight: 1 }], // finished ahead → SPI>1
+    documents: [
+      { name: "D1", required: true, requiredAtGate: 1, status: "Approved" },
+      { name: "D2", required: true, requiredAtGate: 1, status: "Draft" },
+      { name: "D3", required: true, requiredAtGate: 1, status: "Draft" },
+      { name: "D4", required: true, requiredAtGate: 1, status: "Draft" },
+    ],
+  });
+
+  it("raises governanceBreach when MCI < floor in execution", () => {
+    const r = ipi(gamed());
+    expect(r.components.mci).toBe(0.25);
+    expect(r.governanceBreach).toBe(true);
+  });
+
+  it("leaves the numeric IPI untouched — history stays comparable", () => {
+    const r = ipi(gamed());
+    // The score itself is NOT pulled down (still green-range); only band/flag change.
+    expect(r.ipi).toBeGreaterThanOrEqual(90);
+  });
+
+  it("ipiColor gates the green band to 'Governance Risk' when breached", () => {
+    const r = ipi(gamed());
+    expect(ipiColor(r.ipi).label).toBe("On Track");                          // ungated
+    expect(ipiColor(r.ipi, { governanceBreach: true }).label).toBe("Governance Risk"); // gated
+  });
+
+  it("does NOT gate a project already below 90 (nothing to mask)", () => {
+    expect(ipiColor(85, { governanceBreach: true }).label).toBe("Watch");
+    expect(ipiColor(60, { governanceBreach: true }).label).toBe("Critical");
+  });
+
+  it("no breach when MCI meets the floor", () => {
+    const p = mk({
+      gate: "Gate 4",
+      documents: [
+        { name: "D1", required: true, requiredAtGate: 1, status: "Approved" },
+        { name: "D2", required: true, requiredAtGate: 1, status: "Approved" },
+      ],
+    });
+    expect(ipi(p).governanceBreach).toBe(false);
+  });
+
+  it("no breach pre-execution — a low MCI already shows as a low IPI, no masking", () => {
+    const p = mk({
+      gate: "Gate 2", progress: 0, milestones: [],
+      documents: [
+        { name: "D1", required: true, requiredAtGate: 1, status: "Approved" },
+        { name: "D2", required: true, requiredAtGate: 1, status: "Draft" },
+        { name: "D3", required: true, requiredAtGate: 1, status: "Draft" },
+        { name: "D4", required: true, requiredAtGate: 1, status: "Draft" },
+      ],
+    });
+    const r = ipi(p);
+    expect(r.governanceBreach).toBe(false);   // pre-exec: not gated
+    expect(r.ipi).toBe(25);                   // already red on its own
+  });
+
+  it("excluded (side-initiative) projects never breach", () => {
+    expect(ipi(mk({ excludeFromIPI: true })).governanceBreach).toBe(false);
+  });
+});
+
 describe("SPI/CPI are execution-phase — measured from Gate 4 only", () => {
   it("a pre-Gate-4 project reports null SPI and CPI (not 'behind' during planning)", () => {
     const p = mk({ gate: "Gate 2", progress: 0, milestones: [], documents: [] });
