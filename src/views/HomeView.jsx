@@ -38,7 +38,7 @@ import { useDepts } from "../deptContext.js";
 import { ROLE_PM, ROLE_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF } from "../roles.js";
 import { GATE_DEFS } from "../data/constants.js";
 import { TODAY, daysSince } from "../utils/dates.js";
-import { getDeptStats, calcDeptIPI, calcPortfolioIPI, ipiColor, ipiColorDark, calcProjectIPIDisplay, calcProjectIPIFull } from "../utils/metrics.js";
+import { getDeptStats, calcDeptIPI, calcPortfolioIPI, calcPortfolioExposure, ipiColor, ipiColorDark, calcProjectIPIDisplay, calcProjectIPIFull } from "../utils/metrics.js";
 import { fmtSAR } from "../utils/format.js";
 import { Progress } from "../components/Progress.jsx";
 import { RiskBadge } from "../components/Badge.jsx";
@@ -92,6 +92,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
   const activeProjects = useMemo(() => allProjects.filter(p => p.status !== "Completed"),[allProjects]);
 
   const portfolioIPI = useMemo(() => calcPortfolioIPI(allProjects), [allProjects]);
+  const exposure     = useMemo(() => calcPortfolioExposure(allProjects), [allProjects]);
   const d30          = useMemo(() => { const d = new Date(TODAY); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]; }, []);
   const hasD30       = useMemo(() => allProjects.some(p => (p.ipiHistory || []).some(h => h.date && h.date <= d30)), [allProjects, d30]);
   const prevIPI      = useMemo(() => hasD30 ? calcPortfolioIPI(allProjects, d30) : null, [hasD30, allProjects, d30]);
@@ -444,6 +445,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     }
     if (breaches.length > 0) insights.push(`<b>${breaches.length}</b> project${breaches.length === 1 ? " is" : "s are"} past the roadmap commitment — worst: ${esc(worstBreach.p.name)} (IPI capped &amp; decaying −${Math.round((1 - (worstBreach.full.roadmapPenalty ?? 1)) * 100)}%).`);
     insights.push(`Budget utilisation <b>${budgetUtilPct}%</b> (${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)})${overrunProjects.length ? ` · ${overrunProjects.length} project${overrunProjects.length === 1 ? "" : "s"} forecasting overrun, exposure ${fmtSAR(overrunExposure)}` : " · no forecast overruns"}.`);
+    insights.push(`Portfolio exposure (remaining budget weighted by shortfall &amp; priority): <b>${fmtSAR(exposure.atRisk)}</b> at risk${exposure.unknownCount ? ` · ${exposure.unknownCount} unscored project${exposure.unknownCount === 1 ? "" : "s"} (${fmtSAR(exposure.unknownBudget)})` : ""}${exposure.top[0] ? ` — largest: ${esc(exposure.top[0].name)} (${fmtSAR(exposure.top[0].exposure)})` : ""}.`);
     if (overdueMilestones.length > 0) insights.push(`<b>${overdueMilestones.length}</b> milestone${overdueMilestones.length === 1 ? "" : "s"} overdue across ${overdueProjectCount} project${overdueProjectCount === 1 ? "" : "s"} — oldest ${overdueMilestones[0].daysOverdue}d.`);
     if (actOpen.length || actClosedThisMonth.length) insights.push(`Meeting actions: <b>${actOpen.length}</b> open${actOverdue.length ? ` (<b>${actOverdue.length}</b> overdue)` : ""} · ${actClosedThisMonth.length} closed in ${esc(monthName)}.`);
     if (leaderDept && laggardDept && leaderDept.id !== laggardDept.id) insights.push(`${esc(leaderDept.fullName)} leads at <b>${leaderDept.ipi}</b>; ${esc(laggardDept.fullName)} trails at <b>${laggardDept.ipi}</b>.`);
@@ -896,6 +898,15 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                   <span>0</span><span>Critical · 70</span><span>On Track · 90</span><span>100</span>
                 </div>
                 <div style={{ marginTop: 10, fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 500 }}>IPI = SPI 50% + CPI 25% + MCI 25%</div>
+                {/* Exposure — money at risk, a DIFFERENT question from Health.
+                    Shown in SAR (not /100) so the two never blur together. */}
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)", display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 800, letterSpacing: "0.8px", textTransform: "uppercase" }}>Exposure</span>
+                  <span style={{ color: exposure.atRisk > 0 ? "#ff9d7a" : "#7dffd9", fontSize: 20, fontWeight: 900, letterSpacing: "-0.5px" }}>{fmtSAR(exposure.atRisk)}</span>
+                  <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, fontWeight: 600 }}>
+                    at risk{exposure.unknownCount > 0 ? ` · ${exposure.unknownCount} unscored (${fmtSAR(exposure.unknownBudget)})` : ""}
+                  </span>
+                </div>
               </div>
             )}
           </div>

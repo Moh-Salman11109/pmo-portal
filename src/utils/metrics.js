@@ -691,6 +691,51 @@ export function calcPortfolioIPI(projects, asOfDate = TODAY) {
 }
 
 /**
+ * Portfolio EXPOSURE — money at risk, in SAR (NOT a 0–100 score).
+ *
+ * Health (calcPortfolioIPI) and Exposure answer two different questions with
+ * two different units. Health = "are the projects performing?" (budget-weighted
+ * average IPI). Exposure = "how much money is riding on the ones that aren't?"
+ * Reporting them separately stops one number from masking the other: a
+ * portfolio can be 73/100 healthy AND carry SAR 28M of exposure at the same
+ * time (one large troubled project).
+ *
+ *   Exposure(project) = remainingBudget × performanceGap × priorityFactor
+ *     remainingBudget = max(0, budget − actualCost)   (forward-looking spend)
+ *     performanceGap  = max(0, (100 − IPI) / 100)      (0 healthy … 1 failed)
+ *     priorityFactor  = priorityWeight / 2             (Low .5 · Med 1 · High 1.5 · Crit 2)
+ *
+ * Completed / archived / cancelled / side-initiative projects are excluded
+ * (exposure is in-flight risk). Unscored projects (IPI null) can't produce a
+ * gap — they surface as an explicit "unknown exposure" bucket (count + budget),
+ * never silently dropped. Returns SAR amounts + the top contributors.
+ */
+export function calcPortfolioExposure(projects) {
+  const active = projects.filter(p =>
+    !p.archived && p.status !== "Cancelled" && p.status !== "Completed" && !p.excludeFromIPI
+  );
+  let atRisk = 0, unknownBudget = 0, unknownCount = 0;
+  const contrib = [];
+  for (const p of active) {
+    const ipi       = calcProjectIPI(p);
+    const remaining = Math.max(0, (p.budget || 0) - (p.actualCost || 0));
+    if (ipi == null) { unknownCount++; unknownBudget += remaining; continue; }
+    const gap  = Math.max(0, (100 - ipi) / 100);
+    const prio = (PRIORITY_WEIGHT[p.priority] || 2) / 2;
+    const e    = remaining * gap * prio;
+    if (e > 0) contrib.push({ id: p.id, name: p.name, exposure: Math.round(e), ipi, priority: p.priority });
+    atRisk += e;
+  }
+  contrib.sort((a, b) => b.exposure - a.exposure);
+  return {
+    atRisk:        Math.round(atRisk),
+    unknownBudget: Math.round(unknownBudget),
+    unknownCount,
+    top:           contrib.slice(0, 5),
+  };
+}
+
+/**
  * Auto-compute overall project progress from the WBS (Activities tab).
  * For each top-level milestone, progress is the weighted average of its
  * activities (children). The project's overall progress is then the weighted

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcTimeWeightedIPI, effectiveProgress, ipiColor, plannedProgressAt, trackMilestoneDateChanges } from "./metrics.js";
+import { calcProjectIPIFull, parseGateNumber, calcAnticipatedMCI, deriveProjectStatus, calcProjectIPI, calcDeptIPI, calcTimeWeightedIPI, calcPortfolioExposure, effectiveProgress, ipiColor, plannedProgressAt, trackMilestoneDateChanges } from "./metrics.js";
 
 // Convenience: build a minimal project that calcProjectIPIFull will accept.
 // asOfDate frozen so the time-based PV piece is deterministic across runs.
@@ -172,6 +172,48 @@ describe("calcAnticipatedMCI — early-warning for future-gate docs", () => {
     const anticipated = calcAnticipatedMCI(p);
     expect(anticipated.mci).toBe(1.0);
     expect(anticipated.deltaDocs).toBe(1);
+  });
+});
+
+describe("Portfolio Exposure — money at risk in SAR, separate from Health (P4)", () => {
+  // A healthy project (high IPI) contributes ~0; a troubled one contributes its
+  // remaining budget scaled by shortfall & priority.
+  const healthy = (id, budget) => mk({ id, name: id, gate: "Gate 4", priority: "Medium", budget, actualCost: budget * 0.5,
+    milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-12-31", progress: 90, weight: 1 }],
+    documents: [{ name: "d", required: true, requiredAtGate: 1, status: "Approved" }] });
+  const troubled = (id, budget, prio = "Critical") => mk({ id, name: id, gate: "Gate 4", priority: prio, budget, actualCost: budget * 0.2, progress: 20,
+    milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-06-30", progress: 20, weight: 1 }],
+    documents: [{ name: "d", required: true, requiredAtGate: 1, status: "Approved" }] });
+
+  it("a healthy portfolio carries ~zero exposure", () => {
+    const e = calcPortfolioExposure([healthy("H1", 2_000_000), healthy("H2", 1_000_000)]);
+    expect(e.atRisk).toBe(0);
+    expect(e.top).toEqual([]);
+  });
+  it("exposure is dominated by the large troubled project (correct for risk)", () => {
+    const e = calcPortfolioExposure([troubled("BIG", 50_000_000), healthy("S1", 2_000_000), healthy("S2", 1_000_000)]);
+    expect(e.atRisk).toBeGreaterThan(0);
+    expect(e.top[0].id).toBe("BIG");
+  });
+  it("excludes archived / cancelled / completed / side-initiative projects", () => {
+    const base = troubled("T", 10_000_000);
+    expect(calcPortfolioExposure([{ ...base, archived: true }]).atRisk).toBe(0);
+    expect(calcPortfolioExposure([{ ...base, status: "Cancelled" }]).atRisk).toBe(0);
+    expect(calcPortfolioExposure([{ ...base, status: "Completed" }]).atRisk).toBe(0);
+    expect(calcPortfolioExposure([{ ...base, excludeFromIPI: true }]).atRisk).toBe(0);
+  });
+  it("surfaces unscored projects as an explicit unknown bucket, not silently dropped", () => {
+    const pending = mk({ id: "U", gate: "Gate 1", budget: 5_000_000, actualCost: 0, milestones: [], documents: [] });
+    const e = calcPortfolioExposure([pending]);
+    expect(e.unknownCount).toBe(1);
+    expect(e.unknownBudget).toBe(5_000_000);
+  });
+  it("remaining budget (not total) drives exposure — a mostly-spent project risks less forward", () => {
+    const early = troubled("EARLY", 10_000_000);            // 20% spent → 8M remaining
+    const late  = { ...troubled("LATE", 10_000_000), actualCost: 9_000_000 }; // 1M remaining
+    const eEarly = calcPortfolioExposure([early]).atRisk;
+    const eLate  = calcPortfolioExposure([late]).atRisk;
+    expect(eEarly).toBeGreaterThan(eLate);
   });
 });
 
