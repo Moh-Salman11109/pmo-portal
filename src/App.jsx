@@ -1190,7 +1190,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                 </div>
               </div>
               <div>
-                <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>Budget · {utilPct}% used</div>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>Estimated Cost · {utilPct}% used</div>
                 <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(100, utilPct)}%`, background: utilPct > 90 ? "#dc2626" : utilPct > 75 ? "#f59e0b" : "#00FFB3", borderRadius: 4 }} />
                 </div>
@@ -1241,7 +1241,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: T.bg }}>
-                {["Code", "Project Name", "PM", "Type", "Progress", "Status", "IPI", "Risk", "Budget Status", "Gate", "Last Update"].map(h => (
+                {["Code", "Project Name", "PM", "Type", "Progress", "Status", "IPI", "Risk", "Cost Status", "Gate", "Last Update"].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -1278,7 +1278,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
                   </td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>
-                    <span style={{ color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</span>
+                    <span style={{ color: deriveBudgetStatus(p) === "Over Estimate" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</span>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
@@ -1315,7 +1315,7 @@ const DepartmentView = ({ projects, deptId, setRoute, userRole = ROLE_ADMIN, use
               </>; })()}
               <div style={{ display: "flex", gap: 8 }}>
                 <RiskBadge level={deriveRiskLevel(p)} />
-                <span style={{ fontSize: 11, color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600, padding: "2px 8px", background: deriveBudgetStatus(p) === "Over Budget" ? "#fee2e2" : "#dcfce7", borderRadius: 10 }}>{deriveBudgetStatus(p)}</span>
+                <span style={{ fontSize: 11, color: deriveBudgetStatus(p) === "Over Estimate" ? "#dc2626" : "#16a34a", fontWeight: 600, padding: "2px 8px", background: deriveBudgetStatus(p) === "Over Estimate" ? "#fee2e2" : "#dcfce7", borderRadius: 10 }}>{deriveBudgetStatus(p)}</span>
               </div>
             </div>
           ))}
@@ -1362,7 +1362,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
 
   const setH = (k, v) => setHealthState(prev => ({ ...prev, [k]: v }));
   const ragClr     = { Green: { bg: "#dcfce7", text: "#15803d", b: "#16a34a" }, Amber: { bg: "#fef9c3", text: "#854d0e", b: "#eab308" }, Red: { bg: "#fee2e2", text: "#991b1b", b: "#dc2626" } };
-  const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Budget"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
+  const healthDims = [["scope","Scope"],["schedule","Schedule"],["budget","Cost"],["risk","Risk"],["quality","Quality"],["resource","Resources"],["benefits","Benefits"],["governance","Governance"]];
   const [documents, setDocuments] = useState(project.documents?.map(d => ({ ...d })) || []);
 
   // Actual Progress is derived — WBS rollup if any milestones exist, otherwise
@@ -1507,7 +1507,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
         <div>
           <SL>BUDGET (SAR)</SL>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div><FL>Budget</FL>{numInput(budget, setBudget)}</div>
+            <div><FL>Estimated Cost</FL>{numInput(budget, setBudget)}</div>
             <div><FL>Forecast</FL>{numInput(forecast, setForecast)}</div>
             <div><FL>Actual Cost</FL>{numInput(actualCost, setActualCost)}</div>
           </div>
@@ -1891,7 +1891,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
 };
 
 // ─── PROJECT DASHBOARD ────────────────────────────────────────────
-const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Activities", "Budget", "Risks & Issues", "Benefits", "Documents", "Actions", "Updates"];
+const PROJECT_TABS_ADMIN = ["Exec Summary", "Overview", "Activities", "Cost", "Risks & Issues", "Benefits", "Documents", "Actions", "Updates"];
 const PROJECT_TABS_PM    = ["Overview", "Activities", "Risks & Issues", "Benefits", "Documents", "Actions"];
 const PROJECT_TABS_EXEC  = ["Exec Summary"];
 
@@ -2407,7 +2407,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           <div class="sub">${esc(ipiC.label)}</div>
         </div>
         <div class="kpi-tile">
-          <div class="lbl">Budget</div>
+          <div class="lbl">Estimated Cost</div>
           <div class="val mono">${project.budget ? fmtSAR(project.budget) : "—"}</div>
           ${project.actualCost ? `<div class="sub">${Math.round((project.actualCost/project.budget)*100)}% spent</div>` : ""}
         </div>
@@ -2683,7 +2683,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const problems = [];
         if (project.daysDelayed) problems.push(`${project.daysDelayed} days behind plan`);
         else if (behindPts != null && behindPts > 0) problems.push(`${behindPts} pts behind plan`);
-        if (overBudget > 0) problems.push(`forecast ${fmtSAR(forecastVal)} vs ${fmtSAR(project.budget)} budget (+${fmtSAR(overBudget)})`);
+        if (overBudget > 0) problems.push(`forecast ${fmtSAR(forecastVal)} vs ${fmtSAR(project.budget)} estimate (+${fmtSAR(overBudget)})`);
         if (worstOverdue) problems.push(`"${worstOverdue.name}" milestone ${overdueDays}d overdue`);
 
         const delayed = project.status === "Delayed" || derived?.status === "Delayed";
@@ -3066,9 +3066,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
             <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 16 }}>
               {/* Budget Health */}
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Budget Health</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Cost Health</div>
                 <div style={{ fontSize: 22, fontWeight: 900, color: remaining >= 0 ? "#007a62" : "#b23800" }}>{fmtSAR(project.actualCost)}</div>
-                <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>of {fmtSAR(project.budget)} approved</div>
+                <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>of {fmtSAR(project.budget)} estimated</div>
                 {/* Utilisation bar with a forecast marker tick */}
                 <div style={{ position: "relative", height: 8, background: "#eef3ee", borderRadius: 5, overflow: "visible" }}>
                   <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100, budgetUtil)}%`, borderRadius: 5, background: budgetUtil > 90 ? "#FF5000" : budgetUtil > 75 ? "#d97706" : "#00b894" }} />
@@ -3139,7 +3139,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                     ["Classification", project.classification],
                     ["Gate Status", project.gate],
                     ["Risk Level", deriveRiskLevel(project)],
-                    ["Budget Status", deriveBudgetStatus(project)],
+                    ["Cost Status", deriveBudgetStatus(project)],
                     ["Days Remaining", daysLeft == null ? "—" : daysLeft === 0 ? "Completed" : `${daysLeft} days`],
                   ];
                 })().map(([k, v]) => (
@@ -3190,9 +3190,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               </div>
             </div>
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
-              <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>Budget Snapshot</h3>
+              <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>Cost Snapshot</h3>
               {[
-                { label: "Approved Budget", value: fmtSAR(project.budget), color: T.text },
+                { label: "Estimated Cost", value: fmtSAR(project.budget), color: T.text },
                 { label: "Actual Cost", value: fmtSAR(project.actualCost), color: T.text },
                 { label: "Remaining", value: fmtSAR(remaining), color: remaining >= 0 ? "#16a34a" : "#dc2626" },
                 { label: "Utilisation", value: `${budgetUtil}%`, color: budgetUtil > 90 ? "#dc2626" : T.text },
@@ -3339,17 +3339,17 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       )}
 
       {/* BUDGET TAB */}
-      {activeTab === "Budget" && (
+      {activeTab === "Cost" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 700 }}>Financial Summary</h3>
             {[
-              { label: "Approved Budget", value: fmtSAR(project.budget), sub: "Total approved allocation" },
-              { label: "Forecast Budget", value: fmtSAR(project.forecast), sub: "Estimated total at completion", color: project.forecast > project.budget ? "#dc2626" : "#16a34a" },
-              { label: "Actual Cost to Date", value: fmtSAR(project.actualCost), sub: `${budgetUtil}% of budget consumed` },
-              { label: "Remaining Budget", value: fmtSAR(remaining), sub: "Available to spend", color: remaining < 0 ? "#dc2626" : "#16a34a" },
-              { label: "Cost Variance", value: fmtSAR(project.budget - project.actualCost), sub: "Positive = under budget", color: project.budget >= project.actualCost ? "#16a34a" : "#dc2626" },
-              { label: "Cost Performance Index", value: ipiResult.components.cpi != null ? ipiResult.components.cpi.toFixed(2) : "—", sub: "> 1.0 = under budget (auto-calculated)", color: (ipiResult.components.cpi ?? 1) >= 1 ? "#16a34a" : "#dc2626" },
+              { label: "Estimated Cost", value: fmtSAR(project.budget), sub: "Total estimated cost" },
+              { label: "Forecast Cost", value: fmtSAR(project.forecast), sub: "Estimated total at completion", color: project.forecast > project.budget ? "#dc2626" : "#16a34a" },
+              { label: "Actual Cost to Date", value: fmtSAR(project.actualCost), sub: `${budgetUtil}% of estimate consumed` },
+              { label: "Remaining", value: fmtSAR(remaining), sub: "Available to spend", color: remaining < 0 ? "#dc2626" : "#16a34a" },
+              { label: "Cost Variance", value: fmtSAR(project.budget - project.actualCost), sub: "Positive = under estimate", color: project.budget >= project.actualCost ? "#16a34a" : "#dc2626" },
+              { label: "Cost Performance Index", value: ipiResult.components.cpi != null ? ipiResult.components.cpi.toFixed(2) : "—", sub: "> 1.0 = under estimate (auto-calculated)", color: (ipiResult.components.cpi ?? 1) >= 1 ? "#16a34a" : "#dc2626" },
             ].map(({ label, value, sub, color }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
                 <div>
@@ -3362,7 +3362,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
           </div>
           <div>
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, marginBottom: 16 }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Budget Utilisation</h3>
+              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Cost Utilisation</h3>
               <div style={{ marginBottom: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <span style={{ fontSize: 13, color: T.muted }}>Actual Spend</span>
@@ -3371,7 +3371,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                 <Progress value={budgetUtil} color={budgetUtil > 90 ? "#dc2626" : budgetUtil > 75 ? "#eab308" : T.accent} height={14} />
               </div>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={[{ name: "Budget", Approved: project.budget / 1000000, Forecast: project.forecast / 1000000, Actual: project.actualCost / 1000000 }]} barSize={40}>
+                <BarChart data={[{ name: "Cost", Approved: project.budget / 1000000, Forecast: project.forecast / 1000000, Actual: project.actualCost / 1000000 }]} barSize={40}>
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 11 }} unit="M" />
                   <Tooltip formatter={(v) => `SAR ${v.toFixed(2)}M`} {...ttStyle()} />
@@ -4885,7 +4885,7 @@ const AdminView = ({ projects, setRoute, onSaveForm, archiveProject, restoreProj
                   <Field label="Gate" field="gate" options={["Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5"]} {...fp} />
                   <Field label="Status" field="status" options={["Not Started", "On Track", "At Risk", "Delayed", "On Hold", "Completed", "Cancelled"]} {...fp} />
                   <Field label="Priority" field="priority" options={["Low", "Medium", "High", "Critical"]} {...fp} />
-                  <Field label="Budget (SAR)" field="budget" type="number" {...fp} />
+                  <Field label="Estimated Cost (SAR)" field="budget" type="number" {...fp} />
                   <Field label="Progress %" field="progress" type="number" {...fp} />
                   <Field label="Start Date" field="startDate" type="date" {...fp} />
                   <Field label="Planned End Date" field="plannedEnd" type="date" {...fp} />
@@ -5140,7 +5140,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: T.headerText, marginBottom: 4 }}>Enterprise Portfolio Performance Index</div>
           <div style={{ fontSize: 12, color: T.headerText, opacity: 0.7, marginBottom: 12 }}>
-            Budget × Priority weighted across all active projects — SPI (auto from activities) ×50% + CPI (auto from budget) ×25% + MCI (compliance) ×25%
+            Estimated Cost × Priority weighted across all active projects — SPI (auto from activities) ×50% + CPI (auto from cost) ×25% + MCI (compliance) ×25%
           </div>
           <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
             {[
@@ -5233,7 +5233,7 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
                 Snapshot averages across {d.stats.total} project{d.stats.total === 1 ? "" : "s"}
               </span>
               <span style={{ fontSize: 9, color: T.muted, opacity: 0.7 }}>
-                informational · dept IPI uses budget × priority weighting
+                informational · dept IPI uses cost × priority weighting
               </span>
             </div>
             <div style={{ padding: "4px 20px 14px", borderBottom: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
@@ -5303,12 +5303,12 @@ const DepartmentsOverview = ({ projects, setRoute }) => {
             {/* Budget row */}
             <div style={{ padding: "12px 20px", borderBottom: `1px solid ${T.border}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, color: T.muted }}>Budget Utilisation</span>
+                <span style={{ fontSize: 11, color: T.muted }}>Cost Utilisation</span>
                 <span style={{ fontSize: 11, fontWeight: 700 }}>{d.stats.budgetUtil}%</span>
               </div>
               <Progress value={d.stats.budgetUtil} color={d.stats.budgetUtil > 90 ? "#dc2626" : d.stats.budgetUtil > 75 ? "#eab308" : T.accent} height={6} />
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                <span style={{ fontSize: 11, color: T.muted }}>Budget: <strong style={{ color: T.text }}>{fmtSAR(d.stats.totalBudget)}</strong></span>
+                <span style={{ fontSize: 11, color: T.muted }}>Est. Cost: <strong style={{ color: T.text }}>{fmtSAR(d.stats.totalBudget)}</strong></span>
                 <span style={{ fontSize: 11, color: T.muted }}>Spent: <strong style={{ color: T.text }}>{fmtSAR(d.stats.actualCost)}</strong></span>
               </div>
             </div>
@@ -5475,7 +5475,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
               { lbl: "IPI",          key: "ipi" },
               { lbl: "Status",       key: "status" },
               { lbl: "Risk",         key: null },
-              { lbl: "Budget",       key: null },
+              { lbl: "Cost Status",  key: null },
               { lbl: "Gate",         key: "gate" },
               { lbl: "Last Update",  key: "lastUpdate" },
             ].map(h => {
@@ -5554,7 +5554,7 @@ const AllProjectsView = ({ projects, setRoute, route, userRole = ROLE_ADMIN }) =
                   </td>
                   <td style={{ padding: "12px 14px" }}><Badge status={p.status} /></td>
                   <td style={{ padding: "12px 14px" }}><RiskBadge level={deriveRiskLevel(p)} /></td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: deriveBudgetStatus(p) === "Over Budget" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 12, color: deriveBudgetStatus(p) === "Over Estimate" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{deriveBudgetStatus(p)}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12, color: T.muted }}>{p.gate}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, color: T.muted }}>{p.lastUpdate || "—"}</div>
@@ -6178,7 +6178,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 
   const STEPS = [
     { label: "Basic Info", icon: "clipboard" },
-    { label: "Timeline & Budget", icon: "calendar" },
+    { label: "Timeline & Cost", icon: "calendar" },
     { label: "Activities", icon: "target" },
     { label: "Risks & Issues", icon: "alert" },
     { label: "Documents", icon: "doc" },
@@ -6299,7 +6299,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
         })()}
         <FField label="Progress (%)"><input type="number" min={0} max={100} value={form.progress} onChange={e => set("progress", Number(e.target.value))} style={s} /></FField>
         <FField label="Planned Progress (%)"><input type="number" min={0} max={100} value={form.plannedProgress} onChange={e => set("plannedProgress", Number(e.target.value))} style={s} /></FField>
-        <FField label="Budget (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>
+        <FField label="Estimated Cost (SAR)"><input type="number" min={0} step={10000} value={form.budget} onChange={e => set("budget", Number(e.target.value))} style={s} /></FField>
         <FField label="Forecast (SAR)"><input type="number" min={0} step={10000} value={form.forecast} onChange={e => set("forecast", Number(e.target.value))} style={s} /></FField>
         <FField label="Actual Cost (SAR)"><input type="number" min={0} step={10000} value={form.actualCost} onChange={e => set("actualCost", Number(e.target.value))} style={s} /></FField>
       </div>

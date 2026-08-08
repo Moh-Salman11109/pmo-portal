@@ -246,8 +246,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       if (staleDays !== null && staleDays > 14) reasons.push(`No update ${staleDays}d`);
       if (p.budget > 0) {
         const util = p.actualCost / p.budget;
-        if (util > 0.95) { reasons.push(`Budget ${Math.round(util * 100)}%`); severity = "high"; }
-        else if (util > 0.85) reasons.push(`Budget ${Math.round(util * 100)}%`);
+        if (util > 0.95) { reasons.push(`Cost ${Math.round(util * 100)}%`); severity = "high"; }
+        else if (util > 0.85) reasons.push(`Cost ${Math.round(util * 100)}%`);
       }
       const om = (p.milestones || []).filter(m => m.status !== "Completed" && m.date && m.date < TODAY);
       if (om.length > 0) {
@@ -333,7 +333,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     if (overrunProjects.length > 0) {
       bits.push(`${overrunProjects.length} project${overrunProjects.length > 1 ? "s" : ""} forecast overrun — SAR ${(overrunExposure / 1_000_000).toFixed(1)}M exposure.`);
     } else {
-      bits.push("No forecast overruns — every project tracking within budget.");
+      bits.push("No forecast overruns — every project tracking within estimate.");
     }
     return bits.join(" ");
   }, [rankedDepts.length, leaderDept, laggardDept, overrunProjects.length, overrunExposure]);
@@ -444,8 +444,8 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       insights.push(`<b>${counts.crit}</b> of ${allProjects.length} projects are Critical (&lt;70): ${names}.`);
     }
     if (breaches.length > 0) insights.push(`<b>${breaches.length}</b> project${breaches.length === 1 ? " is" : "s are"} past the roadmap commitment — worst: ${esc(worstBreach.p.name)} (IPI capped &amp; decaying −${Math.round((1 - (worstBreach.full.roadmapPenalty ?? 1)) * 100)}%).`);
-    insights.push(`Budget utilisation <b>${budgetUtilPct}%</b> (${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)})${overrunProjects.length ? ` · ${overrunProjects.length} project${overrunProjects.length === 1 ? "" : "s"} forecasting overrun, exposure ${fmtSAR(overrunExposure)}` : " · no forecast overruns"}.`);
-    insights.push(`Portfolio exposure (remaining budget weighted by shortfall &amp; priority): <b>${fmtSAR(exposure.atRisk)}</b> at risk${exposure.unknownCount ? ` · ${exposure.unknownCount} unscored project${exposure.unknownCount === 1 ? "" : "s"} (${fmtSAR(exposure.unknownBudget)})` : ""}${exposure.top[0] ? ` — largest: ${esc(exposure.top[0].name)} (${fmtSAR(exposure.top[0].exposure)})` : ""}.`);
+    insights.push(`Cost utilisation <b>${budgetUtilPct}%</b> (${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)})${overrunProjects.length ? ` · ${overrunProjects.length} project${overrunProjects.length === 1 ? "" : "s"} forecasting overrun, exposure ${fmtSAR(overrunExposure)}` : " · no forecast overruns"}.`);
+    insights.push(`Portfolio exposure (remaining estimated cost weighted by shortfall &amp; priority): <b>${fmtSAR(exposure.atRisk)}</b> at risk${exposure.unknownCount ? ` · ${exposure.unknownCount} unscored project${exposure.unknownCount === 1 ? "" : "s"} (${fmtSAR(exposure.unknownBudget)})` : ""}${exposure.top[0] ? ` — largest: ${esc(exposure.top[0].name)} (${fmtSAR(exposure.top[0].exposure)})` : ""}.`);
     if (overdueMilestones.length > 0) insights.push(`<b>${overdueMilestones.length}</b> milestone${overdueMilestones.length === 1 ? "" : "s"} overdue across ${overdueProjectCount} project${overdueProjectCount === 1 ? "" : "s"} — oldest ${overdueMilestones[0].daysOverdue}d.`);
     if (actOpen.length || actClosedThisMonth.length) insights.push(`Meeting actions: <b>${actOpen.length}</b> open${actOverdue.length ? ` (<b>${actOverdue.length}</b> overdue)` : ""} · ${actClosedThisMonth.length} closed in ${esc(monthName)}.`);
     if (leaderDept && laggardDept && leaderDept.id !== laggardDept.id) insights.push(`${esc(leaderDept.fullName)} leads at <b>${leaderDept.ipi}</b>; ${esc(laggardDept.fullName)} trails at <b>${laggardDept.ipi}</b>.`);
@@ -455,7 +455,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
       { l: "On Track ≥90",   v: counts.ok,    c: "#007a62" },
       { l: "Watch 70–89",    v: counts.watch, c: "#b45309" },
       { l: "Critical <70",   v: counts.crit,  c: "#c2410c" },
-      { l: "Budget Utilisation", v: budgetUtilPct + "%", s: fmtSAR(costTotal) + " spent" },
+      { l: "Cost Utilisation", v: budgetUtilPct + "%", s: fmtSAR(costTotal) + " spent" },
       { l: "Open Actions", v: actOpen.length, c: actOverdue.length ? "#b45309" : "#007a62", s: actOverdue.length ? `${actOverdue.length} overdue` : `${actClosedThisMonth.length} closed this month` },
     ];
 
@@ -565,7 +565,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
     const gatePipelineHtml = on("gatePipeline")
       ? `<section><div class="sec-head"><h2>Gate Pipeline</h2><span class="m">where the live portfolio sits · dot = IPI band</span></div><div class="gates-grid">${pipelineHtml}</div></section>` : "";
     const deptSectionHtml = on("deptIPI")
-      ? `<section><div class="sec-head"><h2>Department IPI Performance</h2><span class="m">IPI · budget × priority weighted</span></div>${deptBars}</section>` : "";
+      ? `<section><div class="sec-head"><h2>Department IPI Performance</h2><span class="m">IPI · cost × priority weighted</span></div>${deptBars}</section>` : "";
     const portfolioSectionHtml = on("portfolioTable")
       ? `<section><div class="sec-head"><h2>Portfolio — All Projects</h2><span class="m">sorted worst-first · IPI is the 90-day weighted score</span></div>
          <table class="port"><thead><tr><th>Code</th><th>Project</th><th>Dept</th><th>PM</th><th>Gate</th><th>Progress</th><th>IPI</th><th>Actions</th><th>Status</th><th>Planned End</th><th>Flags</th></tr></thead><tbody>${tableRows}</tbody></table></section>` : "";
@@ -935,7 +935,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                     : undefined,
                 },
                 {
-                  label: "Budget utilised",
+                  label: "Cost utilised",
                   value: `${budgetUtilPct}%`,
                   color: "white",
                   sub: `${fmtSAR(costTotal)} of ${fmtSAR(budgetTotal)}`,
@@ -1205,11 +1205,11 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
 
         {/* Portfolio Budget */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px", display: "flex", flexDirection: "column" }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Portfolio Budget</h3>
+          <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: T.text }}>Portfolio Cost</h3>
           <p style={{ margin: "0 0 14px", fontSize: 11, color: T.muted }}>Across all active projects</p>
           <div style={{ display: "flex", flexDirection: "column" }}>
             {[
-              { label: "Approved",  value: fmtSAR(budgetTotal),              color: T.text },
+              { label: "Estimated", value: fmtSAR(budgetTotal),              color: T.text },
               { label: "Spent",     value: fmtSAR(costTotal),                color: T.text },
               { label: "Remaining", value: fmtSAR(budgetTotal - costTotal),  color: (budgetTotal - costTotal) >= 0 ? "#007a62" : "#FF5000" },
             ].map(({ label, value, color }) => (
@@ -1273,7 +1273,7 @@ const HomeView = ({ projects, requests, gateSubmissions, closureSubmissions, set
                 ))}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTop: "1px solid #eef3ee", fontSize: 11, color: T.muted }}>
-                <span>Budget: <span style={{ fontWeight: 700, color: T.text }}>{fmtSAR(stats.totalBudget)}</span></span>
+                <span>Est. Cost: <span style={{ fontWeight: 700, color: T.text }}>{fmtSAR(stats.totalBudget)}</span></span>
                 <span>High Risk: <span style={{ fontWeight: 700, color: stats.highRisk > 0 ? "#b23800" : T.text }}>{stats.highRisk}</span></span>
               </div>
             </div>

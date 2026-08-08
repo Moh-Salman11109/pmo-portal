@@ -181,7 +181,7 @@ const IPICalculator = ({ onClose, onBack }) => {
 
             <div style={{ fontSize: 11, fontWeight: 800, color: T.primary, letterSpacing: "0.5px", textTransform: "uppercase", margin: "20px 0 12px" }}>Cost (optional)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 4 }}>
-              {field("Budget (SAR)", <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" style={inputStyle} />)}
+              {field("Estimated Cost (SAR)", <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" style={inputStyle} />)}
               {field("Actual cost (SAR)", <input type="number" min="0" value={actualCost} onChange={e => setActualCost(e.target.value)} placeholder="0" style={inputStyle} />)}
             </div>
             <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 4 }}>Leave empty → CPI excluded · IPI re-normalises across the remaining components</div>

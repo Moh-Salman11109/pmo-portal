@@ -131,7 +131,7 @@ const buildCharter = (f) => {
     ${delRows ? `<h3 class="sub">Key deliverables</h3><table><tr><th style="width:34%">Deliverable</th><th>Description</th></tr>${delRows}</table>` : ""}
     <h2 class="sec"><span class="no">03</span> Business Case</h2>
     ${f.businessCase.trim() ? `<p>${esc(f.businessCase)}</p>` : `<p class="hint">Overview provided as an attachment.</p>`}
-    <h2 class="sec"><span class="no">04</span> Budget &amp; Resource Plan</h2>
+    <h2 class="sec"><span class="no">04</span> Estimated Cost &amp; Resource Plan</h2>
     <div class="kv">
       <div class="cell"><div class="k">Estimated cost (SAR)</div><div class="v">${esc(f.cost) || "—"}</div></div>
       <div class="cell"><div class="k">Resources</div><div class="v">${esc(f.resources) || "—"}</div></div>
@@ -393,7 +393,7 @@ const DocGenerator = ({ onClose, currentUserName }) => {
         <F label="Overview of anticipated benefits and value drivers (financial, operational, compliance, customer)" span>
           <textarea style={ta} value={charter.businessCase} onChange={e => setC("businessCase", e.target.value)} placeholder="Leave empty to reference the attachment" /></F>
 
-        <div style={secH}>4 · Budget &amp; Resource Plan</div>
+        <div style={secH}>4 · Estimated Cost &amp; Resource Plan</div>
         <div style={grid2}>
           <F label="Estimated cost (SAR)"><input style={inp} value={charter.cost} onChange={e => setC("cost", e.target.value)} placeholder="e.g. 350,000 — or 0 for internal" /></F>
           <F label="Resources (Internal / Vendor)"><input style={inp} value={charter.resources} onChange={e => setC("resources", e.target.value)} /></F>

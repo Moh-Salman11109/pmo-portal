@@ -901,18 +901,20 @@ export function deriveRiskLevel(project) {
 }
 
 /**
- * Derive budget status from raw numbers.
- * "Over Budget" when actualCost or forecast exceeds the approved budget.
- * Otherwise "On Budget". "Under Budget" is intentionally not derived — rarely actionable.
+ * Derive cost status from raw numbers — actual/forecast vs the estimated cost.
+ * Returns "Over Estimate" when actualCost or forecast exceeds the estimated
+ * cost, otherwise "Within Estimate". (project.budget is the legacy field name
+ * for the estimated cost — see the mapping layer.) "Under Estimate" is
+ * intentionally not derived — rarely actionable.
  */
 export function deriveBudgetStatus(project) {
-  const budget     = project.budget     || 0;
-  const actualCost = project.actualCost || 0;
-  const forecast   = project.forecast   || 0;
-  if (!budget) return "On Budget";
-  if (actualCost > budget) return "Over Budget";
-  if (forecast   > budget) return "Over Budget";
-  return "On Budget";
+  const estimatedCost = project.budget || 0;
+  const actualCost    = project.actualCost || 0;
+  const forecast      = project.forecast   || 0;
+  if (!estimatedCost) return "Within Estimate";
+  if (actualCost > estimatedCost) return "Over Estimate";
+  if (forecast   > estimatedCost) return "Over Estimate";
+  return "Within Estimate";
 }
 
 // Strict 3-band RAG scale derived from the Tree brand (v2 design).

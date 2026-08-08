@@ -471,7 +471,7 @@ export const IPIBreakdownModal = ({ project, onClose }) => {
         <KV k="Days elapsed" v={elapsedDays != null ? `${elapsedDays} of ${totalDays} days` : "—"} mono />
         <KV k="Actual progress (effective)" v={`${eff}%`} mono />
         <KV k="Planned progress source" v={project.plannedProgress != null && project.plannedProgress !== "" ? "Manual override" : "Auto from dates"} />
-        <KV k="Budget" v={budget ? sar(budget) : "—"} mono />
+        <KV k="Estimated cost" v={budget ? sar(budget) : "—"} mono />
         <KV k="Actual cost" v={ac ? sar(ac) : "—"} mono />
         <KV k="Current gate" v={`Gate ${gateNum}`} />
         <KV k="Required docs" v={`${reqDocs.length} total · ${dueDocs.length} due at Gate ${gateNum}`} mono />
@@ -514,7 +514,7 @@ spiFinal = min(1.20, SPI)  =  ${num3(comp.spiFinal)}`}</Formula>
       {/* ─── 03 CPI ─── */}
       <Section num="03" title="CPI — Cost Performance Index" accent="#00b894" sub="weight 25%">
         {budget > 0 && ac > 0 ? (
-          <Formula>{`BCWP  =  Budget × (progress ÷ 100)
+          <Formula>{`BCWP  =  Estimated Cost × (progress ÷ 100)
        =  ${budget.toLocaleString()} × ${num3(evRaw)}
        =  ${(bcwp || 0).toLocaleString()} SAR
 
@@ -522,7 +522,7 @@ CPI   =  BCWP ÷ Actual Cost    (capped at 1.20)
        =  ${(bcwp || 0).toLocaleString()} ÷ ${ac.toLocaleString()}
        =  ${num3(comp.cpi)}`}</Formula>
         ) : (
-          <Formula>{`Budget or actual cost is zero / missing / negative.
+          <Formula>{`Estimated cost or actual cost is zero / missing / negative.
 CPI = ${comp.cpi == null ? "null  →  EXCLUDED from IPI; remaining weights re-normalise" : num3(comp.cpi)}`}</Formula>
         )}
         <KV k="CPI used in IPI" v={comp.cpi == null ? "excluded (re-normalised)" : num3(comp.cpi)} mono />
