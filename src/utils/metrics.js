@@ -146,7 +146,7 @@ const IPI_DEFAULTS = {
   // left unchanged (schedule & cost really are strong), so ipiHistory stays
   // comparable and no historical recompute is needed. Threshold is governance-
   // grade — change only with PMO sign-off. 0.60 = "at least 60% of docs due at
-  // this gate are approved/credited". Recommended default, pending PMO review.
+  // this gate are approved/credited". Approved by PMO (Mohammed) 2026-08-08.
   mciGreenFloor: 0.60,
 };
 
