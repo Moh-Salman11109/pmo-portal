@@ -11,12 +11,12 @@ import { env } from "../config/runtimeEnv.js";
 const GRC_SP_SITE = env.VITE_GRC_SP_SITE_URL || "https://treedigitalinsurance.sharepoint.com/sites/GRC-Dashboard";
 
 // ── GRC shared modal wrapper ──────────────────────────────────────
-const GRCModal = ({ title, onClose, children }) => {
+const GRCModal = ({ title, onClose, children, maxWidth = 520 }) => {
   const T = useT();
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
          onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, width: "100%", maxWidth, maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: `1px solid ${T.border}` }}>
           <span style={{ fontWeight: 800, fontSize: 14, color: T.text }}>{title}</span>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.muted, lineHeight: 1 }}>✕</button>
@@ -67,16 +67,30 @@ const computeAutoRAG = (value, kri) => {
   }
 };
 
+// Default reporting period for a KRI, derived from its frequency. Shared by
+// the single-reading form and the bulk Quick-Entry panel so both agree.
+const defaultPeriodFor = (freq) =>
+  freq === "Quarterly"   ? _qNow :
+  freq === "Semi-Annual" ? _hNow :
+  freq === "Annual"      ? String(_yr) :
+                           _now.toISOString().substring(0, 7);
+
+// Trend is direction-aware (Improving / Worsening / Stable): a move toward the
+// "good" side of the threshold is Improving. Falls back to Stable when either
+// value is missing or unchanged.
+const computeTrendLocal = (val, prev, kri) => {
+  const v = parseFloat(val), p = parseFloat(prev);
+  if (!Number.isFinite(v) || !Number.isFinite(p) || v === p) return "Stable";
+  const lowerBetter = (kri.ThresholdDirection || "Lower is better") === "Lower is better";
+  return (lowerBetter ? v < p : v > p) ? "Improving" : "Worsening";
+};
+
 // ── Add / Edit KRI Reading form ───────────────────────────────────
 const GRCReadingForm = ({ kri, reading, onSave, saving, error, onCancel }) => {
   const T = useT();
   const isEdit = reading && reading.ID != null;
   const freq = (kri.ReportingFrequency || "Monthly");
-  const defaultPeriod =
-    freq === "Quarterly"   ? _qNow :
-    freq === "Semi-Annual" ? _hNow :
-    freq === "Annual"      ? String(_yr) :
-                             _now.toISOString().substring(0, 7);
+  const defaultPeriod = defaultPeriodFor(freq);
   const [form, setForm] = useState({
     ID:                 reading?.ID ?? null,
     KRIID:              reading?.KRIID ?? kri.KRIID,
@@ -715,9 +729,19 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const [filterSub,  setFilterSub]  = useState([]);
   const [filterRAG,  setFilterRAG]  = useState([]);
   const [editingReading, setEditingReading] = useState(null);
+  // Bulk "Quick Reading Entry" — enter one reading per KRI, save all at once.
+  const [bulkOpen,    setBulkOpen]    = useState(false);
+  const [bulkVals,    setBulkVals]    = useState({});   // { KRIID: "value" }
+  const [bulkPeriods, setBulkPeriods] = useState({});   // { KRIID: "period" }
+  const [bulkBusy,    setBulkBusy]    = useState(false);
+  const [bulkProg,    setBulkProg]    = useState({ done: 0, total: 0, failed: [] });
+  const [bulkDone,    setBulkDone]    = useState(null); // { saved, failed[] } after a run
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
+  // silent=true refetches in the background WITHOUT blanking the dashboard to a
+  // spinner — used after a write so the screen never "reloads" under the user.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError("");
     if (isUsingMock()) {
       setKriMaster([]); setKriReadings([]); setRiskReg([]);
       setAppetite([]); setAuditFindings([]); setCorrectiveActions([]);
@@ -778,6 +802,15 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
     if (!res.ok) throw new Error(await res.text());
   };
 
+  // ── Local state merges — patch just the affected reading instead of a full
+  //    refetch, so a save never blanks/reloads the dashboard. ────────────────
+  const upsertReadingLocal = (item) => setKriReadings(prev => {
+    const i = prev.findIndex(r => r.ID === item.ID);
+    if (i >= 0) { const n = [...prev]; n[i] = { ...n[i], ...item }; return n; }
+    return [item, ...prev];
+  });
+  const removeReadingLocal = (id) => setKriReadings(prev => prev.filter(r => r.ID !== id));
+
   // ── Save handlers ─────────────────────────────────────────────
   const saveReading = async (form) => {
     setSaving(true); setSaveErr("");
@@ -797,11 +830,17 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
         ActionPlan:          form.ActionPlan || "",
         EscalationRequired:  form.EscalationRequired,
       };
-      if (form.ID == null) await spPost("GRC_KRI_Readings", payload);
-      else                 await spPatch("GRC_KRI_Readings", form.ID, payload);
+      if (form.ID == null) {
+        const created = await spPost("GRC_KRI_Readings", payload);
+        const id = created?.ID ?? created?.Id;
+        if (id != null) upsertReadingLocal({ ...payload, ID: id });
+        else await load(true);   // couldn't read new ID — reconcile silently
+      } else {
+        await spPatch("GRC_KRI_Readings", form.ID, payload);
+        upsertReadingLocal({ ...payload, ID: form.ID });
+      }
       setReadingModal(null);
       setEditingReading(null);
-      await load();
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -809,7 +848,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const deleteReading = async (r) => {
     if (!window.confirm(`Delete reading for ${r.Period}?`)) return;
     setSaving(true);
-    try { await spDelete("GRC_KRI_Readings", r.ID); await load(); }
+    try { await spDelete("GRC_KRI_Readings", r.ID); removeReadingLocal(r.ID); }
     catch(e) { window.alert(e.message); }
     finally  { setSaving(false); }
   };
@@ -825,7 +864,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
         MitigationSummary:  form.MitigationSummary || "",
       });
       setRiskModal(null);
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -838,7 +877,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
         AppetiteStatus:       form.AppetiteStatus,
       });
       setAppetiteModal(null);
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -867,7 +906,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
       if (form.ID == null) await spPost("GRC_KRI_Master", payload);
       else                 await spPatch("GRC_KRI_Master", form.ID, payload);
       setMasterModal(null);
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -875,7 +914,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const deleteKRI = async (kri) => {
     if (!window.confirm(`Delete KRI "${kri.Title}"?\n\nThis cannot be undone.`)) return;
     setSaving(true);
-    try { await spDelete("GRC_KRI_Master", kri.ID); await load(); }
+    try { await spDelete("GRC_KRI_Master", kri.ID); await load(true); }
     catch(e) { window.alert(e.message); }
     finally  { setSaving(false); }
   };
@@ -891,7 +930,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const deleteRisk = async (id) => {
     if (!window.confirm("Delete this risk? This cannot be undone.")) return;
     setSaving(true); setSaveErr("");
-    try { await spDelete("GRC_RiskRegister", id); await load(); }
+    try { await spDelete("GRC_RiskRegister", id); await load(true); }
     catch(e) { setSaveErr(e.message); }
     finally  { setSaving(false); }
   };
@@ -899,7 +938,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const deleteAppetite = async (id) => {
     if (!window.confirm("Delete this appetite category? This cannot be undone.")) return;
     setSaving(true); setSaveErr("");
-    try { await spDelete("GRC_RiskAppetite", id); await load(); }
+    try { await spDelete("GRC_RiskAppetite", id); await load(true); }
     catch(e) { setSaveErr(e.message); }
     finally  { setSaving(false); }
   };
@@ -919,7 +958,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
         NextReviewDate:       form.NextReviewDate || null,
       });
       setNewRiskModal(false);
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -936,7 +975,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
         AppetiteStatus:       form.AppetiteStatus,
       });
       setNewAppetiteModal(false);
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -947,7 +986,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
       const data = { Title: form.Title, FindingSeverity: form.FindingSeverity, BusinessUnit: form.BusinessUnit || "", Status: form.Status, DueDate: form.DueDate || null };
       if (form.ID) { await spPatch("GRC_AuditFindings", form.ID, data); setAfEditModal(null); }
       else         { await spPost("GRC_AuditFindings", data);           setAfNewModal(false); }
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -955,7 +994,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const deleteAuditFinding = async (id) => {
     if (!window.confirm("Delete this audit finding?")) return;
     setSaving(true);
-    try { await spDelete("GRC_AuditFindings", id); await load(); }
+    try { await spDelete("GRC_AuditFindings", id); await load(true); }
     catch(e) { window.alert(e.message); }
     finally  { setSaving(false); }
   };
@@ -966,7 +1005,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
       const data = { Title: form.Title, Status: form.Status, CompletionPercentage: Number(form.CompletionPercentage), TargetDate: form.TargetDate || null, LinkedFindingID: form.LinkedFindingID || "" };
       if (form.ID) { await spPatch("GRC_CorrectiveActions", form.ID, data); setCaEditModal(null); }
       else         { await spPost("GRC_CorrectiveActions", data);           setCaNewModal(false); }
-      await load();
+      await load(true);
     } catch(e) { setSaveErr(e.message); }
     finally    { setSaving(false); }
   };
@@ -974,7 +1013,7 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
   const deleteCorrectiveAction = async (id) => {
     if (!window.confirm("Delete this corrective action?")) return;
     setSaving(true);
-    try { await spDelete("GRC_CorrectiveActions", id); await load(); }
+    try { await spDelete("GRC_CorrectiveActions", id); await load(true); }
     catch(e) { window.alert(e.message); }
     finally  { setSaving(false); }
   };
@@ -1078,6 +1117,73 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
 
   const anyFilterActive = filterDept.length + filterCat.length + filterSub.length + filterRAG.length > 0 || kriSearch.trim() !== "";
   const clearAllFilters = () => { setFilterDept([]); setFilterCat([]); setFilterSub([]); setFilterRAG([]); setKriSearch(""); };
+
+  // ── Bulk Quick Reading Entry (defined after filteredKRIs/latestByKRI so the
+  //    React Compiler keeps their memoization) ───────────────────────────────
+  // Opens over the CURRENTLY FILTERED KRIs so the user can target a subset;
+  // each row defaults its period from the KRI's reporting frequency.
+  const openBulk = () => {
+    const periods = {};
+    filteredKRIs.forEach(k => { periods[k.KRIID] = defaultPeriodFor(k.ReportingFrequency); });
+    setBulkPeriods(periods);
+    setBulkVals({});
+    setBulkProg({ done: 0, total: 0, failed: [] });
+    setBulkDone(null);
+    setBulkOpen(true);
+  };
+
+  // Save every row the user filled. Upsert (PATCH existing KRI+Period, else
+  // POST), a small concurrency pool so SharePoint isn't flooded, per-row error
+  // capture, and ONE local state merge at the end — no page reload.
+  const saveBulkReadings = async () => {
+    const entries = filteredKRIs
+      .filter(k => { const v = bulkVals[k.KRIID]; return v != null && String(v).trim() !== ""; })
+      .map(k => ({ kri: k, value: bulkVals[k.KRIID], period: (bulkPeriods[k.KRIID] || defaultPeriodFor(k.ReportingFrequency)).trim() }));
+    if (entries.length === 0) return;
+
+    setBulkBusy(true); setBulkDone(null);
+    setBulkProg({ done: 0, total: entries.length, failed: [] });
+    const saved = [], failed = [];
+    let idx = 0;
+    const worker = async () => {
+      while (idx < entries.length) {
+        const { kri, value, period } = entries[idx++];
+        try {
+          const prevVal = latestByKRI[kri.KRIID]?.ActualValue ?? null;
+          const rag = computeAutoRAG(value, kri) || "Green";
+          const payload = {
+            Title: `${kri.KRIID}-${period}`, KRIID: kri.KRIID, KRIName: kri.Title,
+            ReadingDate: new Date().toISOString(),
+            ActualValue: Number(value),
+            PreviousValue: prevVal,
+            Period: period, RAGStatus: rag,
+            Trend: computeTrendLocal(value, prevVal, kri),
+            Comments: "", Justification: "", ActionPlan: "",
+            EscalationRequired: rag === "Red",
+          };
+          const existing = kriReadings.find(r => r.KRIID === kri.KRIID && r.Period === period);
+          if (existing) { await spPatch("GRC_KRI_Readings", existing.ID, payload); saved.push({ ...existing, ...payload }); }
+          else {
+            const created = await spPost("GRC_KRI_Readings", payload);
+            saved.push({ ...payload, ID: created?.ID ?? created?.Id ?? null });
+          }
+        } catch (e) { failed.push({ name: kri.Title, err: e.message }); }
+        setBulkProg(p => ({ done: p.done + 1, total: p.total, failed: [...failed] }));
+      }
+    };
+    const CONC = 4;
+    await Promise.all(Array.from({ length: Math.min(CONC, entries.length) }, worker));
+
+    // One merge for every saved row — the table updates instantly, no reload.
+    setKriReadings(prev => {
+      const map = new Map(prev.map(r => [r.ID, r]));
+      saved.forEach(it => { if (it.ID != null) map.set(it.ID, { ...(map.get(it.ID) || {}), ...it }); });
+      return Array.from(map.values());
+    });
+    setBulkBusy(false);
+    setBulkDone({ saved: saved.length, failed });
+    if (saved.some(it => it.ID == null)) await load(true);   // reconcile any row we couldn't ID
+  };
 
   // KPI counts use the filtered list so they always match what the user sees in the table
   const redCount    = filteredKRIs.filter(k => k.latest?.RAGStatus === "Red").length;
@@ -1933,10 +2039,16 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
             </span>
           </h2>
           {canEdit && (
-            <button onClick={handleAddKRI}
-              style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-              + Add KRI
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={openBulk} title="Enter a reading for every KRI and save them all at once"
+                style={{ background: "#00ffb3", color: "#061210", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+                ⚡ Quick Reading Entry
+              </button>
+              <button onClick={handleAddKRI}
+                style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                + Add KRI
+              </button>
+            </div>
           )}
         </div>
 
@@ -2503,6 +2615,85 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
           <GRCReadingForm kri={readingModal} reading={editingReading} onSave={saveReading} saving={saving} error={saveErr} onCancel={() => { setReadingModal(null); setEditingReading(null); setSaveErr(""); }} />
         </GRCModal>
       )}
+      {bulkOpen && (() => {
+        const filledCount = filteredKRIs.filter(k => { const v = bulkVals[k.KRIID]; return v != null && String(v).trim() !== ""; }).length;
+        const ragBg = { Red: "#fee2e2", Amber: "#fef3c7", Green: "#dcfce7" };
+        const ragFg = { Red: "#dc2626", Amber: "#d97706", Green: "#16a34a" };
+        const close = () => { if (!bulkBusy) { setBulkOpen(false); setBulkDone(null); } };
+        return (
+          <GRCModal maxWidth={860} title={`⚡ Quick Reading Entry — ${filteredKRIs.length} KRI${filteredKRIs.length === 1 ? "" : "s"}`} onClose={close}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" }}>
+                Enter this period&rsquo;s value for each KRI — RAG and trend are computed automatically.
+                Only rows you fill are saved. This list respects your current filters
+                {filteredKRIs.length !== kriWithLatest.length ? ` (showing ${filteredKRIs.length} of ${kriWithLatest.length}).` : "."}
+                <span style={{ color: T.text, fontWeight: 700 }}> {filledCount} filled.</span>
+              </div>
+
+              <div style={{ maxHeight: "52vh", overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: 8 }}>
+                {filteredKRIs.map((k, i) => {
+                  const val  = bulkVals[k.KRIID] ?? "";
+                  const rag  = computeAutoRAG(val, k);
+                  const prev = latestByKRI[k.KRIID];
+                  return (
+                    <div key={k.KRIID} style={{ display: "grid", gridTemplateColumns: "1fr 130px 96px 110px", gap: 10, alignItems: "center", padding: "8px 12px", borderTop: i ? `1px solid ${T.border}` : "none", background: val !== "" ? "rgba(0,184,148,0.08)" : "transparent" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k.Title}</div>
+                        <div style={{ fontSize: 10.5, color: T.muted }}>
+                          {k.KRIID}{k.MeasurementUnit ? ` · ${k.MeasurementUnit}` : ""}{prev?.ActualValue != null ? ` · prev ${prev.ActualValue} (${prev.Period})` : " · no prior reading"}
+                        </div>
+                      </div>
+                      <input type="number" value={val} disabled={bulkBusy}
+                        onChange={e => setBulkVals(v => ({ ...v, [k.KRIID]: e.target.value }))}
+                        placeholder="value"
+                        style={{ width: "100%", border: `1px solid ${T.border}`, borderRadius: 6, padding: "7px 9px", fontSize: 13, background: T.inputBg, color: T.inputText, boxSizing: "border-box" }} />
+                      <div style={{ textAlign: "center" }}>
+                        {rag
+                          ? <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: ragBg[rag], color: ragFg[rag] }}>{rag}</span>
+                          : <span style={{ fontSize: 11, color: T.muted }}>—</span>}
+                      </div>
+                      <input type="text" value={bulkPeriods[k.KRIID] ?? ""} disabled={bulkBusy}
+                        onChange={e => setBulkPeriods(p => ({ ...p, [k.KRIID]: e.target.value }))}
+                        title="Reporting period"
+                        style={{ width: "100%", border: `1px solid ${T.border}`, borderRadius: 6, padding: "7px 9px", fontSize: 12, textAlign: "center", background: T.inputBg, color: T.inputText, boxSizing: "border-box" }} />
+                    </div>
+                  );
+                })}
+                {filteredKRIs.length === 0 && <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: T.muted }}>No KRIs match the current filters.</div>}
+              </div>
+
+              {bulkBusy && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 5 }}>
+                    <span>Saving… {bulkProg.done} / {bulkProg.total}</span>
+                    <span>{bulkProg.failed.length ? `${bulkProg.failed.length} failed` : ""}</span>
+                  </div>
+                  <div style={{ height: 8, background: T.border, borderRadius: 5, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${bulkProg.total ? Math.round((bulkProg.done / bulkProg.total) * 100) : 0}%`, background: "#00b894", transition: "width 0.2s" }} />
+                  </div>
+                </div>
+              )}
+
+              {bulkDone && (
+                <div style={{ background: bulkDone.failed.length ? "#fef3c7" : "#dcfce7", color: bulkDone.failed.length ? "#92400e" : "#166534", borderRadius: 8, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.6 }}>
+                  ✓ Saved <strong>{bulkDone.saved}</strong> reading{bulkDone.saved === 1 ? "" : "s"}.
+                  {bulkDone.failed.length > 0 && (
+                    <> <strong>{bulkDone.failed.length}</strong> failed: {bulkDone.failed.slice(0, 5).map(f => f.name).join(", ")}{bulkDone.failed.length > 5 ? "…" : ""}. Re-enter those and save again.</>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 2 }}>
+                <button onClick={close} disabled={bulkBusy} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 18px", fontSize: 13, cursor: bulkBusy ? "not-allowed" : "pointer", color: T.text, opacity: bulkBusy ? 0.6 : 1 }}>Close</button>
+                <button onClick={saveBulkReadings} disabled={bulkBusy || filledCount === 0}
+                  style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "9px 22px", fontSize: 13, fontWeight: 800, cursor: bulkBusy || filledCount === 0 ? "not-allowed" : "pointer", opacity: bulkBusy || filledCount === 0 ? 0.6 : 1 }}>
+                  {bulkBusy ? "Saving…" : `Save ${filledCount} reading${filledCount === 1 ? "" : "s"}`}
+                </button>
+              </div>
+            </div>
+          </GRCModal>
+        );
+      })()}
       {riskModal && (
         <GRCModal title={`Edit Risk — ${riskModal.Title}`} onClose={() => { setRiskModal(null); setSaveErr(""); }}>
           <GRCRiskForm risk={riskModal} onSave={saveRisk} saving={saving} error={saveErr} onCancel={() => { setRiskModal(null); setSaveErr(""); }} />
