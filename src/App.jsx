@@ -3119,6 +3119,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               </div>
             </div>
 
+            {/* Executive schedule — the same Gantt shown on the Activities tab */}
+            <MilestoneGantt milestones={project.milestones} project={project} />
+
           </div>
         );
       })()}
