@@ -3958,7 +3958,7 @@ const ApprovalTimeline = ({ history }) => {
           <div style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5, flexShrink: 0, background: h.action === "Approved" ? "#16a34a" : h.action === "Returned" ? "#d97706" : "#dc2626" }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{h.stage} — <span style={{ color: h.action === "Approved" ? "#16a34a" : h.action === "Returned" ? "#d97706" : "#dc2626" }}>{h.action}</span></div>
-            <div style={{ fontSize: 11, color: T.muted }}>{h.by} · {h.date}</div>
+            {(h.by || h.date) && <div style={{ fontSize: 11, color: T.muted }}>{[h.by, h.date].filter(Boolean).join(" · ")}</div>}
             {h.notes && <div style={{ fontSize: 11, color: T.text, marginTop: 2, fontStyle: "italic" }}>{h.notes}</div>}
           </div>
         </div>
@@ -4140,6 +4140,7 @@ const MyRequestsView = ({ requests, gateSubmissions, closureSubmissions, setRout
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approval History</div>
               <ApprovalTimeline history={req.approvalHistory} />
+              <ApprovalLogPanel log={req.approvalLog} />
             </div>
             {req.description && (
               <div style={{ marginTop: 14 }}>

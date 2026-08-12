@@ -212,6 +212,41 @@ export function mapSPItemToDepartment(item) {
   };
 }
 
+// Parse a multi-line ApprovalLog (written by the request approval Power
+// Automate flow) into structured entries. Each line:
+//   "{emoji} {Name} ({Role}) — {Approve|Reject} — {date} — {comment}"
+// Same format the Gate/Closure lists use — see extractApproverNames above.
+const parseApprovalLogEntries = (raw) => {
+  if (!raw || typeof raw !== "string") return [];
+  return raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+    const parts = line.split(/\s+[—–-]\s+/);
+    if (parts.length < 2) return null;
+    const head = parts[0];
+    const emojiMatch = head.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|[✅❌⚠️])\s*/u);
+    const rest = emojiMatch ? head.slice(emojiMatch[0].length).trim() : head.trim();
+    const roleMatch = rest.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    return {
+      name:     (roleMatch ? roleMatch[1] : rest).trim(),
+      role:     roleMatch ? roleMatch[2].trim() : "",
+      decision: (parts[1] || "").trim(),
+      date:     (parts[2] || "").trim(),
+      comment:  parts.slice(3).join(" — ").trim(),
+    };
+  }).filter(Boolean);
+};
+
+const decisionToAction = (d) => {
+  const s = (d || "").toLowerCase();
+  if (s.includes("approve")) return "Approved";
+  if (s.includes("reject") || s.includes("return")) return "Returned";
+  return null;
+};
+
+// Build the per-stage approval timeline. The status columns say WHETHER each
+// stage happened; the ApprovalLog (once the flow writes it) says WHO and WHEN.
+// Each stage pulls its approver name + date + comment from the log entry whose
+// role matches the stage. Degrades gracefully: no log → names blank (the
+// timeline hides the empty line). Owner falls back to the owner field.
 function buildApprovalHistory(item) {
   const toAction = st => {
     const s = (st || "").toLowerCase();
@@ -219,21 +254,35 @@ function buildApprovalHistory(item) {
     if (s.includes("returned") || s.includes("rejected")) return "Returned";
     return null;
   };
+  const entries    = parseApprovalLogEntries(item.ApprovalLog);
+  const stageEntry = (re) => entries.find(e => re.test(e.role)) || null;
   const history = [];
-  const ownerAction = toAction(item.OwnerApprovalStatus);
+
+  const owner = stageEntry(/owner|^pm$|manager/i);
+  const ownerAction = toAction(item.OwnerApprovalStatus) || (owner && decisionToAction(owner.decision));
   if (ownerAction) history.push({
     stage: "Owner / PM Review", action: ownerAction,
-    by: item["ProjectOwner_x002f_Manager"]?.Title || "", date: "", notes: ""
+    by:   owner?.name || item["ProjectOwner_x002f_Manager"]?.Title || "",
+    date: owner?.date || "",
+    notes: owner?.comment || "",
   });
-  const pmoAction = toAction(item.PMOApprovalStatus);
+
+  const pmo = stageEntry(/pmo/i);
+  const pmoAction = toAction(item.PMOApprovalStatus) || (pmo && decisionToAction(pmo.decision));
   if (pmoAction) history.push({
     stage: "PMO Review", action: pmoAction,
-    by: "", date: "", notes: item.ReturnNotes || ""
+    by:   pmo?.name || "",
+    date: pmo?.date || "",
+    notes: pmo?.comment || item.ReturnNotes || "",
   });
-  const strategyAction = toAction(item.StrategyApprovalStatus);
+
+  const strat = stageEntry(/strateg/i);
+  const strategyAction = toAction(item.StrategyApprovalStatus) || (strat && decisionToAction(strat.decision));
   if (strategyAction) history.push({
     stage: "Strategy Review", action: strategyAction,
-    by: "", date: "", notes: ""
+    by:   strat?.name || "",
+    date: strat?.date || "",
+    notes: strat?.comment || "",
   });
   return history;
 }
@@ -622,6 +671,7 @@ export function mapSPItemToRequest(item) {
     requestedByEmail:item.Author?.EMail            || "",
     requestDate:     safeDate(item[f.requestDate]),
     approvalHistory: buildApprovalHistory(item),
+    approvalLog:     item.ApprovalLog              || "",   // populated once the flow + column exist
     linkedProjectId: "",
     // Days in current stage — proxy from Modified. SharePoint updates
     // Modified whenever an approval status flips, so this reflects "how long
@@ -759,11 +809,17 @@ Object.assign(SPService, {
   async getRequests() {
     if (USE_MOCK) return MOCK_REQUESTS;
     try {
-      const items = await fetchAllItems(
-        SP_CONFIG.requestsListName,
-        REQUESTS_SELECT,
-        REQUESTS_EXPAND,
-      );
+      // ApprovalLog is added by the request approval Power Automate flow and may
+      // not exist on the list yet. Try the query WITH it; if SharePoint 400s on
+      // an unknown column, fall back to the base select so the page never
+      // breaks. Once the column exists, the first attempt succeeds and the
+      // approver names + dates flow into the timeline automatically.
+      let items;
+      try {
+        items = await fetchAllItems(SP_CONFIG.requestsListName, REQUESTS_SELECT + ",ApprovalLog", REQUESTS_EXPAND);
+      } catch {
+        items = await fetchAllItems(SP_CONFIG.requestsListName, REQUESTS_SELECT, REQUESTS_EXPAND);
+      }
       return items.map(mapSPItemToRequest);
     } catch (err) {
       console.warn("getRequests failed (non-fatal):", err.message);
