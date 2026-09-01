@@ -557,6 +557,7 @@ const NavIcon = ({ name, size = 16 }) => {
     gear:     <><circle cx="8" cy="8" r="2"/><path d="M8 2.8v1.4M8 11.8v1.4M2.8 8h1.4M11.8 8h1.4M4.3 4.3l1 1M10.7 10.7l1 1M11.7 4.3l-1 1M5.3 10.7l-1 1"/></>,
     sliders:  <><path d="M3 5h10M3 11h10"/><circle cx="6" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="10" cy="11" r="1.6" fill="currentColor" stroke="none"/></>,
     doc:      <><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.3h4M6 10.8h2.5"/></>,
+    chart:    <><path d="M2.8 13h10.4"/><path d="M4.5 13V8.5"/><path d="M7.5 13V4.5"/><path d="M10.5 13V7"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -728,6 +729,48 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
                   <span style={{ flex: 1 }}>{tool.label}</span>
                 </button>
               ))}
+              {/* Report — quick link to the external portfolio report (e.g. Power
+                  BI). The URL is stored per-browser (localStorage), with an env
+                  default (VITE_REPORT_URL); ✎ sets/replaces it. Opens in a new tab. */}
+              {(() => {
+                const KEY = "pmo_report_url";
+                const getUrl = () => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } };
+                const openReport = () => {
+                  let url = getUrl() || (import.meta.env.VITE_REPORT_URL || "");
+                  if (!url) {
+                    url = window.prompt("Paste the report link (Power BI / dashboard URL):", "https://") || "";
+                    if (!url) return;
+                    try { localStorage.setItem(KEY, url); } catch { /* ignore */ }
+                  }
+                  window.open(url, "_blank", "noopener,noreferrer");
+                  if (!isDesktop) onClose();
+                };
+                const editReport = (e) => {
+                  e.stopPropagation();
+                  const cur = getUrl();
+                  const url = window.prompt("Set / replace the report link:", cur || "https://");
+                  if (url !== null) { try { localStorage.setItem(KEY, url.trim()); } catch { /* ignore */ } }
+                };
+                return (
+                  <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                    <button onClick={openReport} style={{
+                      flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
+                      border: "1px solid rgba(0,255,179,0.16)", background: "rgba(0,0,0,0.22)", color: T.accent,
+                      cursor: "pointer", fontSize: 13, fontWeight: 600, textAlign: "left",
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,255,179,0.10)"; e.currentTarget.style.borderColor = "rgba(0,255,179,0.40)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.22)"; e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)"; }}>
+                      <NavIcon name="chart" />
+                      <span style={{ flex: 1 }}>Report</span>
+                      <span style={{ opacity: 0.7 }}>↗</span>
+                    </button>
+                    <button onClick={editReport} title="Set / change report link" style={{
+                      width: 38, borderRadius: 8, border: "1px solid rgba(0,255,179,0.16)", background: "rgba(0,0,0,0.22)",
+                      color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                    }}>✎</button>
+                  </div>
+                );
+              })()}
             </>
           )}
           {/* Dept Heads see only their own department(s) — their project data
@@ -1796,7 +1839,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             : (m.progress ?? (m.status === "Completed" ? 100 : 0));
           const isMs = m._isMilestone;
           const isDiamond = isMs && !hasDuration;
-          const name = m.name || (isMs ? "(unnamed milestone)" : "(activity)");
+          const name = (m.link ? "🔗 " : "") + (m.name || (isMs ? "(unnamed milestone)" : "(activity)"));
           const fitsInside = !isDiamond && width > name.length * 0.65 + 6;
           const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
           const dateLbl = m.date ? (
@@ -1818,12 +1861,16 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
           };
 
           return (
-            <div key={m.id || i} style={{
-              position: "relative",
-              height: isMs ? 36 : 30,
-              borderTop: `1px solid ${T.border}`,
-              background: isMs ? `${T.primary}06` : "transparent",
-            }} title={m.name}>
+            <div key={m.id || i}
+              onClick={m.link ? (() => window.open(m.link, "_blank", "noopener,noreferrer")) : undefined}
+              title={m.link ? `Open linked task ↗  ·  ${m.name || ""}` : m.name}
+              style={{
+                position: "relative",
+                height: isMs ? 36 : 30,
+                borderTop: `1px solid ${T.border}`,
+                background: isMs ? `${T.primary}06` : "transparent",
+                cursor: m.link ? "pointer" : "default",
+              }}>
               {ticks.map((t, ti) => (
                 <div key={ti} style={{ position: "absolute", left: `${t.p}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: 0.4 }} />
               ))}
@@ -5652,8 +5699,9 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove, move, canRemove = 
       borderLeft: isActivity ? `3px solid ${T.accent}` : `4px solid ${T.primary}`,
     }}>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: "0.06em" }}>
+        <span style={{ fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
           {isActivity ? "ACTIVITY" : "MILESTONE"}
+          {item.ref && <span style={{ color: T.accent, marginLeft: 6, fontFamily: "ui-monospace, monospace" }}>{item.ref}</span>}
         </span>
         <input value={item.name} onChange={e => upd(item.id, "name", e.target.value)}
           placeholder={isActivity ? "Activity name *" : "Milestone name *"}
@@ -5706,6 +5754,17 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove, move, canRemove = 
             onChange={e => upd(item.id, "weight", Math.max(1, Number(e.target.value)))} style={s} />
         </div>
       </div>
+      {/* Dependencies (by ID) + external task link (e.g. Jira) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Depends on <span style={{ opacity: 0.6 }}>(IDs, e.g. A1, M2)</span></div>
+          <input value={item.dependsOn || ""} onChange={e => upd(item.id, "dependsOn", e.target.value)} placeholder="e.g. A1, A2" style={{ ...s, fontFamily: "ui-monospace, monospace" }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: T.muted, marginBottom: 3 }}>Link <span style={{ opacity: 0.6 }}>(Jira / URL — clickable in Gantt)</span></div>
+          <input type="url" value={item.link || ""} onChange={e => upd(item.id, "link", e.target.value)} placeholder="https://…" style={s} />
+        </div>
+      </div>
     </div>
   );
 };
@@ -5713,40 +5772,56 @@ const MilestoneRow = ({ item, isActivity, items, upd, remove, move, canRemove = 
 const MilestoneListEditor = ({ items, onChange, canRemove = true }) => {
   const T = useT();
 
-  const milestones = items.filter(m => !m.parentId);
-  const childrenOf  = (id) => items.filter(m => m.parentId === id);
+  // Short, human-friendly IDs (M1, M2… for milestones · A1, A2… for activities)
+  // used for the "Depends on" field. Assigned to any item missing one, always
+  // continuing from the current max so existing refs (and dependencies that
+  // point at them) stay stable across reorders and deletes.
+  const ensureRefs = (list) => {
+    let mN = Math.max(0, ...list.map(m => /^M(\d+)$/.test(m.ref || "") ? +m.ref.slice(1) : 0));
+    let aN = Math.max(0, ...list.map(m => /^A(\d+)$/.test(m.ref || "") ? +m.ref.slice(1) : 0));
+    return list.map(m => m.ref ? m : (!m.parentId ? { ...m, ref: `M${++mN}` } : { ...m, ref: `A${++aN}` }));
+  };
+  const view = ensureRefs(items);
+  const emit = (next) => onChange(ensureRefs(next));
 
+  const milestones = view.filter(m => !m.parentId);
+  const childrenOf  = (id) => view.filter(m => m.parentId === id);
+
+  // Pure unique id (no Date.now/random): prefix + one past the largest trailing
+  // number across existing ids. Keeps ids stable and collision-free on re-adds.
+  const nextId = (prefix) => {
+    const nums = view.map(m => { const mm = String(m.id || "").match(/(\d+)$/); return mm ? +mm[1] : 0; });
+    return `${prefix}${Math.max(0, ...nums) + 1}`;
+  };
   const addMilestone = () => {
-    const id = `M${Date.now()}`;
-    onChange([...items, { id, name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1, parentId: null }]);
+    emit([...view, { id: nextId("M"), name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1, parentId: null, dependsOn: "", link: "" }]);
   };
   const addActivity = (parentId) => {
-    const id = `A${Date.now()}`;
-    onChange([...items, { id, name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1, parentId }]);
+    emit([...view, { id: nextId("A"), name: "", startDate: "", date: "", status: "Upcoming", owner: "", progress: 0, weight: 1, parentId, dependsOn: "", link: "" }]);
   };
   const remove = (id) => {
     // Also drop any children when removing a milestone
-    onChange(items.filter(m => m.id !== id && m.parentId !== id));
+    emit(view.filter(m => m.id !== id && m.parentId !== id));
   };
-  const upd = (id, k, v) => onChange(items.map(m => m.id === id ? { ...m, [k]: v } : m));
+  const upd = (id, k, v) => emit(view.map(m => m.id === id ? { ...m, [k]: v } : m));
   // Reorder among siblings: a top-level milestone swaps with another top-level
   // milestone; an activity swaps with another activity under the same parent.
   // All downstream views (Activities tab, Gantt, Print Report) re-group by
   // parent at render time, so the swap propagates cleanly everywhere.
   const move = (id, dir) => {
-    const item = items.find(x => x.id === id);
+    const item = view.find(x => x.id === id);
     if (!item) return;
     const parentKey = item.parentId || null;
-    const siblings = items.filter(x => (x.parentId || null) === parentKey);
+    const siblings = view.filter(x => (x.parentId || null) === parentKey);
     const sibIdx = siblings.findIndex(x => x.id === id);
     const targetSibIdx = dir === "up" ? sibIdx - 1 : sibIdx + 1;
     if (targetSibIdx < 0 || targetSibIdx >= siblings.length) return;
     const targetId = siblings[targetSibIdx].id;
-    const aIdx = items.findIndex(x => x.id === id);
-    const bIdx = items.findIndex(x => x.id === targetId);
-    const next = [...items];
+    const aIdx = view.findIndex(x => x.id === id);
+    const bIdx = view.findIndex(x => x.id === targetId);
+    const next = [...view];
     [next[aIdx], next[bIdx]] = [next[bIdx], next[aIdx]];
-    onChange(next);
+    emit(next);
   };
 
   return (
@@ -6580,6 +6655,25 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+  // ── Guard against the "crash on Backspace" ────────────────────
+  // In some browsers/configs a Backspace (or Alt+←) pressed OUTSIDE an input
+  // fires browser-back, which tears the SPA down mid-state and looks like a
+  // crash — reported when opening the Doc Generator. Block that navigation
+  // unless the user is actually editing a field.
+  useEffect(() => {
+    const isEditable = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+    const onKey = (e) => {
+      if ((e.key === "Backspace" || (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"))) && !isEditable(e.target)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
   // ── Role lookup: fires once email is available ────────────────
   useEffect(() => {
