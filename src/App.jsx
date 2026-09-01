@@ -2322,6 +2322,36 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>`;
       }).join("");
 
+    // ── Dependency connectors for the printed timeline ────────────────────────
+    // Same 90° Finish→Start routing as the on-screen Gantt, drawn as an SVG
+    // overlay. x is in % (matches the bars' % positioning) and y in px (row
+    // heights are fixed: 24 ms / 22 act), so it needs no width measurement.
+    const rowHpx = (m) => (m._isMs ? 24 : 22);
+    let _ry = 0;
+    const rgeom = ordered.map(m => {
+      const l = toPct(m.startDate || m.date), r = toPct(m.date || m.startDate);
+      const g = { ref: m.ref, left: Math.min(l, r), right: Math.max(l, r), yc: _ry + rowHpx(m) / 2 };
+      _ry += rowHpx(m);
+      return g;
+    });
+    const rTotalH = _ry;
+    const rByRef = {};
+    rgeom.forEach(g => { if (g.ref) rByRef[g.ref] = g; });
+    const rDeps = [];
+    ordered.forEach((m, i) => String(m.dependsOn || "").split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+      .forEach(dep => { const f = rByRef[dep]; if (f && f !== rgeom[i]) rDeps.push({ f, t: rgeom[i] }); }));
+    const depSvg = rDeps.length === 0 ? "" : `<svg width="100%" height="${rTotalH}" style="position:absolute;top:0;left:0;pointer-events:none;z-index:3;overflow:visible">
+      <defs><marker id="rep-dep" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M1,1 L6,3.5 L1,6 Z" fill="#0a5448"/></marker></defs>
+      ${rDeps.map(d => {
+        const mx = Math.min(99, d.f.right + 1.4);   // vertical channel just past the predecessor
+        const cas = (x1, y1, x2, y2, extra = "") => `<line x1="${x1}%" y1="${y1}" x2="${x2}%" y2="${y2}" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/><line x1="${x1}%" y1="${y1}" x2="${x2}%" y2="${y2}" stroke="#0a5448" stroke-width="1.4" stroke-linecap="round" ${extra}/>`;
+        return cas(d.f.right, d.f.yc, mx, d.f.yc)
+             + cas(mx, d.f.yc, mx, d.t.yc)
+             + cas(mx, d.t.yc, d.t.left, d.t.yc, 'marker-end="url(#rep-dep)"')
+             + `<circle cx="${d.f.right}%" cy="${d.f.yc}" r="2.5" fill="#0a5448" stroke="#fff" stroke-width="1"/>`;
+      }).join("")}
+    </svg>`;
+
     // ── Risks
     const openRisks = (project.risks || [])
       .filter(r => r.status !== "Closed" && r.status !== "Mitigated")
@@ -2548,7 +2578,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         </div>
         <div class="timeline">
           ${ordered.length > 0 ? `<div class="axis">${ticks.map(t => `<div class="tick" style="left:${t.p}%">${t.label}</div>`).join("")}</div>` : ""}
-          ${rowsHtml}
+          <div style="position:relative">${depSvg}${rowsHtml}</div>
         </div>
       </section>
 
