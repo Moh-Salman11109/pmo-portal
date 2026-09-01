@@ -583,7 +583,7 @@ const DeptGlyph = ({ name }) => {
   );
 };
 
-const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, userDeptId, open, onClose, onOpenWhatIf, onOpenDocGen }) => {
+const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closureSubmissions, currentUserEmail, currentUserName, userRole, userDeptId, open, onClose, onOpenWhatIf, onOpenDocGen, onOpenReports }) => {
   const { departments } = useDepts();
   const T = useT();
   const bp = useBp();
@@ -696,7 +696,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
           {/* What-If Hub — single sidebar entry that opens a picker with
               IPI / Cost / ROI calculators. Replaces the two separate sidebar
               buttons; keeps the sidebar clean as we add more planning tools. */}
-          {((canWhatIf && onOpenWhatIf) || (canDocGen && onOpenDocGen)) && (
+          {((canWhatIf && onOpenWhatIf) || (canDocGen && onOpenDocGen) || onOpenReports) && (
             /* Designed INTO the sidebar's own language instead of imported
                from elsewhere: a micro section header (same idiom as
                "DEPARTMENTS" below) and quietly recessed tool trays — one
@@ -729,48 +729,20 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
                   <span style={{ flex: 1 }}>{tool.label}</span>
                 </button>
               ))}
-              {/* Report — quick link to the external portfolio report (e.g. Power
-                  BI). The URL is stored per-browser (localStorage), with an env
-                  default (VITE_REPORT_URL); ✎ sets/replaces it. Opens in a new tab. */}
-              {(() => {
-                const KEY = "pmo_report_url";
-                const getUrl = () => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } };
-                const openReport = () => {
-                  let url = getUrl() || (import.meta.env.VITE_REPORT_URL || "");
-                  if (!url) {
-                    url = window.prompt("Paste the report link (Power BI / dashboard URL):", "https://") || "";
-                    if (!url) return;
-                    try { localStorage.setItem(KEY, url); } catch { /* ignore */ }
-                  }
-                  window.open(url, "_blank", "noopener,noreferrer");
-                  if (!isDesktop) onClose();
-                };
-                const editReport = (e) => {
-                  e.stopPropagation();
-                  const cur = getUrl();
-                  const url = window.prompt("Set / replace the report link:", cur || "https://");
-                  if (url !== null) { try { localStorage.setItem(KEY, url.trim()); } catch { /* ignore */ } }
-                };
-                return (
-                  <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                    <button onClick={openReport} style={{
-                      flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
-                      border: "1px solid rgba(0,255,179,0.16)", background: "rgba(0,0,0,0.22)", color: T.accent,
-                      cursor: "pointer", fontSize: 13, fontWeight: 600, textAlign: "left",
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,255,179,0.10)"; e.currentTarget.style.borderColor = "rgba(0,255,179,0.40)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.22)"; e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)"; }}>
-                      <NavIcon name="chart" />
-                      <span style={{ flex: 1 }}>Report</span>
-                      <span style={{ opacity: 0.7 }}>↗</span>
-                    </button>
-                    <button onClick={editReport} title="Set / change report link" style={{
-                      width: 38, borderRadius: 8, border: "1px solid rgba(0,255,179,0.16)", background: "rgba(0,0,0,0.22)",
-                      color: T.accent, cursor: "pointer", fontSize: 13, fontWeight: 700,
-                    }}>✎</button>
-                  </div>
-                );
-              })()}
+              {/* Reports — opens a manager where you add reports (name + date +
+                  link) and click any to open it, exactly like the Documents list. */}
+              {onOpenReports && (
+                <button onClick={() => { onOpenReports(); if (!isDesktop) onClose(); }} style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
+                  border: "1px solid rgba(0,255,179,0.16)", background: "rgba(0,0,0,0.22)", color: T.accent,
+                  cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: "left",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,255,179,0.10)"; e.currentTarget.style.borderColor = "rgba(0,255,179,0.40)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.22)"; e.currentTarget.style.borderColor = "rgba(0,255,179,0.16)"; }}>
+                  <NavIcon name="chart" />
+                  <span style={{ flex: 1 }}>Reports</span>
+                </button>
+              )}
             </>
           )}
           {/* Dept Heads see only their own department(s) — their project data
@@ -6609,6 +6581,67 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 //  object. All write paths (submitUpdate, savePMONote, archiveProject, etc.)
 //  are defined here and passed down to the child views as props.
 //
+// ── Reports manager — add/open external reports (name + date + link), managed
+//    exactly like the Documents list. Stored per-browser (localStorage).
+const ReportsModal = ({ onClose }) => {
+  const T = useT();
+  const KEY = "pmo_reports";
+  const [reports, setReports] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } });
+  const [name, setName] = useState("");
+  const [date, setDate] = useState("");
+  const [link, setLink] = useState("");
+  const persist = (next) => { setReports(next); try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  const add = () => {
+    const nm = name.trim(), ln = link.trim();
+    if (!nm || !ln) return;
+    const url = /^https?:\/\//i.test(ln) ? ln : `https://${ln}`;
+    const n = reports.reduce((m, r) => Math.max(m, r.n || 0), 0) + 1;
+    persist([...reports, { n, name: nm, date, link: url }]);
+    setName(""); setDate(""); setLink("");
+  };
+  const remove = (n) => persist(reports.filter(r => r.n !== n));
+  const s = fInputStyle(T, false);
+  const lbl = { fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 4 };
+  const canAdd = !!name.trim() && !!link.trim();
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,18,14,0.6)", backdropFilter: "blur(3px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, width: "min(680px, 100%)", maxHeight: "88vh", overflow: "auto", boxShadow: "0 30px 80px rgba(0,0,0,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: `1px solid ${T.border}` }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Reports</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Add a report name, date and link — click any to open it.</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.muted, lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ padding: 22 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 10, marginBottom: 10 }}>
+            <div><div style={lbl}>Report name *</div><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Monthly Portfolio Report" style={s} /></div>
+            <div><div style={lbl}>Date</div><input type="date" value={date} onChange={e => setDate(e.target.value)} style={s} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 18, alignItems: "flex-end" }}>
+            <div><div style={lbl}>Link (SharePoint / Power BI / URL) *</div><input value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} placeholder="https://…" style={s} /></div>
+            <button onClick={add} disabled={!canAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "0 22px", height: 38, fontSize: 13, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.6 }}>+ Add</button>
+          </div>
+          {reports.length === 0 ? (
+            <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 0" }}>No reports yet — add your first above.</div>
+          ) : (
+            <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
+              {reports.map((r, i) => (
+                <div key={r.n} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "center", padding: "11px 14px", borderTop: i ? `1px solid ${T.border}` : "none" }}>
+                  <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>{r.name} <span style={{ fontSize: 12 }}>↗</span></a>
+                  <span style={{ fontSize: 12, color: T.muted, fontFamily: "ui-monospace, monospace" }}>{r.date || "—"}</span>
+                  <button onClick={() => remove(r.n)} title="Remove" style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "3px 10px" }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 14 }}>Saved on this browser. Want them shared with everyone? We can store them in SharePoint — just ask.</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [route, setRoute] = useState({ view: "home" });
   const activeT = useT();
@@ -6620,6 +6653,7 @@ export default function App() {
   // returns to null.
   const [whatIfView, setWhatIfView] = useState(null);
   const [docGenOpen, setDocGenOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
   const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
@@ -7115,8 +7149,9 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => setDocGenOpen(true)} />
+      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => setDocGenOpen(true)} onOpenReports={() => setReportsOpen(true)} />
       {docGenOpen && <DocGenerator onClose={() => setDocGenOpen(false)} currentUserName={currentUserName} />}
+      {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} />}
       {whatIfView === "picker" && <WhatIfPicker  onClose={() => setWhatIfView(null)} onPick={(k) => setWhatIfView(k)} />}
       {whatIfView === "ipi"    && <IPICalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
       {whatIfView === "cost"   && <CostCalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
