@@ -35,13 +35,13 @@
 //  Tree brand palette.
 // ============================================================================
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, ReferenceLine, ReferenceArea, CartesianGrid, LabelList } from "recharts";
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_LOCKED } from "./roles.js";
-import { themeStore, useT, ttStyle } from "./theme.js";
+import { themeStore, useT, useDark, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, deptColor } from "./utils/colors.js";
 import { fmtSAR } from "./utils/format.js";
@@ -1708,8 +1708,38 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
 //  Past time is faded with a soft Lichen mist; a sea-green Today marker cuts
 //  across the chart. Overdue bars turn maroon and carry an OVERDUE chip.
 //
+// Build a rounded orthogonal (90°) path through a list of waypoints — used for
+// the Gantt dependency connectors so corners turn cleanly instead of diagonally.
+function roundedElbow(pts, r) {
+  if (!pts || pts.length < 2) return "";
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+    const inDx = Math.sign(p1.x - p0.x), inDy = Math.sign(p1.y - p0.y);
+    const outDx = Math.sign(p2.x - p1.x), outDy = Math.sign(p2.y - p1.y);
+    const rin  = Math.min(r, Math.hypot(p1.x - p0.x, p1.y - p0.y) / 2);
+    const rout = Math.min(r, Math.hypot(p2.x - p1.x, p2.y - p1.y) / 2);
+    const bx = p1.x - inDx * rin,  by = p1.y - inDy * rin;
+    const ax = p1.x + outDx * rout, ay = p1.y + outDy * rout;
+    d += ` L ${bx.toFixed(1)} ${by.toFixed(1)} Q ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${ax.toFixed(1)} ${ay.toFixed(1)}`;
+  }
+  const last = pts[pts.length - 1];
+  d += ` L ${last.x.toFixed(1)} ${last.y.toFixed(1)}`;
+  return d;
+}
+
 const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
   const T = useT();
+  const dark = useDark();
+  const wrapRef = useRef(null);
+  const [chartW, setChartW] = useState(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((es) => { const w = es[0]?.contentRect?.width; if (w) setChartW(w); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Group into WBS order: each milestone followed by its activities (children).
   // Top-level items (parentId null/missing) are milestones; rest are activities.
@@ -1820,20 +1850,45 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             the marker when the bar is too narrow) so the chart presents
             without a legend column. Date labels carry replan memory —
             struck old date + current date when the finish was moved. */}
-        <div style={{ position: "relative" }}>
-        {depLines.length > 0 && (
-          <svg width="100%" height={rowsHeight} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 5, overflow: "visible" }}>
-            <defs>
-              <marker id="gantt-dep" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#00b894" />
-              </marker>
-            </defs>
-            {depLines.map((d, i) => (
-              <line key={i} x1={`${d.from.right}%`} y1={d.from.yc} x2={`${d.to.left}%`} y2={d.to.yc}
-                stroke="#00b894" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" markerEnd="url(#gantt-dep)" />
-            ))}
-          </svg>
-        )}
+        <div ref={wrapRef} style={{ position: "relative" }}>
+        {depLines.length > 0 && chartW > 0 && (() => {
+          // Professional Finish→Start connectors: right-angle elbows with rounded
+          // corners, a start dot at the predecessor's finish, an arrowhead at the
+          // successor's start, and a card-coloured casing so the line stays crisp
+          // over the coloured bars. Geometry is in real px (chart width measured).
+          const S = 16, R = 7, GAP = 5;
+          const conn   = dark ? "#8be9d0" : "#0a5448";
+          const casing = T.surface;
+          const px = (pct) => (pct / 100) * chartW;
+          const built = depLines.map((d) => {
+            const x1 = px(d.from.right), y1 = d.from.yc;
+            const x2 = px(d.to.left) - GAP, y2 = d.to.yc;
+            let pts;
+            if (x2 >= x1 + S * 2) {
+              pts = [{ x: x1, y: y1 }, { x: x1 + S, y: y1 }, { x: x1 + S, y: y2 }, { x: x2, y: y2 }];
+            } else {
+              const my = y1 + (y2 - y1) / 2;
+              pts = [{ x: x1, y: y1 }, { x: x1 + S, y: y1 }, { x: x1 + S, y: my }, { x: x2 - S, y: my }, { x: x2 - S, y: y2 }, { x: x2, y: y2 }];
+            }
+            return { d: roundedElbow(pts, R), x1, y1 };
+          });
+          return (
+            <svg width={chartW} height={rowsHeight} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 5, overflow: "visible" }}>
+              <defs>
+                <marker id="gantt-dep" markerWidth="8" markerHeight="8" refX="5.5" refY="4" orient="auto">
+                  <path d="M1,1 L6.5,4 L1,7 Z" fill={conn} />
+                </marker>
+              </defs>
+              {built.map((p, i) => (
+                <g key={i}>
+                  <path d={p.d} fill="none" stroke={casing} strokeWidth={4.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
+                  <path d={p.d} fill="none" stroke={conn} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" markerEnd="url(#gantt-dep)" />
+                  <circle cx={p.x1} cy={p.y1} r={3} fill={conn} stroke={casing} strokeWidth={1.3} />
+                </g>
+              ))}
+            </svg>
+          );
+        })()}
         {milestones.map((m, i) => {
           const sc  = SC[m.status] || SC.Upcoming;
           const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
