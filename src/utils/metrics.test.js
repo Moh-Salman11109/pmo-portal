@@ -335,6 +335,44 @@ describe("Governance gate — strong schedule/cost can't mask missing docs (P2)"
   });
 });
 
+describe("Completed projects FREEZE — IPI must not decay after closure", () => {
+  it("a finished project past its roadmap scores the same regardless of as-of date", () => {
+    // No actualFinishDate on purpose — the exact bug case where the clock used
+    // to fall back to 'today' and the roadmap penalty ate the score daily.
+    const p = mk({
+      gate: "Gate 5", status: "Completed", progress: 100, lastUpdate: null,
+      startDate: "2026-01-01", plannedEnd: "2026-06-01", baselineEnd: "2026-06-01",
+      roadmapDeadline: "2026-05-01",
+      milestones: [{ id: "a", startDate: "2026-01-01", date: "2026-06-01", progress: 100, weight: 1 }],
+      documents: [{ name: "d", required: true, requiredAtGate: 1, status: "Approved" }],
+    });
+    const early = calcProjectIPIFull(p, "2026-06-10").ipi;
+    const later = calcProjectIPIFull(p, "2026-12-10").ipi;   // 6 months later
+    expect(early).not.toBeNull();
+    expect(later).toBe(early);   // frozen — no day-by-day decay
+  });
+  it("freezes at the recorded actualFinishDate when present", () => {
+    const p = mk({
+      gate: "Gate 5", status: "Completed", progress: 100, actualFinishDate: "2026-05-20",
+      startDate: "2026-01-01", plannedEnd: "2026-06-01", baselineEnd: "2026-06-01",
+      documents: [{ name: "d", required: true, requiredAtGate: 1, status: "Approved" }],
+    });
+    expect(calcProjectIPIFull(p, "2027-01-01").ipi).toBe(calcProjectIPIFull(p, "2026-06-10").ipi);
+  });
+  it("a project completed before its roadmap stays 'met' and never flips to a decaying breach", () => {
+    const p = mk({
+      gate: "Gate 5", status: "Completed", progress: 100, actualFinishDate: "2026-04-15",
+      startDate: "2026-01-01", plannedEnd: "2026-06-01", baselineEnd: "2026-06-01",
+      roadmapDeadline: "2026-05-01",   // finished 15 Apr, before the 1 May roadmap
+      documents: [{ name: "d", required: true, requiredAtGate: 1, status: "Approved" }],
+    });
+    const r1 = calcProjectIPIFull(p, "2026-05-10");   // reviewed AFTER the roadmap date
+    const r2 = calcProjectIPIFull(p, "2027-01-01");
+    expect(r1.roadmapStatus).toBe("met");             // frozen at finish → met, not breach
+    expect(r2.ipi).toBe(r1.ipi);                      // stable over time
+  });
+});
+
 describe("SPI/CPI are execution-phase — measured from Gate 4 only", () => {
   it("a pre-Gate-4 project reports null SPI and CPI (not 'behind' during planning)", () => {
     const p = mk({ gate: "Gate 2", progress: 0, milestones: [], documents: [] });

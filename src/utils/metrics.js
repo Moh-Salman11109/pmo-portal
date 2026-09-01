@@ -206,34 +206,36 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   }
   const { cap, weights } = IPI_DEFAULTS;
   const asOfMs = _toMs(asOfDate) ?? Date.now();
-  // The MEASUREMENT date for SPI: if the project has already been marked
-  // Completed and we have an actualFinishDate, freeze the clock at that
-  // moment. Otherwise use as-of. This lets a project finished on time keep
-  // SPI = 1.0 even when someone reviews it months later.
-  const finishMs = project.status === "Completed"
-    ? _toMs(project.actualFinishDate || project.lastUpdate)
-    : null;
-  const nowMs = finishMs && finishMs > 0 ? finishMs : asOfMs;
 
-  // ── Data-reliability guards (applied to project-level SPI paths) ──────────
-  // The engine is defensively skeptical of its own inputs. Two conditions
-  // make SPI mathematically meaningless and are refused rather than reported:
-  //   1. Impossible dates — end at or before start. Anything the engine
-  //      returns from bad dates would be misleading; return null.
-  //   2. Baseline still forming — fewer than 7 days since start. A single-
-  //      day EV/PV ratio has no signal (both approach zero); refuse to guess.
   const projectStartMs = _toMs(project.startDate);
   // SPI reference = the project's own committed BASELINE finish. Prefer the
   // locked baselineEnd (captured at Gate-3 approval, PMO-protected) and fall
-  // back to plannedEnd for projects predating the baseline field. The Roadmap
-  // Deadline is NEVER part of the SPI math — its slack must not inflate SPI.
-  // Roadmap is a checkpoint only (see roadmapBreach below).
+  // back to plannedEnd for projects predating the field. The Roadmap Deadline
+  // is NEVER part of the SPI math — its slack must not inflate SPI (roadmap is
+  // a checkpoint only, see roadmapBreach below).
   const scheduleEndMs = _toMs(project.baselineEnd) || _toMs(project.plannedEnd);
-  // Effective progress drives completion detection, the no-WBS SPI fallback,
-  // and CPI's BCWP. Prefers the WBS rollup so a stale project.progress can't
-  // drift from the activity-driven reality shown in the UI.
+  // Effective (WBS-aware) progress drives completion detection, the no-WBS SPI
+  // fallback, and CPI's BCWP — so a stale project.progress can't drift from the
+  // activity-driven reality shown in the UI.
   const effProgress = effectiveProgress(project);
   const isComplete  = effProgress >= 100;
+
+  // ── Freeze the measurement clock for a CLOSED project ─────────────────────
+  // Once a project is CLOSED (status Completed) its schedule is HISTORY: the
+  // score must stop moving and must NEVER keep decaying day-by-day after
+  // closure. (This fixes the bug where a completed project's IPI dropped every
+  // couple of days — the roadmap penalty was still measured against "today".)
+  // Freeze at the recorded finish, else the last update, else the committed end
+  // date — crucially NEVER "today". (Keyed on the Completed STATUS, not merely
+  // 100% progress: a project can hit 100% and still be in execution/unclosed.)
+  const finishMs = project.status === "Completed"
+    ? (_toMs(project.actualFinishDate) || _toMs(project.lastUpdate) || scheduleEndMs)
+    : null;
+  const nowMs = finishMs && finishMs > 0 ? finishMs : asOfMs;
+
+  // ── Data-reliability guards ───────────────────────────────────────────────
+  // SPI is refused (null) when inputs are meaningless: impossible dates (end ≤
+  // start), or a baseline younger than 7 days (a single-day EV/PV has no signal).
   // Impossible dates → SPI is meaningless. Baseline at/before start, OR a
   // completed project whose finish clock lands at/before start (zero/negative
   // actual duration) both fail the guard and return "Data Invalid".
