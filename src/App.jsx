@@ -1873,7 +1873,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             return { d: roundedElbow(pts, R), x1, y1 };
           });
           return (
-            <svg width={chartW} height={rowsHeight} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 5, overflow: "visible" }}>
+            <svg width={chartW} height={rowsHeight} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 2, overflow: "visible" }}>
               <defs>
                 <marker id="gantt-dep" markerWidth="8" markerHeight="8" refX="5.5" refY="4" orient="auto">
                   <path d="M1,1 L6.5,4 L1,7 Z" fill={conn} />
@@ -2340,7 +2340,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     const rDeps = [];
     ordered.forEach((m, i) => String(m.dependsOn || "").split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
       .forEach(dep => { const f = rByRef[dep]; if (f && f !== rgeom[i]) rDeps.push({ f, t: rgeom[i] }); }));
-    const depSvg = rDeps.length === 0 ? "" : `<svg width="100%" height="${rTotalH}" style="position:absolute;top:0;left:0;pointer-events:none;z-index:3;overflow:visible">
+    const depSvg = rDeps.length === 0 ? "" : `<svg width="100%" height="${rTotalH}" style="position:absolute;top:0;left:0;pointer-events:none;z-index:2;overflow:visible">
       <defs><marker id="rep-dep" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M1,1 L6,3.5 L1,6 Z" fill="#0a5448"/></marker></defs>
       ${rDeps.map(d => {
         const mx = Math.min(99, d.f.right + 1.4);   // vertical channel just past the predecessor
