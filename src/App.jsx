@@ -1368,6 +1368,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
   const [daysDelayed, setDaysDelayed] = useState(project.daysDelayed ?? 0);
   const [milestones, setMilestones]   = useState(project.milestones?.map(m => ({ ...m })) || []);
   const [risks, setRisks]             = useState(project.risks?.map(r => ({ ...r })) || []);
+  const [issues, setIssues]           = useState(project.issues?.map(i => ({ ...i })) || []);
   const [benefits, setBenefits]       = useState(project.benefits?.map(b => ({ ...b })) || []);
   const [note, setNote]               = useState("");
   const [saving, setSaving]           = useState(false);
@@ -1397,7 +1398,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     { key: "Status",     icon: "gauge" },
     { key: "Financials", icon: "coins" },
     { key: "Activities", icon: "target" },
-    { key: "Risks",      icon: "alert" },
+    { key: "Risks",      label: "Risks & Issues", icon: "alert" },
     { key: "Benefits",   icon: "trend" },
     { key: "Documents",  icon: "doc" },
     { key: "Note",       icon: "note" },
@@ -1417,7 +1418,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
         status: derivedStatus.status, phase, gate, priority, progress: autoProgress, plannedProgress, startDate, plannedEnd,
         roadmapDeadline,
         health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
-        milestones, risks, benefits, documents, note,
+        milestones, risks, issues, benefits, documents, note,
       });
       setSaved(true);
       setTimeout(onClose, 900);
@@ -1569,7 +1570,15 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
     );
 
     if (tab === "Activities") return <MilestoneListEditor items={milestones} onChange={setMilestones} canRemove={userRole !== ROLE_PM} />;
-    if (tab === "Risks")      return <RiskListEditor      items={risks}      onChange={setRisks} />;
+    if (tab === "Risks")      return (
+      <div>
+        <RiskListEditor items={risks} onChange={setRisks}
+          onConvertToIssue={(r) => { setIssues(prev => [...prev, riskToIssue(r, prev)]); setRisks(prev => prev.filter(x => x.id !== r.id)); }} />
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 20, marginTop: 4 }}>
+          <IssueListEditor items={issues} onChange={setIssues} />
+        </div>
+      </div>
+    );
     if (tab === "Benefits")   return <BenefitListEditor   items={benefits}   onChange={setBenefits} />;
 
     if (tab === "Documents") {
@@ -1669,7 +1678,7 @@ const UpdatePanel = ({ project, onClose, onSubmit, userRole = ROLE_PM }) => {
                 borderBottom: tab === t.key ? `2px solid ${T.primary}` : "2px solid transparent",
                 color: tab === t.key ? T.primary : T.muted,
                 display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Ico name={t.icon} size={13} /> {t.key}
+              <Ico name={t.icon} size={13} /> {t.label || t.key}
             </button>
           ))}
         </div>
@@ -5948,11 +5957,29 @@ const MilestoneListEditor = ({ items, onChange, canRemove = true }) => {
   );
 };
 
-const RiskListEditor = ({ items, onChange }) => {
+// Map a risk to a fresh issue when a risk is escalated/converted. Pure — uses
+// the TODAY constant and a counter over existing issues (no Date.now).
+const riskToIssue = (risk, existingIssues) => {
+  const nextN = Math.max(0, ...(existingIssues || []).map(x => { const m = String(x.id || "").match(/(\d+)$/); return m ? +m[1] : 0; })) + 1;
+  return {
+    id: `I${nextN}`,
+    title: risk.title,
+    severity: ["Low", "Medium", "High", "Critical"].includes(risk.level) ? risk.level : "Medium",
+    status: "Open",
+    owner: risk.owner || "",
+    raised: TODAY,
+    escalated: false,
+    targetDate: risk.dueDate || "",
+    relatedActivity: risk.relatedActivity || "",
+    fromRisk: true,
+  };
+};
+
+const RiskListEditor = ({ items, onChange, onConvertToIssue }) => {
   const T = useT();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const blank = { title: "", probability: "Medium", impact: "Medium", level: "Medium", owner: "", status: "Open", mitigation: "", dueDate: "" };
+  const blank = { title: "", probability: "Medium", impact: "Medium", level: "Medium", owner: "", status: "Open", mitigation: "", dueDate: "", relatedActivity: "" };
   const [draft, setDraft] = useState(blank);
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
@@ -5982,6 +6009,7 @@ const RiskListEditor = ({ items, onChange }) => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <div style={{ fontWeight: 600, fontSize: 13, color: T.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {onConvertToIssue && <button onClick={() => onConvertToIssue(r)} disabled={adding} title="Convert this risk into an issue (moves it to the Issues log)" style={{ ...btnSm, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", opacity: adding ? 0.5 : 1 }}>→ Issue</button>}
               <button onClick={() => openEdit(r)} disabled={adding} style={{ ...btnSm, background: T.surface, border: `1px solid ${T.border}`, color: T.text, opacity: adding ? 0.5 : 1 }}>Edit</button>
               <button onClick={() => remove(r.id)} style={{ ...btnSm, background: "#fee2e2", color: "#dc2626" }}>Remove</button>
             </div>
@@ -5991,6 +6019,7 @@ const RiskListEditor = ({ items, onChange }) => {
             <span style={{ background: levelC[r.level] || T.border, color: "#fff", borderRadius: 10, padding: "2px 8px" }}>{r.level}</span>
             {r.status && <span style={{ background: (statusC[r.status] || "#6b7280") + "22", color: statusC[r.status] || "#6b7280", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>{r.status}</span>}
             {r.owner && <span style={{ background: T.border, borderRadius: 10, padding: "2px 8px" }}>Owner: {r.owner}</span>}
+            {r.relatedActivity && <span style={{ background: "rgba(0,184,148,0.14)", color: "#0a5448", borderRadius: 10, padding: "2px 8px", fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>↳ {r.relatedActivity}</span>}
           </div>
           {r.mitigation && <div style={{ fontSize: 11, color: T.muted, marginTop: 5 }}>Mitigation: {r.mitigation}</div>}
         </div>
@@ -6021,6 +6050,10 @@ const RiskListEditor = ({ items, onChange }) => {
               <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Mitigation Plan</div>
               <input value={draft.mitigation} onChange={e => setDraft(p => ({ ...p, mitigation: e.target.value }))} style={s} />
             </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Related activity <span style={{ opacity: 0.6, fontWeight: 400 }}>(optional — activity ID, e.g. A1)</span></div>
+              <input value={draft.relatedActivity} onChange={e => setDraft(p => ({ ...p, relatedActivity: e.target.value }))} placeholder="e.g. A1" style={{ ...s, fontFamily: "ui-monospace, monospace" }} />
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={save} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "7px 20px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{editingId ? "Save Changes" : "Add Risk"}</button>
@@ -6037,7 +6070,7 @@ const IssueListEditor = ({ items, onChange }) => {
   const today = new Date().toISOString().split("T")[0];
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const blank = { title: "", severity: "Medium", status: "Open", owner: "", raised: today, escalated: false, targetDate: "" };
+  const blank = { title: "", severity: "Medium", status: "Open", owner: "", raised: today, escalated: false, targetDate: "", relatedActivity: "" };
   const [draft, setDraft] = useState(blank);
   const s = fInputStyle(T, false);
   const ss = { ...s, background: T.selectBg };
@@ -6073,6 +6106,8 @@ const IssueListEditor = ({ items, onChange }) => {
             <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.severity}</span>
             <span style={{ background: "#fecaca", borderRadius: 10, padding: "2px 8px" }}>{i.status}</span>
             {i.escalated && <span style={{ background: "#dc2626", color: "#fff", borderRadius: 10, padding: "2px 8px" }}>Escalated</span>}
+            {i.fromRisk && <span style={{ background: "#eef2f6", color: "#475569", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>from risk</span>}
+            {i.relatedActivity && <span style={{ background: "rgba(0,184,148,0.14)", color: "#0a5448", borderRadius: 10, padding: "2px 8px", fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>↳ {i.relatedActivity}</span>}
             {i.targetDate && <span style={{ background: i.targetDate < today && i.status !== "Resolved" ? "#fee2e2" : "#f3f4f6", color: i.targetDate < today && i.status !== "Resolved" ? "#dc2626" : "#6b7280", borderRadius: 10, padding: "2px 8px" }}>Due: {i.targetDate}</span>}
           </div>
         </div>
@@ -6112,6 +6147,10 @@ const IssueListEditor = ({ items, onChange }) => {
                   </button>
                 ))}
               </div>
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.muted, marginBottom: 4 }}>Related activity <span style={{ opacity: 0.6, fontWeight: 400 }}>(optional — activity ID, e.g. A1)</span></div>
+              <input value={draft.relatedActivity} onChange={e => setDraft(p => ({ ...p, relatedActivity: e.target.value }))} placeholder="e.g. A1" style={{ ...s, fontFamily: "ui-monospace, monospace" }} />
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -6484,7 +6523,8 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
     if (step === 2) return <MilestoneListEditor items={form.milestones} onChange={v => set("milestones", v)} />;
     if (step === 3) return (
       <div>
-        <RiskListEditor items={form.risks} onChange={v => set("risks", v)} />
+        <RiskListEditor items={form.risks} onChange={v => set("risks", v)}
+          onConvertToIssue={(r) => { set("issues", [...(form.issues || []), riskToIssue(r, form.issues || [])]); set("risks", (form.risks || []).filter(x => x.id !== r.id)); }} />
         <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 20, marginTop: 4 }}>
           <IssueListEditor items={form.issues} onChange={v => set("issues", v)} />
         </div>
@@ -6994,7 +7034,7 @@ export default function App() {
     status, phase, gate, priority, progress, plannedProgress, startDate, plannedEnd,
     roadmapDeadline,
     health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
-    milestones, risks, benefits, documents, note,
+    milestones, risks, issues, benefits, documents, note,
   }) => {
     const today = new Date().toISOString().split("T")[0];
     const project = projects.find(p => p.id === projectId);
@@ -7107,6 +7147,7 @@ export default function App() {
       roadmapDeadline: isPMOrDeptHead ? project.roadmapDeadline : roadmapDeadline,
       health, budget, forecast, actualCost, spi, cpi, daysRemaining, daysDelayed,
       milestones: trackedMilestones, risks, benefits,
+      ...(issues ? { issues } : {}),
       ...(documents ? { documents } : {}),
       updates: newUpdates, lastUpdate: today,
       ipiHistory,
