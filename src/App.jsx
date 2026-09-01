@@ -6713,56 +6713,95 @@ const ReportsModal = ({ onClose }) => {
   const T = useT();
   const KEY = "pmo_reports";
   const [reports, setReports] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } });
+  const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [link, setLink] = useState("");
   const persist = (next) => { setReports(next); try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  const resetForm = () => { setName(""); setDate(""); setLink(""); };
   const add = () => {
     const nm = name.trim(), ln = link.trim();
     if (!nm || !ln) return;
     const url = /^https?:\/\//i.test(ln) ? ln : `https://${ln}`;
     const n = reports.reduce((m, r) => Math.max(m, r.n || 0), 0) + 1;
     persist([...reports, { n, name: nm, date, link: url }]);
-    setName(""); setDate(""); setLink("");
+    resetForm(); setAdding(false);
   };
   const remove = (n) => persist(reports.filter(r => r.n !== n));
   const s = fInputStyle(T, false);
-  const lbl = { fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 4 };
+  const lbl = { fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
   const canAdd = !!name.trim() && !!link.trim();
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,18,14,0.6)", backdropFilter: "blur(3px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, width: "min(680px, 100%)", maxHeight: "88vh", overflow: "auto", boxShadow: "0 30px 80px rgba(0,0,0,0.4)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 22px", borderBottom: `1px solid ${T.border}` }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Reports</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Add a report name, date and link — click any to open it.</div>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, width: "min(640px, 100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,0.45)" }}>
+        {/* ── Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(0,184,148,0.12)", display: "grid", placeItems: "center", color: T.accent }}><NavIcon name="chart" /></div>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.text, lineHeight: 1.1 }}>Reports</div>
+              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{reports.length} saved · click a report to open it</div>
+            </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.muted, lineHeight: 1 }}>✕</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 15px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>+ Add Report</button>}
+            <button onClick={onClose} title="Close" style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.muted, fontSize: 15 }}>✕</button>
+          </div>
         </div>
-        <div style={{ padding: 22 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 10, marginBottom: 10 }}>
-            <div><div style={lbl}>Report name *</div><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Monthly Portfolio Report" style={s} /></div>
-            <div><div style={lbl}>Date</div><input type="date" value={date} onChange={e => setDate(e.target.value)} style={s} /></div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 18, alignItems: "flex-end" }}>
-            <div><div style={lbl}>Link (SharePoint / Power BI / URL) *</div><input value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} placeholder="https://…" style={s} /></div>
-            <button onClick={add} disabled={!canAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "0 22px", height: 38, fontSize: 13, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.6 }}>+ Add</button>
-          </div>
-          {reports.length === 0 ? (
-            <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 0" }}>No reports yet — add your first above.</div>
+
+        {/* ── Body ── */}
+        <div style={{ padding: 18, overflowY: "auto" }}>
+          {/* Add form — only when the user chooses to add */}
+          {adding && (
+            <div style={{ border: `1px solid ${T.accent}`, borderRadius: 12, padding: 16, marginBottom: 16, background: "rgba(0,184,148,0.05)" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 12 }}>New report</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 12, marginBottom: 12 }}>
+                <div><label style={lbl}>Report name *</label><input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Monthly Portfolio Report" style={s} /></div>
+                <div><label style={lbl}>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={s} /></div>
+              </div>
+              <div style={{ marginBottom: 14 }}><label style={lbl}>Link (SharePoint / Power BI / URL) *</label><input value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && canAdd) add(); }} placeholder="https://…" style={s} /></div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button onClick={() => { setAdding(false); resetForm(); }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", color: T.text }}>Cancel</button>
+                <button onClick={add} disabled={!canAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 12.5, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.55 }}>Save report</button>
+              </div>
+            </div>
+          )}
+
+          {/* List (or empty state) */}
+          {reports.length === 0 && !adding ? (
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <div style={{ fontSize: 30, marginBottom: 10, opacity: 0.55 }}>📊</div>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: T.text, marginBottom: 4 }}>No reports yet</div>
+              <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 18, maxWidth: 340, marginInline: "auto", lineHeight: 1.6 }}>Add a link to a Power BI or SharePoint report to keep it one click away.</div>
+              <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>+ Add your first report</button>
+            </div>
           ) : (
-            <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
-              {reports.map((r, i) => (
-                <div key={r.n} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "center", padding: "11px 14px", borderTop: i ? `1px solid ${T.border}` : "none" }}>
-                  <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>{r.name} <span style={{ fontSize: 12 }}>↗</span></a>
-                  <span style={{ fontSize: 12, color: T.muted, fontFamily: "ui-monospace, monospace" }}>{r.date || "—"}</span>
-                  <button onClick={() => remove(r.n)} title="Remove" style={{ background: "#fee2e2", border: "none", borderRadius: 6, cursor: "pointer", color: "#dc2626", fontWeight: 900, fontSize: 14, padding: "3px 10px" }}>×</button>
-                </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {reports.map((r) => (
+                <a key={r.n} href={r.link} target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 10, textDecoration: "none", background: T.bg, transition: "border-color 0.15s, background 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = "rgba(0,184,148,0.05)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.bg; }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(0,184,148,0.12)", display: "grid", placeItems: "center", color: T.accent, flexShrink: 0 }}><NavIcon name="chart" /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                    <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{r.date ? fmtDate(r.date) : "No date"}</div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: T.accent, flexShrink: 0 }}>Open ↗</span>
+                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.n); }} title="Remove"
+                    style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, fontSize: 16, flexShrink: 0, padding: "2px 7px", borderRadius: 6, lineHeight: 1 }}
+                    onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.background = "#fee2e2"; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>×</button>
+                </a>
               ))}
             </div>
           )}
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 14 }}>Saved on this browser. Want them shared with everyone? We can store them in SharePoint — just ask.</div>
         </div>
+
+        {/* ── Footer note ── */}
+        <div style={{ padding: "10px 20px", borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.muted }}>Saved on this browser · want them shared with everyone? we can store them in SharePoint.</div>
       </div>
     </div>
   );
