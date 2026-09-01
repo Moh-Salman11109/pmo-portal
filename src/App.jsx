@@ -56,7 +56,6 @@ import IPICalculator from "./components/IPICalculator.jsx";
 import CostCalculator from "./components/CostCalculator.jsx";
 import ROICalculator from "./components/ROICalculator.jsx";
 import WhatIfPicker from "./components/WhatIfPicker.jsx";
-import DocGenerator from "./components/DocGenerator.jsx";
 import { IPIBreakdownModal, ProgressBreakdownModal } from "./components/MetricBreakdown.jsx";
 import GRCDashboard from "./views/GRCDashboard.jsx";
 import HomeView from "./views/HomeView.jsx";
@@ -1778,9 +1777,36 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
     Upcoming:      { track: "#f0f4f0", fill: "#a1b9ab", border: "#8aa093", lbl: "#3a5547" },
   };
 
+  // ── Dependency geometry: each row's x-span + vertical centre, keyed by ref,
+  //    so we can draw finish→start arrows between bars that depend on each other.
+  const ROW_H = (m) => (m._isMilestone ? 36 : 30);
+  let _yAcc = 0;
+  const geom = milestones.map(m => {
+    const sp = toPct(m.startDate || m.date);
+    const ep = toPct(m.date || m.startDate);
+    const left  = sp != null ? Math.min(sp, ep ?? sp) : (ep ?? 0);
+    const right = ep != null ? Math.max(ep, sp ?? ep) : (sp ?? 0);
+    const yc = _yAcc + ROW_H(m) / 2;
+    _yAcc += ROW_H(m);
+    return { ref: m.ref, left, right, yc };
+  });
+  const rowsHeight = _yAcc;
+  const byRef = {};
+  geom.forEach(g => { if (g.ref) byRef[g.ref] = g; });
+  const depLines = [];
+  milestones.forEach((m, i) => {
+    String(m.dependsOn || "").split(/[\s,]+/).map(s => s.trim()).filter(Boolean).forEach(dep => {
+      const from = byRef[dep];
+      if (from && from !== geom[i]) depLines.push({ from, to: geom[i] });
+    });
+  });
+
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px 14px", marginBottom: 20, overflowX: "auto" }}>
-      <div style={{ fontWeight: 800, fontSize: 13, color: T.text, marginBottom: 12 }}>Gantt Chart</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+        <span style={{ fontWeight: 800, fontSize: 13, color: T.text }}>Gantt Chart</span>
+        {depLines.length > 0 && <span style={{ fontSize: 10, color: T.muted }}>— dashed green arrows show dependencies</span>}
+      </div>
       <div style={{ minWidth: 640 }}>
 
         {/* Month labels — full-width axis, no name column */}
@@ -1794,6 +1820,20 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             the marker when the bar is too narrow) so the chart presents
             without a legend column. Date labels carry replan memory —
             struck old date + current date when the finish was moved. */}
+        <div style={{ position: "relative" }}>
+        {depLines.length > 0 && (
+          <svg width="100%" height={rowsHeight} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 5, overflow: "visible" }}>
+            <defs>
+              <marker id="gantt-dep" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#00b894" />
+              </marker>
+            </defs>
+            {depLines.map((d, i) => (
+              <line key={i} x1={`${d.from.right}%`} y1={d.from.yc} x2={`${d.to.left}%`} y2={d.to.yc}
+                stroke="#00b894" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" markerEnd="url(#gantt-dep)" />
+            ))}
+          </svg>
+        )}
         {milestones.map((m, i) => {
           const sc  = SC[m.status] || SC.Upcoming;
           const isOverdue = m.status !== "Completed" && m.date && m.date < TODAY;
@@ -1878,6 +1918,7 @@ const MilestoneGantt = ({ milestones: rawMilestones, project }) => {
             </div>
           );
         })}
+        </div>
 
         {/* Today label */}
         {todayPct != null && (
@@ -6652,7 +6693,6 @@ export default function App() {
   // · "cost" · "roi". Back arrow in a calculator returns to "picker"; ×
   // returns to null.
   const [whatIfView, setWhatIfView] = useState(null);
-  const [docGenOpen, setDocGenOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
@@ -7149,8 +7189,7 @@ export default function App() {
       background: activeT.bg, color: activeT.text,
       overflow: "hidden",
     }}>
-      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => setDocGenOpen(true)} onOpenReports={() => setReportsOpen(true)} />
-      {docGenOpen && <DocGenerator onClose={() => setDocGenOpen(false)} currentUserName={currentUserName} />}
+      <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => window.open(`${window.location.pathname}?docgen=1&u=${encodeURIComponent(currentUserName || "")}`, "_blank", "noopener")} onOpenReports={() => setReportsOpen(true)} />
       {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} />}
       {whatIfView === "picker" && <WhatIfPicker  onClose={() => setWhatIfView(null)} onPick={(k) => setWhatIfView(k)} />}
       {whatIfView === "ipi"    && <IPICalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
