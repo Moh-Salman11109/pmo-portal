@@ -640,6 +640,8 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
   // Doc Generator is FOR the PMs (self-service charters/plans instead of
   // template e-mails), so PMs get it alongside the PMO roles.
   const canDocGen = isAdmin || userRole === ROLE_PMO_STAFF || isPM;
+  // Reports are a PMO-tier tool — hidden from PMs and other roles.
+  const canReports = isAdmin || userRole === ROLE_PMO_STAFF;
 
   // The projects route is visible to EVERY role. For a PM the projects prop
   // is already server-filtered to their own projects (getProjects role=pm),
@@ -695,7 +697,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
           {/* What-If Hub — single sidebar entry that opens a picker with
               IPI / Cost / ROI calculators. Replaces the two separate sidebar
               buttons; keeps the sidebar clean as we add more planning tools. */}
-          {((canWhatIf && onOpenWhatIf) || (canDocGen && onOpenDocGen) || onOpenReports) && (
+          {((canWhatIf && onOpenWhatIf) || (canDocGen && onOpenDocGen) || (canReports && onOpenReports)) && (
             /* Designed INTO the sidebar's own language instead of imported
                from elsewhere: a micro section header (same idiom as
                "DEPARTMENTS" below) and quietly recessed tool trays — one
@@ -730,7 +732,7 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
               ))}
               {/* Reports — opens a manager where you add reports (name + date +
                   link) and click any to open it, exactly like the Documents list. */}
-              {onOpenReports && (
+              {canReports && onOpenReports && (
                 <button onClick={() => { onOpenReports(); if (!isDesktop) onClose(); }} style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8,
                   border: "1px solid rgba(0,255,179,0.16)", background: "rgba(0,0,0,0.22)", color: T.accent,
@@ -6751,26 +6753,43 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 //    exactly like the Documents list. Stored per-browser (localStorage).
 const ReportsModal = ({ onClose }) => {
   const T = useT();
-  const KEY = "pmo_reports";
-  const [reports, setReports] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } });
+  // Shared reports — stored in the PMO_Reports SharePoint list so every user
+  // sees the same set (not per-browser).
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [link, setLink] = useState("");
-  const persist = (next) => { setReports(next); try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  useEffect(() => {
+    let ok = true;
+    SPService.getReports().then(r => { if (ok) { setReports(r); setLoading(false); } }).catch(() => { if (ok) setLoading(false); });
+    return () => { ok = false; };
+  }, []);
   const resetForm = () => { setName(""); setDate(""); setLink(""); };
   const add = () => {
     const nm = name.trim(), ln = link.trim();
-    if (!nm || !ln) return;
+    if (!nm || !ln || busy) return;
     const url = /^https?:\/\//i.test(ln) ? ln : `https://${ln}`;
-    const n = reports.reduce((m, r) => Math.max(m, r.n || 0), 0) + 1;
-    persist([...reports, { n, name: nm, date, link: url }]);
-    resetForm(); setAdding(false);
+    setBusy(true); setErr("");
+    SPService.addReport({ name: nm, date, link: url })
+      .then(created => { setReports(prev => [...prev, created]); resetForm(); setAdding(false); })
+      .catch(e => setErr(e.message || "Couldn't save the report."))
+      .finally(() => setBusy(false));
   };
-  const remove = (n) => persist(reports.filter(r => r.n !== n));
+  const remove = (id) => {
+    if (busy) return;
+    setBusy(true); setErr("");
+    SPService.deleteReport(id)
+      .then(() => setReports(prev => prev.filter(r => r.id !== id)))
+      .catch(e => setErr(e.message || "Couldn't remove the report."))
+      .finally(() => setBusy(false));
+  };
   const s = fInputStyle(T, false);
   const lbl = { fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 5, display: "block" };
-  const canAdd = !!name.trim() && !!link.trim();
+  const canAdd = !!name.trim() && !!link.trim() && !busy;
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 
   return (
@@ -6793,6 +6812,7 @@ const ReportsModal = ({ onClose }) => {
 
         {/* ── Body ── */}
         <div style={{ padding: 18, overflowY: "auto" }}>
+          {err && <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "9px 12px", fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>{err}</div>}
           {/* Add form — only when the user chooses to add */}
           {adding && (
             <div style={{ border: `1px solid ${T.accent}`, borderRadius: 12, padding: 16, marginBottom: 16, background: "rgba(0,184,148,0.05)" }}>
@@ -6804,13 +6824,15 @@ const ReportsModal = ({ onClose }) => {
               <div style={{ marginBottom: 14 }}><label style={lbl}>Link (SharePoint / Power BI / URL) *</label><input value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && canAdd) add(); }} placeholder="https://…" style={s} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button onClick={() => { setAdding(false); resetForm(); }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", color: T.text }}>Cancel</button>
-                <button onClick={add} disabled={!canAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 12.5, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.55 }}>Save report</button>
+                <button onClick={add} disabled={!canAdd} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 12.5, fontWeight: 800, cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.55 }}>{busy ? "Saving…" : "Save report"}</button>
               </div>
             </div>
           )}
 
-          {/* List (or empty state) */}
-          {reports.length === 0 && !adding ? (
+          {/* List (or loading / empty state) */}
+          {loading ? (
+            <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 0" }}>Loading reports…</div>
+          ) : reports.length === 0 && !adding ? (
             <div style={{ textAlign: "center", padding: "40px 20px" }}>
               <div style={{ fontSize: 30, marginBottom: 10, opacity: 0.55 }}>📊</div>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: T.text, marginBottom: 4 }}>No reports yet</div>
@@ -6820,7 +6842,7 @@ const ReportsModal = ({ onClose }) => {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {reports.map((r) => (
-                <a key={r.n} href={r.link} target="_blank" rel="noopener noreferrer"
+                <a key={r.id} href={r.link} target="_blank" rel="noopener noreferrer"
                   style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 10, textDecoration: "none", background: T.bg, transition: "border-color 0.15s, background 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = "rgba(0,184,148,0.05)"; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.bg; }}>
@@ -6830,7 +6852,7 @@ const ReportsModal = ({ onClose }) => {
                     <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{r.date ? fmtDate(r.date) : "No date"}</div>
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 800, color: T.accent, flexShrink: 0 }}>Open ↗</span>
-                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.n); }} title="Remove"
+                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.id); }} title="Remove"
                     style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, fontSize: 16, flexShrink: 0, padding: "2px 7px", borderRadius: 6, lineHeight: 1 }}
                     onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.background = "#fee2e2"; }}
                     onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>×</button>
@@ -6841,7 +6863,7 @@ const ReportsModal = ({ onClose }) => {
         </div>
 
         {/* ── Footer note ── */}
-        <div style={{ padding: "10px 20px", borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.muted }}>Saved on this browser · want them shared with everyone? we can store them in SharePoint.</div>
+        <div style={{ padding: "10px 20px", borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.muted }}>Shared with everyone · stored in the PMO_Reports SharePoint list.</div>
       </div>
     </div>
   );

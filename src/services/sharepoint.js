@@ -13,6 +13,7 @@ export const SP_CONFIG = {
   gateSubmissionsListName: env.VITE_SP_GATE_SUBMISSIONS_LIST || "G1 - Project Initiation",
   closureListName:         env.VITE_SP_CLOSURE_LIST          || "Project Closure - E-Signoff",
   usersListName:           env.VITE_SP_USERS_LIST            || "PMO_Users",
+  reportsListName:         env.VITE_SP_REPORTS_LIST          || "PMO_Reports",
   pageSize:              Number(env.VITE_SP_PAGE_SIZE)       || 500,
 };
 
@@ -804,7 +805,56 @@ export function mapSPItemToGateSubmission(item) {
 }
 
 // ─── EXTENDED SERVICE METHODS ────────────────────────────────────
+// ── Reports (shared) ──────────────────────────────────────────────────────
+// A small SP list `PMO_Reports` (Title · ReportDate · ReportLink) holds the
+// portfolio report links so every user sees the same set. Self-healing: if the
+// list doesn't exist yet, reads return [] (no crash) and writes surface a clear
+// "not set up" error. Mock mode uses localStorage so dev still works.
+const REPORTS_MOCK_KEY = "pmo_reports_mock";
+const _repMockGet = () => { try { return JSON.parse(localStorage.getItem(REPORTS_MOCK_KEY) || "[]"); } catch { return []; } };
+const _repMockSet = (v) => { try { localStorage.setItem(REPORTS_MOCK_KEY, JSON.stringify(v)); } catch { /* ignore */ } };
+
 Object.assign(SPService, {
+  /** Fetch shared reports. Returns [] if the list isn't set up yet. */
+  async getReports() {
+    if (USE_MOCK) return _repMockGet();
+    try {
+      const items = await fetchAllItems(SP_CONFIG.reportsListName, "ID,Title,ReportDate,ReportLink");
+      return items.map(it => ({
+        id: it.ID,
+        name: it.Title || "",
+        date: it.ReportDate ? String(it.ReportDate).slice(0, 10) : "",
+        link: it.ReportLink || "",
+      }));
+    } catch (err) {
+      console.warn("getReports failed (list may not exist yet):", err.message);
+      return [];
+    }
+  },
+  /** Add a shared report. Throws (with a clear message) if the list is missing. */
+  async addReport({ name, date, link }) {
+    if (USE_MOCK) { const next = [..._repMockGet(), { id: Date.now(), name, date, link }]; _repMockSet(next); return next[next.length - 1]; }
+    const token = await acquireSpToken();
+    const res = await fetch(`${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(SP_CONFIG.reportsListName)}')/items`, {
+      method: "POST",
+      headers: { Accept: "application/json;odata=nometadata", "Content-Type": "application/json;odata=nometadata", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ Title: name, ReportDate: date || null, ReportLink: link }),
+    });
+    if (!res.ok) throw new Error(`The PMO_Reports SharePoint list isn't set up yet (${res.status}). Ask an admin to create it.`);
+    const created = await res.json().catch(() => ({}));
+    return { id: created.ID ?? created.Id, name, date, link };
+  },
+  /** Delete a shared report by SP item id. */
+  async deleteReport(id) {
+    if (USE_MOCK) { _repMockSet(_repMockGet().filter(r => r.id !== id)); return; }
+    const token = await acquireSpToken();
+    const res = await fetch(`${SP_CONFIG.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(SP_CONFIG.reportsListName)}')/items(${id})`, {
+      method: "POST",
+      headers: { Accept: "application/json;odata=nometadata", "IF-MATCH": "*", "X-HTTP-Method": "DELETE", Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await res.text().catch(() => `delete failed ${res.status}`));
+  },
+
   /** Fetch all project requests from "New Project Request" list. */
   async getRequests() {
     if (USE_MOCK) return MOCK_REQUESTS;
