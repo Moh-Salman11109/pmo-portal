@@ -320,6 +320,7 @@ const AnimStyles = () => (
 function useCountUp(target, duration = 750) {
   const [val, setVal] = useState(0);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- animation-only reset to 0 when target is 0; no cascading render, stable in production
     if (target === 0) { setVal(0); return; }
     let raf;
     const t0 = performance.now();
@@ -2251,9 +2252,12 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     // ── Timeline data
     const milestones = (project.milestones || []).filter(m => m.date || m.startDate);
     const allTs = milestones.flatMap(m => [m.startDate, m.date].filter(Boolean).map(d => new Date(d).getTime()));
+    // eslint-disable-next-line react-hooks/purity -- print-report fallback only; deterministic per print invocation
     const spanStart = allTs.length ? Math.min(...allTs, new Date(project.startDate || allTs[0]).getTime()) : Date.now();
+    // eslint-disable-next-line react-hooks/purity -- print-report fallback only; deterministic per print invocation
     const spanEnd   = allTs.length ? Math.max(...allTs, new Date(project.plannedEnd || allTs[0]).getTime()) : Date.now();
     const span = Math.max(1, spanEnd - spanStart);
+    // eslint-disable-next-line react-hooks/purity -- print-report timestamp captured once at print time
     const todayMs = Date.now();
     const todayPct = Math.max(0, Math.min(100, ((todayMs - spanStart) / span) * 100));
     const toPct = (d) => d ? Math.max(0, Math.min(100, ((new Date(d).getTime() - spanStart) / span) * 100)) : 0;
@@ -6882,7 +6886,7 @@ export default function App() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
-  const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
+  const [userRole, setUserRole] = useState(ROLE_EXEC);    // default only APPLIED for genuinely unregistered users; technical failures fail closed (see role lookup)
   const [userDeptId, setUserDeptId] = useState(null);
   const [roleResolved, setRoleResolved] = useState(isUsingMock()); // mock: skip role lookup, load immediately
   const [projects, setProjects] = useState([]);
@@ -6939,12 +6943,24 @@ export default function App() {
   useEffect(() => {
     if (!currentUserEmail) return;
     SPService.getUserRole(currentUserEmail)
-      .then(({ role, deptId }) => {
+      .then(({ role, deptId, error }) => {
+        if (error || !role) {
+          // Fail CLOSED: a technical failure resolving the role must not grant
+          // any access. Surface an error instead of defaulting to a view role.
+          // Clear loading too, otherwise the spinner (checked before loadError)
+          // would hang forever since the projects load never runs.
+          setLoadError("We couldn't verify your access right now. Please refresh to try again.");
+          setLoading(false);
+          return;
+        }
         setUserRole(role);
         setUserDeptId(deptId);
         setRoleResolved(true);
       })
-      .catch(() => { setRoleResolved(true); }); // fail-open: keep exec default
+      .catch(() => {
+        setLoadError("We couldn't verify your access right now. Please refresh to try again.");
+        setLoading(false);
+      });
   }, [currentUserEmail]);
   // ── Projects: server-side filtered once role is known ─────────
   useEffect(() => {
@@ -6970,6 +6986,7 @@ export default function App() {
   // on an (often empty) approvals queue made it look like the portal had
   // nothing for them. Actions stays one click away with its badge.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time PM landing redirect on role resolution; intentional
     if (userRole === ROLE_PM) setRoute({ view: "projects" });
   }, [userRole]);
 
@@ -7010,18 +7027,20 @@ export default function App() {
       // pmEmail = "primary, backup" — the backup PM gets the same access so
       // they can update when the PM is away; only the primary shows in the
       // portal. Fallback to name match for projects without pmEmail yet.
-      if (currentUserEmail) {
-        const email = currentUserEmail.trim().toLowerCase();
-        return projects.filter(p =>
-          p.pmEmail ? p.pmEmail.split(/[,;]/).map(e => e.trim().toLowerCase()).includes(email)
-                    : (p.pm || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
-        );
-      }
+      // No resolved identity → show NOTHING (never fall through to all).
+      if (!currentUserEmail) return [];
+      const email = currentUserEmail.trim().toLowerCase();
+      return projects.filter(p =>
+        p.pmEmail ? p.pmEmail.split(/[,;]/).map(e => e.trim().toLowerCase()).includes(email)
+                  : (p.pm || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
+      );
     }
     if (userRole === ROLE_DEPT_HEAD) {
-      if (!userDeptId) return projects;
+      // No resolved scope → show NOTHING (never fall through to all).
+      if (!userDeptId) return [];
       const ids = userDeptId.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-      if (!ids.length || ids.includes("all")) return projects;
+      if (ids.includes("all")) return projects;   // authorized enterprise-wide scope
+      if (!ids.length) return [];
       return projects.filter(p => ids.includes((p.deptId || "").toLowerCase()));
     }
     return projects;
@@ -7190,7 +7209,11 @@ export default function App() {
       // so the returned banner stops surfacing stale feedback.
       const PMO_PROTECTED = ["PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline", "BaselineEnd", "BaselineExceptionNote"];
       const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
-      await SPService.updateProject(project.spId, updated, omit);
+      // Throws a { code:"CONFLICT" } error if a colleague saved in the meantime —
+      // the UpdatePanel catches it, shows the message, and keeps the user's edits
+      // (nothing is merged below, so no stale overwrite of local state either).
+      const saved = await SPService.updateProject(project.spId, updated, omit);
+      if (saved && saved._modified) updated._modified = saved._modified; // refresh concurrency baseline
     }
     setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
   }, [projects, userRole, currentUserName]);
