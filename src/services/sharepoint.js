@@ -127,6 +127,9 @@ export function mapSPItemToProject(item) {
     // Identity
     id:                  String(item[f.projectId] || item[f.spId] || ""),
     spId:                item[f.spId] || null,
+    // Concurrency baseline: the server "Modified" stamp at load time. Used on
+    // save to detect that someone else changed the item in the meantime.
+    _modified:           item.Modified || null,
     code:                item[f.code]               || "",
     name:                item[f.name]               || "",
     deptId:              item[f.deptId]             || "",
@@ -365,6 +368,13 @@ export function mapProjectToSPItem(project) {
   };
 }
 
+// A read only degrades to an empty list when the SharePoint LIST itself is not
+// provisioned yet (404). Access/permission/server/network errors must NOT be
+// masked as "no data" — they surface so the UI can show a real error state.
+function isMissingList(err) {
+  return err && err.status === 404;
+}
+
 // ─── PAGINATION HELPER ───────────────────────────────────────────
 // Uses Bearer token (MSAL) — no cookies, works from any origin.
 async function fetchAllItems(listName, selectFields = "", expandFields = "", filterQuery = "") {
@@ -388,7 +398,9 @@ async function fetchAllItems(listName, selectFields = "", expandFields = "", fil
       let body = "";
       try { body = await res.text(); } catch { /* ignore */ }
       console.error(`SP fetch failed [${res.status}] ${url}\nResponse body:`, body);
-      throw new Error(`SP fetch failed: ${res.status} — ${body.slice(0, 300)}`);
+      const e = new Error(`SP fetch failed: ${res.status} — ${body.slice(0, 300)}`);
+      e.status = res.status;
+      throw e;
     }
     const data = await res.json();
     allItems.push(...(data.value || []));
@@ -407,14 +419,28 @@ export const SPService = {
   async getProjects({ role, email, deptId } = {}) {
     if (USE_MOCK) return MOCK_PROJECTS;
     let filterQuery = "";
-    if (role === "pm" && email) {
+    if (role === "pm") {
+      // A PM with no resolved email must NOT fall through to the full list —
+      // a missing identity fails CLOSED (no projects), never opens to all.
+      if (!email) return [];
       // pmEmail may hold "primary, backup" — substringof catches either slot.
       // The client-side visibleProjects filter re-checks with an exact
       // split-and-match, so any substring false positive is dropped there.
       filterQuery = `substringof('${email.replace(/'/g, "''")}', ProjectManagerEmail)`;
-    } else if (role === "dept_head" && deptId) {
-      const isMulti = deptId.includes(",") || deptId.trim().toLowerCase() === "all";
-      if (!isMulti) filterQuery = `DepartmentID eq '${deptId.replace(/'/g, "''")}'`;
+    } else if (role === "dept_head") {
+      // A dept head with no resolved scope must NOT fall through to the full list.
+      if (!deptId) return [];
+      const ids = deptId.split(",").map(s => s.trim()).filter(Boolean);
+      const lc = ids.map(s => s.toLowerCase());
+      if (lc.includes("all")) {
+        filterQuery = ""; // authorized enterprise-wide scope
+      } else if (ids.length) {
+        // Scope multi-department heads server-side too (not just in the UI),
+        // so other departments' rows never reach the browser.
+        filterQuery = ids.map(id => `DepartmentID eq '${id.replace(/'/g, "''")}'`).join(" or ");
+      } else {
+        return []; // deptId present but empty after parsing → fail-closed
+      }
     }
     const items = await fetchAllItems(SP_CONFIG.projectsListName, "", "", filterQuery);
     return items.map(mapSPItemToProject);
@@ -529,27 +555,62 @@ export const SPService = {
     if (USE_MOCK) return project;
     const { siteUrl, projectsListName } = SP_CONFIG;
     const token = await acquireSpToken();
+    const itemUrl = `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`;
+
+    // ── Optimistic concurrency ────────────────────────────────────────────
+    // If this copy was loaded before a colleague saved theirs, refuse to write
+    // so their edits are never silently overwritten. We compare the server's
+    // current "Modified" against the value captured at load (baseline check),
+    // then send the current ETag as IF-MATCH so the write itself is atomic
+    // (SharePoint returns 412 if it changed again in the tiny gap).
+    let etag = "*";
+    if (project._modified) {
+      const checkRes = await fetch(`${itemUrl}?$select=Modified`, {
+        headers: { Accept: "application/json;odata=minimalmetadata", Authorization: `Bearer ${token}` },
+      });
+      if (checkRes.ok) {
+        const cur = await checkRes.json().catch(() => ({}));
+        if (cur.Modified && cur.Modified !== project._modified) {
+          const e = new Error("This project was updated by someone else while you were editing.");
+          e.code = "CONFLICT";
+          throw e;
+        }
+        if (cur["odata.etag"]) etag = cur["odata.etag"];
+      }
+    }
+
     const payload = mapProjectToSPItem(project);
     omitSPFields.forEach(f => delete payload[f]);
-    const res = await fetch(
-      `${siteUrl}/_api/web/lists/getbytitle('${projectsListName}')/items(${spId})`,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json;odata=nometadata",
-          "Content-Type": "application/json;odata=nometadata",
-          Authorization: `Bearer ${token}`,
-          "X-HTTP-Method": "MERGE",
-          "IF-MATCH": "*",
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(itemUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json;odata=nometadata",
+        "Content-Type": "application/json;odata=nometadata",
+        Authorization: `Bearer ${token}`,
+        "X-HTTP-Method": "MERGE",
+        "IF-MATCH": etag,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 412) {
+      const e = new Error("This project was updated by someone else while you were editing.");
+      e.code = "CONFLICT";
+      throw e;
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(`SP update failed: ${res.status} — ${body.slice(0, 300)}`);
     }
-    return project;
+    // Refresh the baseline so a second save in the same session doesn't falsely
+    // conflict with the change we just made.
+    let newModified = null;
+    try {
+      const after = await fetch(`${itemUrl}?$select=Modified`, {
+        headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` },
+      });
+      if (after.ok) newModified = (await after.json()).Modified || null;
+    } catch { /* baseline refresh is best-effort */ }
+    return { ...project, _modified: newModified };
   },
 
   /** Permanently delete an SP item by its numeric SP ID. */
@@ -827,8 +888,8 @@ Object.assign(SPService, {
         link: it.ReportLink || "",
       }));
     } catch (err) {
-      console.warn("getReports failed (list may not exist yet):", err.message);
-      return [];
+      if (isMissingList(err)) { console.warn("getReports: list not provisioned yet:", err.message); return []; }
+      throw err; // real access/server/network error → surfaced, not shown as empty
     }
   },
   /** Add a shared report. Throws (with a clear message) if the list is missing. */
@@ -867,13 +928,19 @@ Object.assign(SPService, {
       let items;
       try {
         items = await fetchAllItems(SP_CONFIG.requestsListName, REQUESTS_SELECT + ",ApprovalLog", REQUESTS_EXPAND);
-      } catch {
-        items = await fetchAllItems(SP_CONFIG.requestsListName, REQUESTS_SELECT, REQUESTS_EXPAND);
+      } catch (colErr) {
+        // Only retry without ApprovalLog when THAT column is missing (400).
+        // Any other failure must propagate, not be swallowed by a blind retry.
+        if (colErr && colErr.status === 400) {
+          items = await fetchAllItems(SP_CONFIG.requestsListName, REQUESTS_SELECT, REQUESTS_EXPAND);
+        } else {
+          throw colErr;
+        }
       }
       return items.map(mapSPItemToRequest);
     } catch (err) {
-      console.warn("getRequests failed (non-fatal):", err.message);
-      return [];
+      if (isMissingList(err)) { console.warn("getRequests: list not provisioned yet:", err.message); return []; }
+      throw err; // real access/server/network error → surfaced, not shown as empty
     }
   },
 
@@ -888,8 +955,8 @@ Object.assign(SPService, {
       );
       return items.map(mapSPItemToGateSubmission);
     } catch (err) {
-      console.warn("getGateSubmissions failed (non-fatal):", err.message);
-      return [];
+      if (isMissingList(err)) { console.warn("getGateSubmissions: list not provisioned yet:", err.message); return []; }
+      throw err;
     }
   },
 
@@ -904,8 +971,8 @@ Object.assign(SPService, {
       );
       return items.map(mapSPItemToClosureSubmission);
     } catch (err) {
-      console.warn("getClosureSubmissions failed (non-fatal):", err.message);
-      return [];
+      if (isMissingList(err)) { console.warn("getClosureSubmissions: list not provisioned yet:", err.message); return []; }
+      throw err;
     }
   },
 
@@ -913,11 +980,16 @@ Object.assign(SPService, {
    *  Returns: { role: "pmo_admin"|"pm"|"executive"|"dept_head", deptId: string|null }
    *  Defaults to { role: "executive", deptId: null } on any error or missing record (fail-open). */
   async getUserRole(email) {
-    const fallback = { role: "executive", deptId: null };
-    if (!email) return fallback;
+    // Unregistered user (no matching PMO_Users record) → read-only executive.
+    // This is a deliberate BUSINESS default, kept separate from any failure.
+    const unregistered = { role: "executive", deptId: null };
+    // Technical failure (no email / non-OK response / thrown) must NEVER grant a
+    // role — fail CLOSED so a role-service outage can't silently widen access.
+    const technicalFailure = { role: null, deptId: null, error: "technical" };
+    if (!email) return technicalFailure;
     if (USE_MOCK) {
       const found = MOCK_USERS.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      return found ? { role: found.role || "executive", deptId: found.deptId || null } : fallback;
+      return found ? { role: found.role || "executive", deptId: found.deptId || null } : unregistered;
     }
     try {
       const token = await acquireSpToken();
@@ -926,10 +998,10 @@ Object.assign(SPService, {
       const res = await fetch(url, {
         headers: { Accept: "application/json;odata=verbose", Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return fallback;
+      if (!res.ok) return technicalFailure;               // outage / bad request → deny, don't grant
       const data = await res.json();
       const items = data?.d?.results || [];
-      if (!items.length) return fallback;
+      if (!items.length) return unregistered;             // genuine unregistered user
       // Deactivated users are fully locked out
       if (items[0].IsActive === false) return { role: "locked", deptId: null };
       const raw = (items[0].Role || "").trim().toLowerCase().replace(/\s+/g, "_");
@@ -942,9 +1014,10 @@ Object.assign(SPService, {
       if (raw === "grc_admin")                               return { role: "grc_admin",   deptId };
       if (raw === "pmo_head")                                return { role: "pmo_head",    deptId };
       if (raw === "pmo_staff")                               return { role: "pmo_staff",   deptId };
-      return fallback;
+      // Unrecognised role string (misconfiguration) → fail CLOSED, not a broad view.
+      return { role: "locked", deptId: null };
     } catch {
-      return fallback;
+      return technicalFailure;
     }
   },
 
