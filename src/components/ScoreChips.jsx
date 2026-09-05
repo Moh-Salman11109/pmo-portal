@@ -20,6 +20,7 @@ import { calcProjectIPIFull } from "../utils/metrics.js";
 
 // Compute the chip context from the engine result. Accepts either a project
 // (recomputes) or a precomputed calcProjectIPIFull result via `result`.
+// eslint-disable-next-line react-refresh/only-export-components -- shared helper co-located with its chips; dev-only fast-refresh hint, no runtime effect
 export function scoreContext(project, result) {
   const r = result || (project ? calcProjectIPIFull(project) : null);
   if (!r) return { daysLate: 0, roadmapStatus: null, roadmapDaysAhead: 0, complete: false, excluded: false };
