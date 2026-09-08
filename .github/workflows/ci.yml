@@ -22,3 +22,52 @@ jobs:
     permissions:
       contents: read
       id-token: write
+  
+  deploy-uat:
+    name: Deploy to UAT (gitops bump)
+    # Only real pushes to main deploy; workflow_dispatch is build-only.
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: uat
+    # One deploy at a time; a stale queued run must not overwrite a newer tag.
+    concurrency:
+      group: pmo-portal-uat-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout gitops-repo
+        uses: actions/checkout@v4
+        with:
+          repository: TreeDigitalInsurance/gitops-repo
+          token: ${{ secrets.PAT_DEPLOY_REPO }}
+          ref: main
+
+      - name: Bump image tag
+        run: |
+          F="k8s-kustomize/frontend/pmo-portal/overlays/uat/kustomization.yaml"
+          TAG="${{ needs.build.outputs.image_tag }}"
+          grep -q "newTag: " "$F" || { echo "::error::newTag line missing in $F"; exit 1; }
+          sed -i "s|newTag: .*|newTag: ${TAG}|" "$F"
+          git diff --stat
+
+      - name: Validate overlay renders
+        run: |
+          kubectl kustomize k8s-kustomize/frontend/pmo-portal/overlays/uat > /tmp/rendered.yaml
+          grep -q "${{ needs.build.outputs.image_tag }}" /tmp/rendered.yaml \
+            || { echo "::error::rendered overlay does not contain the new tag (images: name mismatch?)"; exit 1; }
+
+      - name: Commit and push
+        run: |
+          git config user.name  "pmo-portal-ci"
+          git config user.email "pmo-portal-ci@tree.com.sa"
+          F="k8s-kustomize/frontend/pmo-portal/overlays/uat/kustomization.yaml"
+          git add "$F"
+          if git diff --cached --quiet; then
+            echo "Tag unchanged - nothing to deploy"; exit 0
+          fi
+          git commit -m "pmo-portal uat -> ${{ needs.build.outputs.image_tag }} (auto-deploy from pmo-portal-ai@${GITHUB_SHA::8})"
+          # another workflow may have pushed meanwhile - rebase once and retry
+          git push origin main || { git pull --rebase origin main && git push origin main; }
+          echo "### Deployed to UAT" >> "$GITHUB_STEP_SUMMARY"
+          echo "gitops newTag -> \`${{ needs.build.outputs.image_tag }}\` (ArgoCD will sync)" >> "$GITHUB_STEP_SUMMARY"
