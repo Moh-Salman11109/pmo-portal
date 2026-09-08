@@ -3,6 +3,8 @@ name: pmo-portal-frontend
 # Build-only pipeline (workflow_dispatch only) — standard fleet shape.
 # Promotion across uat / preprod / prod is handled out-of-band by n8n.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
