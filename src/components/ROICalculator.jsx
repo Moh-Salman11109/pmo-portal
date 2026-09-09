@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useT } from "../theme.js";
 import { Ico } from "./Icon.jsx";
+import { computeRoi } from "../utils/roi.js";
 
 // ============================================================================
 //  ROI CALCULATOR — modal accessible from the What-If hub
@@ -22,27 +23,8 @@ const fmt = (n) =>
 const fmt2 = (n) =>
   Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// NPV of an annuity — sum of discounted annual cash flows over `years`,
-// INCLUDING the fractional final year. The old integer-only loop silently
-// dropped the fraction (e.g. 2.75yr counted as 2yr), understating NPV by a
-// full ~0.75 × annual ÷ (1+r)^3 — enough to flip a positive project to
-// negative on screen. Caught by the product owner comparing NPV to ROI.
-const npv = (annual, years, rate) => {
-  let s = 0;
-  const full = Math.floor(years);
-  for (let y = 1; y <= full; y++) s += annual / Math.pow(1 + rate, y);
-  const frac = years - full;
-  if (frac > 0) s += (annual * frac) / Math.pow(1 + rate, full + 1);
-  return s;
-};
-
-// Add months to a Date, preserving day-of-month as best as possible.
-const addMonths = (date, months) => {
-  const d = new Date(date);
-  const target = d.getMonth() + months;
-  d.setMonth(target);
-  return d;
-};
+// Money/percentage math lives in ../utils/roi.js (pure, tested). This component
+// only collects inputs, calls computeRoi once, and formats the result.
 const fmtDate = (d) =>
   d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 
@@ -56,61 +38,44 @@ const ROICalculator = ({ onClose, onBack }) => {
   const [discount,       setDiscount]       = useState((DEFAULT_DISCOUNT * 100).toString());
   const [result,         setResult]         = useState(null);
   const [error,          setError]          = useState("");
+  // A shown result belongs to the inputs it was computed from. When any input
+  // changes we flag it stale rather than silently presenting old numbers.
+  const [stale,          setStale]          = useState(false);
 
+  // Mandatory fields must be non-empty. We distinguish empty from 0: an empty
+  // field blocks Calculate; an explicit 0 (or negative) flows to the engine,
+  // which validates it. We never coerce "" into a default via `|| default`.
   const canCalc = totalCost !== "" && annualBenefit !== "" && durationMonths !== "";
+  const touch = (setter) => (value) => { setter(value); if (result) setStale(true); };
 
   const calculate = () => {
-    const cost   = Number(totalCost);
-    const benA   = Number(annualBenefit);
-    const dur    = Number(durationMonths);
-    const yrs    = Number(horizonYears);
-    const rate   = Number(discount) / 100;
-
-    if (!canCalc || [cost, benA, dur, yrs, rate].some(n => isNaN(n))) {
-      setError("Fill in the numeric fields above.");
-      return;
+    try {
+      // The engine is the single source of truth. The discount percentage is
+      // passed as-is (e.g. 10) and divided by 100 exactly once inside it.
+      // startDate is captured now and frozen into the result so re-renders do
+      // not move the break-even date.
+      const r = computeRoi({
+        projectCost: Number(totalCost),
+        annualNetBenefit: Number(annualBenefit),
+        implementationMonths: Number(durationMonths),
+        analysisHorizonYears: Number(horizonYears),
+        annualDiscountRatePercent: Number(discount),
+        startDate: new Date(),
+      });
+      setError("");
+      setResult(r);
+      setStale(false);
+    } catch (e) {
+      setResult(null);
+      setStale(false);
+      setError(e && e.message ? e.message : "Check the inputs and try again.");
     }
-    if (cost <= 0 || benA <= 0 || dur < 0 || yrs <= 0) {
-      setError("Cost, benefit, and horizon must be positive; duration cannot be negative.");
-      return;
-    }
-    setError("");
-
-    // Simple payback (in months) starts counting AFTER implementation.
-    const monthlyBenefit = benA / 12;
-    const paybackMonths  = monthlyBenefit > 0 ? cost / monthlyBenefit : Infinity;
-    const totalMonthsToBreakEven = dur + paybackMonths;
-    const breakEvenDate  = addMonths(new Date(), totalMonthsToBreakEven);
-
-    // Cumulative ROI: benefits earned over `yrs` (after implementation),
-    // MINUS total cost, ÷ total cost. Undiscounted, expressed as %.
-    const yearsOfBenefit = Math.max(0, yrs - (dur / 12));
-    const totalBenefit   = benA * yearsOfBenefit;
-    const roiPct         = ((totalBenefit - cost) / cost) * 100;
-
-    // NPV: discounted stream of annual benefits over horizon MINUS cost.
-    // Simplification: treats benefit as if it starts year 1 (small bias for
-    // long implementations; acceptable for planning-grade estimates).
-    const npvVal = npv(benA, yearsOfBenefit, rate) - cost;
-
-    // Verdict — simple bands. PMO can override in real committee discussion.
-    let verdict = "Marginal";
-    let verdictColor = "#d97706";
-    if (paybackMonths <= 24 && roiPct >= 100) { verdict = "Strong"; verdictColor = "#059669"; }
-    else if (paybackMonths <= 36 && roiPct >= 50) { verdict = "Acceptable"; verdictColor = "#059669"; }
-    else if (paybackMonths > 60 || roiPct < 0) { verdict = "Weak"; verdictColor = "#dc2626"; }
-
-    setResult({
-      paybackMonths, totalMonthsToBreakEven, breakEvenDate,
-      roiPct, totalBenefit, npvVal, verdict, verdictColor,
-      cost, benA, dur, yrs, rate,
-    });
   };
 
   const reset = () => {
     setTotalCost(""); setAnnualBenefit(""); setDurationMonths("");
     setHorizonYears("5"); setDiscount((DEFAULT_DISCOUNT * 100).toString());
-    setResult(null); setError("");
+    setResult(null); setError(""); setStale(false);
   };
 
   const inputStyle = {
@@ -179,13 +144,13 @@ const ROICalculator = ({ onClose, onBack }) => {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               {field("Total project cost (SAR)",
                 <input type="number" min="0" placeholder="3,000,000" value={totalCost}
-                       onChange={e => setTotalCost(e.target.value)} style={inputStyle} />,
-                "One-time delivery cost"
+                       onChange={e => touch(setTotalCost)(e.target.value)} style={inputStyle} />,
+                "One-time delivery cost, paid at project start"
               )}
-              {field("Expected annual benefit (SAR)",
-                <input type="number" min="0" placeholder="1,800,000" value={annualBenefit}
-                       onChange={e => setAnnualBenefit(e.target.value)} style={inputStyle} />,
-                "Recurring saving or revenue per year"
+              {field("Expected Annual Net Cash Benefit (SAR)",
+                <input type="number" placeholder="1,800,000" value={annualBenefit}
+                       onChange={e => touch(setAnnualBenefit)(e.target.value)} style={inputStyle} />,
+                "Incremental annual cash inflow or savings after recurring cash costs. Excludes the initial project investment, which is entered separately."
               )}
             </div>
 
@@ -194,26 +159,26 @@ const ROICalculator = ({ onClose, onBack }) => {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               {field("Implementation duration (months)",
-                <input type="number" min="0" placeholder="8" value={durationMonths}
-                       onChange={e => setDurationMonths(e.target.value)} style={inputStyle} />,
-                "Before benefits begin"
+                <input type="number" min="0" step="1" placeholder="8" value={durationMonths}
+                       onChange={e => touch(setDurationMonths)(e.target.value)} style={inputStyle} />,
+                "Whole months before benefits begin"
               )}
               {field("Analysis horizon (years)",
-                <select value={horizonYears} onChange={e => setHorizonYears(e.target.value)} style={inputStyle}>
+                <select value={horizonYears} onChange={e => touch(setHorizonYears)(e.target.value)} style={inputStyle}>
                   <option value="3">3 years</option>
                   <option value="5">5 years</option>
                   <option value="7">7 years</option>
                   <option value="10">10 years</option>
                 </select>,
-                "Post-launch benefit window"
+                "Total analysis period from project start, including implementation."
               )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginBottom: 12 }}>
               {field("Discount rate (%) for NPV",
                 <input type="number" min="0" max="100" step="0.5" value={discount}
-                       onChange={e => setDiscount(e.target.value)} style={inputStyle} />,
-                "Default 8%"
+                       onChange={e => touch(setDiscount)(e.target.value)} style={inputStyle} />,
+                "Effective annual rate. Default 8%"
               )}
             </div>
 
@@ -261,61 +226,97 @@ const ROICalculator = ({ onClose, onBack }) => {
               </div>
             ) : (
               <>
-                {/* Verdict banner */}
-                <div style={{
-                  background: "linear-gradient(135deg, #001f1a 0%, #003932 100%)",
-                  color: "white", borderRadius: 12, padding: "16px 20px",
-                  borderBottom: `3px solid ${result.verdictColor}`,
-                }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", fontWeight: 800, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>Verdict</div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: result.verdictColor, letterSpacing: "-0.5px", lineHeight: 1 }}>
-                    {result.verdict}
+                {stale && (
+                  <div style={{ padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, color: "#92400e", fontSize: 11.5, fontWeight: 600 }}>
+                    Inputs changed — press Calculate ROI to refresh these results.
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 6 }}>
-                    Based on payback ≤ 24m + ROI ≥ 100% (Strong)
+                )}
+
+                {/* NPV classification — descriptive, not an investment approval */}
+                {(() => {
+                  const npvLabel = result.npvClass === "positive" ? "Positive NPV" : result.npvClass === "negative" ? "Negative NPV" : "Approximately zero NPV";
+                  const npvColor = result.npvClass === "positive" ? "#059669" : result.npvClass === "negative" ? "#dc2626" : "#d97706";
+                  return (
+                    <div style={{
+                      background: "linear-gradient(135deg, #001f1a 0%, #003932 100%)",
+                      color: "white", borderRadius: 12, padding: "16px 20px",
+                      borderBottom: `3px solid ${npvColor}`,
+                    }}>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", fontWeight: 800, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>Result</div>
+                      <div style={{ fontSize: 26, fontWeight: 900, color: npvColor, letterSpacing: "-0.5px", lineHeight: 1 }}>
+                        {npvLabel}
+                      </div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 6 }}>
+                        Financial estimate under the stated assumptions. Not an investment approval.
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {!result.hasOperatingWindow && (
+                  <div style={{ padding: "8px 12px", background: "#fef2f0", border: "1px solid #f5d4d0", borderRadius: 8, color: "#991b1b", fontSize: 11.5, fontWeight: 600 }}>
+                    Implementation ≥ horizon: there is no operating period inside the analysis window.
                   </div>
-                </div>
+                )}
 
                 {/* Key metrics grid */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
                     <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>Payback</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: T.text, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.5px", marginTop: 3 }}>
-                      {result.paybackMonths.toFixed(0)}m
+                      {result.recovered ? `${result.paybackAfterLaunchMonths}m` : "—"}
                     </div>
-                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>After launch</div>
+                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
+                      {result.recovered ? "After launch — month-end basis" : "Not recovered within analysis horizon"}
+                    </div>
                   </div>
                   <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>ROI ({result.yrs}-yr)</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: result.roiPct >= 0 ? "#059669" : "#dc2626", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.5px", marginTop: 3 }}>
-                      {result.roiPct >= 0 ? "+" : ""}{result.roiPct.toFixed(0)}%
+                    <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>ROI ({result.inputs.analysisHorizonYears}y from start)</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: result.cumulativeRoiPercent >= 0 ? "#059669" : "#dc2626", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.5px", marginTop: 3 }}>
+                      {result.cumulativeRoiPercent >= 0 ? "+" : ""}{result.cumulativeRoiPercent.toFixed(0)}%
                     </div>
-                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Undiscounted</div>
+                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Cumulative · undiscounted</div>
                   </div>
                   <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>NPV @ {(result.rate * 100).toFixed(1)}%</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: result.npvVal >= 0 ? "#059669" : "#dc2626", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.5px", marginTop: 3 }}>
-                      {result.npvVal >= 0 ? "+" : ""}{fmt(result.npvVal)}
+                    <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>NPV @ {result.inputs.annualDiscountRatePercent}%</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: result.npv >= 0 ? "#059669" : "#dc2626", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.5px", marginTop: 3 }}>
+                      {result.npv >= 0 ? "+" : ""}{fmt(result.npv)}
                     </div>
-                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>SAR (present value)</div>
+                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>SAR · present value</div>
                   </div>
                   <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
                     <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>Break-even</div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: T.text, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.5px", marginTop: 3 }}>
-                      {fmtDate(result.breakEvenDate)}
+                      {result.breakEvenDate ? fmtDate(result.breakEvenDate) : "—"}
                     </div>
-                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{result.totalMonthsToBreakEven.toFixed(0)}m from today</div>
+                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>
+                      {result.breakEvenDate ? `Undiscounted · ${result.recoveryMonthFromStart}m from project start` : "Not reached within analysis horizon"}
+                    </div>
                   </div>
                 </div>
 
-                {/* Math trace */}
+                {/* Assumptions */}
+                <details style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 14px" }}>
+                  <summary style={{ cursor: "pointer", fontSize: 10, fontWeight: 700, color: T.muted, letterSpacing: "0.3px", textTransform: "uppercase" }}>Assumptions</summary>
+                  <ul style={{ margin: "8px 0 2px", paddingInlineStart: 16, color: T.muted, fontSize: 11, lineHeight: 1.7 }}>
+                    <li>All initial investment is paid at project start.</li>
+                    <li>Net operating cash flows are constant and received at each monthly period end after implementation.</li>
+                    <li>The analysis horizon includes implementation.</li>
+                    <li>The discount rate is effective annual.</li>
+                    <li>ROI and payback are undiscounted.</li>
+                    <li>No separate tax, inflation, growth, working-capital, or residual-value modeling.</li>
+                  </ul>
+                </details>
+
+                {/* Math trace — generated from the calculation result */}
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, lineHeight: 1.7 }}>
                   <div style={{ fontFamily: "inherit", fontSize: 10, color: T.muted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px" }}>Calculation</div>
                   <div style={{ color: T.text }}>
-                    Payback = {fmt(result.cost)} ÷ ({fmt(result.benA)} ÷ 12) = {result.paybackMonths.toFixed(1)} months<br/>
-                    Total benefit ({result.yrs}y − {(result.dur/12).toFixed(1)}y impl) = {fmt(result.totalBenefit)} SAR<br/>
-                    ROI = ({fmt(result.totalBenefit)} − {fmt(result.cost)}) ÷ {fmt(result.cost)} = {result.roiPct.toFixed(1)}%<br/>
-                    NPV = Σ(annual ÷ (1+{(result.rate*100).toFixed(1)}%)^y) − cost = {fmt(result.npvVal)} SAR
+                    Operating months = max(0, {result.horizonMonths} − {result.inputs.implementationMonths}) = {result.operatingMonths}<br/>
+                    Total net operating benefits = ({fmt(result.inputs.annualNetBenefit)} ÷ 12) × {result.operatingMonths} = {fmt(result.totalNetOperatingBenefits)}<br/>
+                    Net cash benefit = {fmt(result.totalNetOperatingBenefits)} − {fmt(result.inputs.projectCost)} = {fmt(result.netCashBenefit)}<br/>
+                    Cumulative ROI = {fmt(result.netCashBenefit)} ÷ {fmt(result.inputs.projectCost)} × 100 = {result.cumulativeRoiPercent.toFixed(1)}%<br/>
+                    NPV = −{fmt(result.inputs.projectCost)} + Σ(({fmt(result.inputs.annualNetBenefit)} ÷ 12) ÷ (1+{result.inputs.annualDiscountRatePercent}%)^(m/12), m={result.inputs.implementationMonths + 1}..{result.horizonMonths}) = {fmt(result.npv)}
                   </div>
                 </div>
               </>
