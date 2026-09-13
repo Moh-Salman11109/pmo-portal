@@ -336,7 +336,7 @@ function useCountUp(target, duration = 750) {
 }
 
 // ─── GATE TRACKER COMPONENT ──────────────────────────────────────
-const GateTracker = ({ gates, currentGate, startDate }) => {
+const GateTracker = ({ gates, currentGate, startDate, projectStatus }) => {
   const T = useT();
   const [expanded, setExpanded] = useState(null);
 
@@ -348,11 +348,14 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
     const defIdx   = GATE_DEFS.findIndex(d => d.id === def.id);
     const curIdx   = GATE_DEFS.findIndex(d => d.id === _currentGateId);
 
-    // Derive status from CurrentGate (source of truth)
+    // Derive status from CurrentGate (source of truth). A Completed project has
+    // cleared its final gate, so the current gate reads as Approved (✓ — no
+    // pulse, no SLA "Day N" counter), not "In Progress".
+    const isComplete = projectStatus === "Completed";
     let derivedStatus = "Pending";
     if (curIdx >= 0) {
       if (defIdx < curIdx)   derivedStatus = "Approved";
-      if (defIdx === curIdx) derivedStatus = "In Progress";
+      if (defIdx === curIdx) derivedStatus = isComplete ? "Approved" : "In Progress";
     }
 
     // Only override with GatesJSON status for special cases (Returned / Rejected)
@@ -2903,7 +2906,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
 
       {/* ── GATE TRACKER — always visible ── */}
-      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
+      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} projectStatus={project.status} />
 
       {/* ── PMO Internal Notes (hidden from PM) ─────────────────── */}
       {canSeeNotes && (
