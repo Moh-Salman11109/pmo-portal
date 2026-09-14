@@ -41,6 +41,7 @@ import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
 import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_CORP_DEV, ROLE_LOCKED } from "./roles.js";
+import { loadPptxLib, generateProjectPptx } from "./utils/pptxReport.js";
 import { themeStore, useT, useDark, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, deptColor } from "./utils/colors.js";
@@ -2240,6 +2241,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
              : (userRole === ROLE_EXEC || userRole === ROLE_CORP_DEV) ? PROJECT_TABS_EXEC
              : PROJECT_TABS_ADMIN;
   const [tab, setTab] = useState(() => (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? "Overview" : "Exec Summary");
+  const [pptxBusy, setPptxBusy] = useState(false);
 
   const activeTab = TABS.includes(tab) ? tab : TABS[0];
   const [showUpdate, setShowUpdate] = useState(false);
@@ -2669,6 +2671,34 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     win.document.close();
   };
 
+  // ── PowerPoint export — editable native-shape deck from the same figures ──
+  const exportPptx = async () => {
+    if (pptxBusy) return;
+    setPptxBusy(true);
+    try {
+      await loadPptxLib();
+      const dept = departments.find(d => d.id === project.deptId);
+      await generateProjectPptx({
+        project,
+        deptName: dept?.name || "—",
+        ipi,
+        spi: ipiResult.components?.spiFinal ?? ipiResult.components?.spi ?? null,
+        cpi: ipiResult.components?.cpi ?? null,
+        mci: ipiResult.components?.mci ?? null,
+        governanceBreach: ipiResult.governanceBreach,
+        progress: effectiveProgress,
+        budget: project.budget,
+        actualCost: project.actualCost,
+        budgetUtil,
+        remaining,
+      });
+    } catch (e) {
+      alert(e && e.message ? e.message : "Couldn't generate the PowerPoint report.");
+    } finally {
+      setPptxBusy(false);
+    }
+  };
+
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
       {showIPIBreakdown      && <IPIBreakdownModal      project={project} onClose={() => setShowIPIBreakdown(false)} />}
@@ -2718,6 +2748,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   <button onClick={printProjectReport}
                     style={{ ...baseBtn, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontWeight: 600 }}>
                     <Ico name="printer" size={13} /> Print Report
+                  </button>
+                  <button onClick={exportPptx} disabled={pptxBusy} title="Download an editable PowerPoint status report"
+                    style={{ ...baseBtn, background: "#b23800", color: "#fff", border: "1px solid transparent", fontWeight: 700, opacity: pptxBusy ? 0.6 : 1, cursor: pptxBusy ? "wait" : "pointer" }}>
+                    <Ico name="chart" size={13} /> {pptxBusy ? "Building…" : "PowerPoint"}
                   </button>
                 </>
               );
