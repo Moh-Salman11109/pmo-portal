@@ -6,8 +6,6 @@ dist/
 dist-ssr/
 
 # Environment variables — NEVER commit these
-.env
-.env.local
 .env.*.local
 
 # Editor
@@ -30,7 +28,6 @@ yarn-debug.log*
 yarn-error.log*
 
 .vercel
-.env*
 
 # Local agent skills (installed via `npx skills add`)
 .claude/skills/
@@ -44,3 +41,4 @@ skills-lock.json
 scripts/_build-*.cjs
 scripts/_pdf-handover.cjs
 scripts/_scenario-audit-ipi.mjs
+config.bat

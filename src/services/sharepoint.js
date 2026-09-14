@@ -942,6 +942,7 @@ Object.assign(SPService, {
       if (raw === "grc_admin")                               return { role: "grc_admin",   deptId };
       if (raw === "pmo_head")                                return { role: "pmo_head",    deptId };
       if (raw === "pmo_staff")                               return { role: "pmo_staff",   deptId };
+      if (raw === "corporate_development" || raw === "corp_dev") return { role: "corporate_development", deptId };
       return fallback;
     } catch {
       return fallback;
