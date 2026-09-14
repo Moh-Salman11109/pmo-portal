@@ -649,8 +649,9 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
   // Doc Generator is FOR the PMs (self-service charters/plans instead of
   // template e-mails), so PMs get it alongside the PMO roles.
   const canDocGen = isAdmin || userRole === ROLE_PMO_STAFF || isPM;
-  // Reports are a PMO-tier tool — hidden from PMs and other roles.
-  const canReports = isAdmin || userRole === ROLE_PMO_STAFF;
+  // Reports: PMO-tier manages them; CEO and Head of Department can view/open
+  // them (read-only — no add/delete). Hidden from PMs and Corp-Dev.
+  const canReports = isAdmin || userRole === ROLE_PMO_STAFF || isExec || isDeptHead;
 
   // The projects route is visible to EVERY role. For a PM the projects prop
   // is already server-filtered to their own projects (getProjects role=pm),
@@ -6789,7 +6790,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 //
 // ── Reports manager — add/open external reports (name + date + link), managed
 //    exactly like the Documents list. Stored per-browser (localStorage).
-const ReportsModal = ({ onClose }) => {
+const ReportsModal = ({ onClose, canManage = true }) => {
   const T = useT();
   // Shared reports — stored in the PMO_Reports SharePoint list so every user
   // sees the same set (not per-browser).
@@ -6843,7 +6844,7 @@ const ReportsModal = ({ onClose }) => {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 15px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>+ Add Report</button>}
+            {!adding && canManage && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 15px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>+ Add Report</button>}
             <button onClick={onClose} title="Close" style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.muted, fontSize: 15 }}>✕</button>
           </div>
         </div>
@@ -6874,8 +6875,8 @@ const ReportsModal = ({ onClose }) => {
             <div style={{ textAlign: "center", padding: "40px 20px" }}>
               <div style={{ fontSize: 30, marginBottom: 10, opacity: 0.55 }}>📊</div>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: T.text, marginBottom: 4 }}>No reports yet</div>
-              <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 18, maxWidth: 340, marginInline: "auto", lineHeight: 1.6 }}>Add a link to a Power BI or SharePoint report to keep it one click away.</div>
-              <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>+ Add your first report</button>
+              <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 18, maxWidth: 340, marginInline: "auto", lineHeight: 1.6 }}>{canManage ? "Add a link to a Power BI or SharePoint report to keep it one click away." : "No reports have been shared yet."}</div>
+              {canManage && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>+ Add your first report</button>}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -6890,10 +6891,10 @@ const ReportsModal = ({ onClose }) => {
                     <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{r.date ? fmtDate(r.date) : "No date"}</div>
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 800, color: T.accent, flexShrink: 0 }}>Open ↗</span>
-                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.id); }} title="Remove"
+                  {canManage && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.id); }} title="Remove"
                     style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, fontSize: 16, flexShrink: 0, padding: "2px 7px", borderRadius: 6, lineHeight: 1 }}
                     onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.background = "#fee2e2"; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>×</button>
+                    onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>×</button>}
                 </a>
               ))}
             </div>
@@ -7423,7 +7424,7 @@ export default function App() {
       overflow: "hidden",
     }}>
       <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => window.open(`${window.location.pathname}?docgen=1&u=${encodeURIComponent(currentUserName || "")}`, "_blank", "noopener")} onOpenReports={() => setReportsOpen(true)} />
-      {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} />}
+      {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} canManage={userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF} />}
       {whatIfView === "picker" && <WhatIfPicker  onClose={() => setWhatIfView(null)} onPick={(k) => setWhatIfView(k)} />}
       {whatIfView === "ipi"    && <IPICalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
       {whatIfView === "cost"   && <CostCalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
