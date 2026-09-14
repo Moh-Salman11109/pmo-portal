@@ -771,7 +771,6 @@ const GRCDashboard = ({ canEdit = false, onViewProjects = null }) => {
     finally    { setLoading(false); }
   }, []);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- initial GRC data load on mount; load() is a stable useCallback
   useEffect(() => { load(); }, [load]);
 
   // ── SP Write helpers ──────────────────────────────────────────

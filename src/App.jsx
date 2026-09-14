@@ -40,7 +40,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineCh
 import { GATE_DEFS, OPTIONAL_DOCS, PROJECT_TYPES } from "./data/constants.js";
 import { SPService, isUsingMock, FORM_URLS } from "./services/sharepoint.js";
 import { useCurrentUser } from "./hooks/useCurrentUser.js";
-import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_LOCKED } from "./roles.js";
+import { ROLE_ADMIN, ROLE_PM, ROLE_EXEC, ROLE_DEPT_HEAD, ROLE_GRC, ROLE_GRC_ADMIN, ROLE_PMO_HEAD, ROLE_PMO_STAFF, ROLE_CORP_DEV, ROLE_LOCKED } from "./roles.js";
+import { loadPptxLib, generateProjectPptx } from "./utils/pptxReport.js";
 import { themeStore, useT, useDark, ttStyle } from "./theme.js";
 import { useBp } from "./hooks/useBp.js";
 import { statusColor, riskColor, deptColor } from "./utils/colors.js";
@@ -320,7 +321,6 @@ const AnimStyles = () => (
 function useCountUp(target, duration = 750) {
   const [val, setVal] = useState(0);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- animation-only reset to 0 when target is 0; no cascading render, stable in production
     if (target === 0) { setVal(0); return; }
     let raf;
     const t0 = performance.now();
@@ -337,7 +337,7 @@ function useCountUp(target, duration = 750) {
 }
 
 // ─── GATE TRACKER COMPONENT ──────────────────────────────────────
-const GateTracker = ({ gates, currentGate, startDate }) => {
+const GateTracker = ({ gates, currentGate, startDate, projectStatus }) => {
   const T = useT();
   const [expanded, setExpanded] = useState(null);
 
@@ -349,11 +349,14 @@ const GateTracker = ({ gates, currentGate, startDate }) => {
     const defIdx   = GATE_DEFS.findIndex(d => d.id === def.id);
     const curIdx   = GATE_DEFS.findIndex(d => d.id === _currentGateId);
 
-    // Derive status from CurrentGate (source of truth)
+    // Derive status from CurrentGate (source of truth). A Completed project has
+    // cleared its final gate, so the current gate reads as Approved (✓ — no
+    // pulse, no SLA "Day N" counter), not "In Progress".
+    const isComplete = projectStatus === "Completed";
     let derivedStatus = "Pending";
     if (curIdx >= 0) {
       if (defIdx < curIdx)   derivedStatus = "Approved";
-      if (defIdx === curIdx) derivedStatus = "In Progress";
+      if (defIdx === curIdx) derivedStatus = isComplete ? "Approved" : "In Progress";
     }
 
     // Only override with GatesJSON status for special cases (Returned / Rejected)
@@ -635,25 +638,32 @@ const Sidebar = ({ route, setRoute, projects, requests, gateSubmissions, closure
 
   const isPM   = userRole === ROLE_PM;
   const isAdmin = userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD;
+  const isDeptHead = userRole === ROLE_DEPT_HEAD;
+  const isExec     = userRole === ROLE_EXEC;
+  const isCorpDev  = userRole === ROLE_CORP_DEV;
+  // CEO (exec), Head of Department and Corporate Development do not submit —
+  // they never see the "New Request" submission gates.
+  const canSubmit  = !isExec && !isDeptHead && !isCorpDev;
   // What-If tools are planning aids, not admin surface — PMO Staff do the
   // day-to-day estimation work, so they get them too (role-audit finding).
   const canWhatIf = isAdmin || userRole === ROLE_PMO_STAFF;
   // Doc Generator is FOR the PMs (self-service charters/plans instead of
   // template e-mails), so PMs get it alongside the PMO roles.
   const canDocGen = isAdmin || userRole === ROLE_PMO_STAFF || isPM;
-  // Reports are a PMO-tier tool — hidden from PMs and other roles.
-  const canReports = isAdmin || userRole === ROLE_PMO_STAFF;
+  // Reports: PMO-tier manages them; CEO and Head of Department can view/open
+  // them (read-only — no add/delete). Hidden from PMs and Corp-Dev.
+  const canReports = isAdmin || userRole === ROLE_PMO_STAFF || isExec || isDeptHead;
 
   // The projects route is visible to EVERY role. For a PM the projects prop
   // is already server-filtered to their own projects (getProjects role=pm),
   // so the same view naturally becomes "My Projects" — hiding the link (the
   // old behaviour) left PMs with no way to reach their own project at all.
   const navItems = [
-    ...(!isPM ? [{ icon: "home", label: "Portfolio Overview", route: "home" }] : []),
-    ...(!isPM ? [{ icon: "grid", label: "Departments IPI",     route: "departments" }] : []),
-    { icon: "list", label: isPM ? "My Projects" : "All Projects", route: "projects", badge: attnCount },
-    { icon: "send", label: "New Request",          route: "requests"},
-    { icon: "check", label: "My Actions",            route: "actions",  badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null },
+    ...(!isPM && !isCorpDev ? [{ icon: "home", label: "Portfolio Overview", route: "home" }] : []),
+    ...(!isPM && !isDeptHead && !isCorpDev ? [{ icon: "grid", label: "Departments IPI", route: "departments" }] : []),
+    { icon: "list", label: isPM ? "My Projects" : isCorpDev ? "Roadmap Projects" : "All Projects", route: "projects", badge: attnCount },
+    ...(canSubmit ? [{ icon: "send", label: "New Request", route: "requests" }] : []),
+    ...(!isCorpDev ? [{ icon: "check", label: "My Actions", route: "actions", badge: actionsCount, badgeColor: actionsCount > 0 ? "#d97706" : null }] : []),
     ...(isAdmin ? [{ icon: "gear", label: "Admin Panel", route: "admin" }] : []),
   ];
 
@@ -2035,6 +2045,8 @@ const ActionsPanel = ({ project, canEdit, canRespond = false, onSave }) => {
   const [draft, setDraft] = useState(blank);
   const [noteEditId, setNoteEditId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
+  // An action can only be Closed once it carries a note (governance trail).
+  const [closeWarnId, setCloseWarnId] = useState(null);
   const s = fInputStyle(T, false);
   const actions = project.actions || [];
   const today = new Date().toISOString().split("T")[0];
@@ -2056,9 +2068,28 @@ const ActionsPanel = ({ project, canEdit, canRespond = false, onSave }) => {
     await persist([...actions, entry]);
     setDraft(blank); setAdding(false);
   };
-  const setStatus = (id, status) => persist(actions.map(a => a.id === id
-    ? { ...a, status, ...(status === "Closed" ? { closedDate: today } : { closedDate: undefined }) } : a));
-  const saveNote = (id) => { persist(actions.map(a => a.id === id ? { ...a, note: noteDraft.trim() } : a)); setNoteEditId(null); };
+  const setStatus = (id, status) => {
+    // Closing requires a note. If missing, open the note editor and hold the
+    // close until the note is saved — never silently close without a trail.
+    if (status === "Closed") {
+      const target = actions.find(a => a.id === id);
+      if (!(target?.note || "").trim()) {
+        setNoteEditId(id); setNoteDraft(target?.note || ""); setCloseWarnId(id);
+        return;
+      }
+    }
+    setCloseWarnId(null);
+    return persist(actions.map(a => a.id === id
+      ? { ...a, status, ...(status === "Closed" ? { closedDate: today } : { closedDate: undefined }) } : a));
+  };
+  const saveNote = (id) => {
+    const text = noteDraft.trim();
+    const pendingClose = closeWarnId === id;
+    if (pendingClose && !text) return; // a note is mandatory to close
+    persist(actions.map(a => a.id === id
+      ? { ...a, note: text, ...(pendingClose ? { status: "Closed", closedDate: today } : {}) } : a));
+    setNoteEditId(null); setCloseWarnId(null);
+  };
   const removeAction = (id) => persist(actions.filter(a => a.id !== id));
 
   const stChip = (a) => {
@@ -2138,14 +2169,19 @@ const ActionsPanel = ({ project, canEdit, canRespond = false, onSave }) => {
                 {a.closedDate && <span> · closed {a.closedDate}</span>}
               </div>
               {noteEditId === a.id ? (
-                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                  <input autoFocus value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") saveNote(a.id); if (e.key === "Escape") setNoteEditId(null); }}
-                    placeholder="Write a note…" style={{ ...s, fontSize: 12 }} />
-                  <button onClick={() => saveNote(a.id)} disabled={saving}
-                    style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Save</button>
-                  <button onClick={() => setNoteEditId(null)}
-                    style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Cancel</button>
+                <div style={{ marginTop: 6 }}>
+                  {closeWarnId === a.id && (
+                    <div style={{ fontSize: 11, color: "#b23800", fontWeight: 600, marginBottom: 5 }}>Add a note to close this action.</div>
+                  )}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input autoFocus value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") saveNote(a.id); if (e.key === "Escape") { setNoteEditId(null); setCloseWarnId(null); } }}
+                      placeholder={closeWarnId === a.id ? "Reason for closing…" : "Write a note…"} style={{ ...s, fontSize: 12 }} />
+                    <button onClick={() => saveNote(a.id)} disabled={saving || (closeWarnId === a.id && !noteDraft.trim())}
+                      style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: (closeWarnId === a.id && !noteDraft.trim()) ? 0.5 : 1 }}>{closeWarnId === a.id ? "Save & Close" : "Save"}</button>
+                    <button onClick={() => { setNoteEditId(null); setCloseWarnId(null); }}
+                      style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Cancel</button>
+                  </div>
                 </div>
               ) : (
                 (a.note || canRespondOrEdit) && (
@@ -2198,10 +2234,14 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
   const dark = themeStore.dark;
   const project = projects.find(p => p.id === projectId);
 
-  const TABS = userRole === ROLE_PM ? PROJECT_TABS_PM
-             : (userRole === ROLE_EXEC || userRole === ROLE_DEPT_HEAD) ? PROJECT_TABS_EXEC
+  // Head of Department sees the same project detail tabs as a PM (read-only —
+  // edit stays gated below). Executive View (Exec Summary only) is CEO-only;
+  // Corporate Development is a read-only roadmap viewer.
+  const TABS = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PROJECT_TABS_PM
+             : (userRole === ROLE_EXEC || userRole === ROLE_CORP_DEV) ? PROJECT_TABS_EXEC
              : PROJECT_TABS_ADMIN;
-  const [tab, setTab] = useState(() => userRole === ROLE_PM ? "Overview" : "Exec Summary");
+  const [tab, setTab] = useState(() => (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? "Overview" : "Exec Summary");
+  const [pptxBusy, setPptxBusy] = useState(false);
 
   const activeTab = TABS.includes(tab) ? tab : TABS[0];
   const [showUpdate, setShowUpdate] = useState(false);
@@ -2252,12 +2292,9 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     // ── Timeline data
     const milestones = (project.milestones || []).filter(m => m.date || m.startDate);
     const allTs = milestones.flatMap(m => [m.startDate, m.date].filter(Boolean).map(d => new Date(d).getTime()));
-    // eslint-disable-next-line react-hooks/purity -- print-report fallback only; deterministic per print invocation
     const spanStart = allTs.length ? Math.min(...allTs, new Date(project.startDate || allTs[0]).getTime()) : Date.now();
-    // eslint-disable-next-line react-hooks/purity -- print-report fallback only; deterministic per print invocation
     const spanEnd   = allTs.length ? Math.max(...allTs, new Date(project.plannedEnd || allTs[0]).getTime()) : Date.now();
     const span = Math.max(1, spanEnd - spanStart);
-    // eslint-disable-next-line react-hooks/purity -- print-report timestamp captured once at print time
     const todayMs = Date.now();
     const todayPct = Math.max(0, Math.min(100, ((todayMs - spanStart) / span) * 100));
     const toPct = (d) => d ? Math.max(0, Math.min(100, ((new Date(d).getTime() - spanStart) / span) * 100)) : 0;
@@ -2284,7 +2321,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     const sc = {
       "Completed":   { fill: "#3b82f6", border: "#1e40af", txt: "#fff" },     // Blue (universal "done")
       "In Progress": { fill: "#00FFB3", border: "#00b894", txt: "#003932" },  // Sea — Tree mint
-      "Delayed":     { fill: "#490300", border: "#2c0200", txt: "#fff" },     // Maroon — Tree gravity
+      "Delayed":     { fill: "#dc2626", border: "#991b1b", txt: "#fff" },     // Red — late activities read as urgent (was maroon)
       "Upcoming":    { fill: "#A1B9AB", border: "#7a9485", txt: "#003932" },  // Moss — Tree neutral
     };
     // Executive layout: NO left label column — the activity name lives INSIDE
@@ -2634,6 +2671,34 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
     win.document.close();
   };
 
+  // ── PowerPoint export — editable native-shape deck from the same figures ──
+  const exportPptx = async () => {
+    if (pptxBusy) return;
+    setPptxBusy(true);
+    try {
+      await loadPptxLib();
+      const dept = departments.find(d => d.id === project.deptId);
+      await generateProjectPptx({
+        project,
+        deptName: dept?.name || "—",
+        ipi,
+        spi: ipiResult.components?.spiFinal ?? ipiResult.components?.spi ?? null,
+        cpi: ipiResult.components?.cpi ?? null,
+        mci: ipiResult.components?.mci ?? null,
+        governanceBreach: ipiResult.governanceBreach,
+        progress: effectiveProgress,
+        budget: project.budget,
+        actualCost: project.actualCost,
+        budgetUtil,
+        remaining,
+      });
+    } catch (e) {
+      alert(e && e.message ? e.message : "Couldn't generate the PowerPoint report.");
+    } finally {
+      setPptxBusy(false);
+    }
+  };
+
   return (
     <div style={{ padding: pad, maxWidth: 1400 }}>
       {showIPIBreakdown      && <IPIBreakdownModal      project={project} onClose={() => setShowIPIBreakdown(false)} />}
@@ -2662,7 +2727,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
               };
               return (
                 <>
-                  {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && (
+                  {userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && userRole !== ROLE_CORP_DEV && (
                     <button onClick={() => setShowUpdate(true)}
                       style={{ ...baseBtn, background: T.accent, color: T.accentText, border: "1px solid transparent", fontWeight: 800 }}>
                       <Ico name="pencil" size={13} /> Update
@@ -2683,6 +2748,10 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
                   <button onClick={printProjectReport}
                     style={{ ...baseBtn, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontWeight: 600 }}>
                     <Ico name="printer" size={13} /> Print Report
+                  </button>
+                  <button onClick={exportPptx} disabled={pptxBusy} title="Download an editable PowerPoint status report"
+                    style={{ ...baseBtn, background: "#b23800", color: "#fff", border: "1px solid transparent", fontWeight: 700, opacity: pptxBusy ? 0.6 : 1, cursor: pptxBusy ? "wait" : "pointer" }}>
+                    <Ico name="chart" size={13} /> {pptxBusy ? "Building…" : "PowerPoint"}
                   </button>
                 </>
               );
@@ -2849,7 +2918,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
         const delayed = project.status === "Delayed" || derived?.status === "Delayed";
         const headline = `${delayed ? "Behind schedule" : "At risk"}${overBudget > 0 ? " and over forecast" : ""}${isReturned ? " — PMO returned the last update" : ""}`;
         const note = isReturned ? project.pmoValidationNote : null;
-        const canUpdate = userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF;
+        const canUpdate = userRole !== ROLE_EXEC && userRole !== ROLE_DEPT_HEAD && userRole !== ROLE_PMO_STAFF && userRole !== ROLE_CORP_DEV;
         return (
           <div style={{ background: dark ? "rgba(255,80,0,0.06)" : "#fff8f4", border: `1px solid ${dark ? "rgba(255,80,0,0.28)" : "#ffd9c7"}`, borderLeft: "4px solid #FF5000", borderRadius: 14, padding: "16px 22px", marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 14 }}>
             <span style={{ marginTop: 2, flexShrink: 0 }}><Ico name="alert" size={16} color="#FF5000" /></span>
@@ -2872,7 +2941,7 @@ const ProjectView = ({ projects, projectId, setRoute, submitUpdate, savePMONote,
       <Tab tabs={TABS} active={activeTab} onSelect={setTab} />
 
       {/* ── GATE TRACKER — always visible ── */}
-      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} />
+      <GateTracker gates={project.gates} currentGate={project.gate} startDate={project.startDate} projectStatus={project.status} />
 
       {/* ── PMO Internal Notes (hidden from PM) ─────────────────── */}
       {canSeeNotes && (
@@ -6755,7 +6824,7 @@ const ProjectForm = ({ projectId, mode, projects, setRoute, onSaveForm }) => {
 //
 // ── Reports manager — add/open external reports (name + date + link), managed
 //    exactly like the Documents list. Stored per-browser (localStorage).
-const ReportsModal = ({ onClose }) => {
+const ReportsModal = ({ onClose, canManage = true }) => {
   const T = useT();
   // Shared reports — stored in the PMO_Reports SharePoint list so every user
   // sees the same set (not per-browser).
@@ -6809,7 +6878,7 @@ const ReportsModal = ({ onClose }) => {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {!adding && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 15px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>+ Add Report</button>}
+            {!adding && canManage && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "8px 15px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>+ Add Report</button>}
             <button onClick={onClose} title="Close" style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.muted, fontSize: 15 }}>✕</button>
           </div>
         </div>
@@ -6840,8 +6909,8 @@ const ReportsModal = ({ onClose }) => {
             <div style={{ textAlign: "center", padding: "40px 20px" }}>
               <div style={{ fontSize: 30, marginBottom: 10, opacity: 0.55 }}>📊</div>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: T.text, marginBottom: 4 }}>No reports yet</div>
-              <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 18, maxWidth: 340, marginInline: "auto", lineHeight: 1.6 }}>Add a link to a Power BI or SharePoint report to keep it one click away.</div>
-              <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>+ Add your first report</button>
+              <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 18, maxWidth: 340, marginInline: "auto", lineHeight: 1.6 }}>{canManage ? "Add a link to a Power BI or SharePoint report to keep it one click away." : "No reports have been shared yet."}</div>
+              {canManage && <button onClick={() => setAdding(true)} style={{ background: T.btnPrimBg, color: T.btnPrimText, border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>+ Add your first report</button>}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -6856,10 +6925,10 @@ const ReportsModal = ({ onClose }) => {
                     <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{r.date ? fmtDate(r.date) : "No date"}</div>
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 800, color: T.accent, flexShrink: 0 }}>Open ↗</span>
-                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.id); }} title="Remove"
+                  {canManage && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(r.id); }} title="Remove"
                     style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, fontSize: 16, flexShrink: 0, padding: "2px 7px", borderRadius: 6, lineHeight: 1 }}
                     onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.background = "#fee2e2"; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>×</button>
+                    onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>×</button>}
                 </a>
               ))}
             </div>
@@ -6886,7 +6955,7 @@ export default function App() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const toggleDark = () => themeStore.toggle();
   const { email: currentUserEmail, name: currentUserName } = useCurrentUser();
-  const [userRole, setUserRole] = useState(ROLE_EXEC);    // default only APPLIED for genuinely unregistered users; technical failures fail closed (see role lookup)
+  const [userRole, setUserRole] = useState(ROLE_EXEC);    // fail-open: unprovisioned users get read-only exec view
   const [userDeptId, setUserDeptId] = useState(null);
   const [roleResolved, setRoleResolved] = useState(isUsingMock()); // mock: skip role lookup, load immediately
   const [projects, setProjects] = useState([]);
@@ -6943,24 +7012,12 @@ export default function App() {
   useEffect(() => {
     if (!currentUserEmail) return;
     SPService.getUserRole(currentUserEmail)
-      .then(({ role, deptId, error }) => {
-        if (error || !role) {
-          // Fail CLOSED: a technical failure resolving the role must not grant
-          // any access. Surface an error instead of defaulting to a view role.
-          // Clear loading too, otherwise the spinner (checked before loadError)
-          // would hang forever since the projects load never runs.
-          setLoadError("We couldn't verify your access right now. Please refresh to try again.");
-          setLoading(false);
-          return;
-        }
+      .then(({ role, deptId }) => {
         setUserRole(role);
         setUserDeptId(deptId);
         setRoleResolved(true);
       })
-      .catch(() => {
-        setLoadError("We couldn't verify your access right now. Please refresh to try again.");
-        setLoading(false);
-      });
+      .catch(() => { setRoleResolved(true); }); // fail-open: keep exec default
   }, [currentUserEmail]);
   // ── Projects: server-side filtered once role is known ─────────
   useEffect(() => {
@@ -6986,8 +7043,9 @@ export default function App() {
   // on an (often empty) approvals queue made it look like the portal had
   // nothing for them. Actions stays one click away with its badge.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time PM landing redirect on role resolution; intentional
-    if (userRole === ROLE_PM) setRoute({ view: "projects" });
+    // PM and Corporate Development both land on their project list (Corp-Dev's
+    // list is roadmap-only via visibleProjects; home/departments are hidden).
+    if (userRole === ROLE_PM || userRole === ROLE_CORP_DEV) setRoute({ view: "projects" });
   }, [userRole]);
 
   const addDept = useCallback(async (d) => {
@@ -7027,21 +7085,23 @@ export default function App() {
       // pmEmail = "primary, backup" — the backup PM gets the same access so
       // they can update when the PM is away; only the primary shows in the
       // portal. Fallback to name match for projects without pmEmail yet.
-      // No resolved identity → show NOTHING (never fall through to all).
-      if (!currentUserEmail) return [];
-      const email = currentUserEmail.trim().toLowerCase();
-      return projects.filter(p =>
-        p.pmEmail ? p.pmEmail.split(/[,;]/).map(e => e.trim().toLowerCase()).includes(email)
-                  : (p.pm || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
-      );
+      if (currentUserEmail) {
+        const email = currentUserEmail.trim().toLowerCase();
+        return projects.filter(p =>
+          p.pmEmail ? p.pmEmail.split(/[,;]/).map(e => e.trim().toLowerCase()).includes(email)
+                    : (p.pm || "").trim().toLowerCase() === (currentUserName || "").trim().toLowerCase()
+        );
+      }
     }
     if (userRole === ROLE_DEPT_HEAD) {
-      // No resolved scope → show NOTHING (never fall through to all).
-      if (!userDeptId) return [];
+      if (!userDeptId) return projects;
       const ids = userDeptId.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-      if (ids.includes("all")) return projects;   // authorized enterprise-wide scope
-      if (!ids.length) return [];
+      if (!ids.length || ids.includes("all")) return projects;
       return projects.filter(p => ids.includes((p.deptId || "").toLowerCase()));
+    }
+    if (userRole === ROLE_CORP_DEV) {
+      // Corporate Development sees strategic-roadmap projects only.
+      return projects.filter(p => p.isRoadmap === true);
     }
     return projects;
   }, [projects, userRole, currentUserEmail, currentUserName, userDeptId]);
@@ -7209,11 +7269,7 @@ export default function App() {
       // so the returned banner stops surfacing stale feedback.
       const PMO_PROTECTED = ["PMOValidatedBy", "PMOValidatedDate", "PMONotes", "RoadmapDeadline", "BaselineEnd", "BaselineExceptionNote"];
       const omit = (userRole === ROLE_PM || userRole === ROLE_DEPT_HEAD) ? PMO_PROTECTED : [];
-      // Throws a { code:"CONFLICT" } error if a colleague saved in the meantime —
-      // the UpdatePanel catches it, shows the message, and keeps the user's edits
-      // (nothing is merged below, so no stale overwrite of local state either).
-      const saved = await SPService.updateProject(project.spId, updated, omit);
-      if (saved && saved._modified) updated._modified = saved._modified; // refresh concurrency baseline
+      await SPService.updateProject(project.spId, updated, omit);
     }
     setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
   }, [projects, userRole, currentUserName]);
@@ -7312,7 +7368,9 @@ export default function App() {
         const names = departments.filter(d => ids.includes((d.id || "").toLowerCase())).map(d => d.name);
         if (names.length) return [`${names.join(" · ")} Portfolio`, `Overview scoped to your department${names.length > 1 ? "s" : ""}`];
       }
-      return ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
+      return userRole === ROLE_EXEC
+        ? ["Enterprise Portfolio Dashboard", "CEO overview across all departments"]
+        : ["Enterprise Portfolio Dashboard", "Executive overview across all departments"];
     }
     if (route.view === "departments") return ["Departments Overview", `IPI comparison across ${departments.length} departments`];
     if (route.view === "projects")    return userRole === ROLE_PM
@@ -7400,7 +7458,7 @@ export default function App() {
       overflow: "hidden",
     }}>
       <Sidebar route={route} setRoute={setRoute} projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} currentUserEmail={currentUserEmail} currentUserName={currentUserName} userRole={userRole} userDeptId={userDeptId} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenWhatIf={() => setWhatIfView("picker")} onOpenDocGen={() => window.open(`${window.location.pathname}?docgen=1&u=${encodeURIComponent(currentUserName || "")}`, "_blank", "noopener")} onOpenReports={() => setReportsOpen(true)} />
-      {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} />}
+      {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} canManage={userRole === ROLE_ADMIN || userRole === ROLE_PMO_HEAD || userRole === ROLE_PMO_STAFF} />}
       {whatIfView === "picker" && <WhatIfPicker  onClose={() => setWhatIfView(null)} onPick={(k) => setWhatIfView(k)} />}
       {whatIfView === "ipi"    && <IPICalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
       {whatIfView === "cost"   && <CostCalculator onClose={() => setWhatIfView(null)} onBack={() => setWhatIfView("picker")} />}
@@ -7410,8 +7468,8 @@ export default function App() {
         <main style={{ flex: 1, overflowY: "auto", background: activeT.bg }}>
           <AnimStyles />
           {/* Portfolio-level views — blocked for PM role */}
-          {route.view === "home"        && userRole !== ROLE_PM && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
-          {route.view === "departments" && userRole !== ROLE_PM && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
+          {route.view === "home"        && userRole !== ROLE_PM && userRole !== ROLE_CORP_DEV && <HomeView          projects={visibleProjects} requests={requests} gateSubmissions={gateSubmissions} closureSubmissions={closureSubmissions} setRoute={setRoute} loadedAt={loadedAt} userRole={userRole} />}
+          {route.view === "departments" && userRole !== ROLE_PM && userRole !== ROLE_CORP_DEV && <DepartmentsOverview projects={visibleProjects} setRoute={setRoute} />}
           {route.view === "projects"    && <AllProjectsView    projects={visibleProjects} setRoute={setRoute} route={route} userRole={userRole} />}
           {route.view === "department"  && userRole !== ROLE_PM && <DepartmentView     projects={visibleProjects} deptId={route.deptId} setRoute={setRoute} userRole={userRole} userDeptId={userDeptId} />}
           {/* Project workspace — accessible to all roles (PM sees only their own via visibleProjects) */}
