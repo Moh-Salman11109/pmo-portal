@@ -596,6 +596,16 @@ function projectWeight(p) {
  */
 export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
   if (project && project.excludeFromIPI) return null;
+  // A Completed project's score is HISTORY: evaluate the trailing window as of
+  // its finish — NEVER "today" — so it stops moving after closure. Without this,
+  // the window slid forward with today and older (higher) snapshots dropped out,
+  // dragging a completed project's IPI down day by day. Freeze at the latest of
+  // its end/update/history dates so every snapshot stays in a fixed window.
+  if (project && project.status === "Completed") {
+    const ends = [project.actualFinishDate, project.lastUpdate, project.plannedEnd, project.baselineEnd,
+      ...((project.ipiHistory || []).map(h => h && h.date))].map(_toMs).filter(v => v != null);
+    if (ends.length) asOfDate = new Date(Math.max(...ends)).toISOString().slice(0, 10);
+  }
   const { timeWeightedWindowDays } = IPI_DEFAULTS;
   let asOfMs = _toMs(asOfDate);
   if (asOfMs == null) return calcProjectIPISnapshot(project);

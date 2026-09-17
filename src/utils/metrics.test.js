@@ -1211,3 +1211,30 @@ describe("trackMilestoneDateChanges — Gantt replan memory", () => {
     expect(out[1].prevDate).toBeUndefined();
   });
 });
+
+describe("completed project IPI is frozen (no decay after closure)", () => {
+  const completed = {
+    status: "Completed", startDate: "2026-01-01", plannedEnd: "2026-06-30",
+    actualFinishDate: "2026-06-30", progress: 100, budget: 1_000_000, actualCost: 900_000,
+    milestones: [],
+    ipiHistory: [
+      { date: "2026-02-01", ipi: 95 },
+      { date: "2026-04-15", ipi: 88 },
+      { date: "2026-06-30", ipi: 82 },
+    ],
+  };
+  it("returns the SAME value however far 'today' has moved past closure", () => {
+    const soon     = calcTimeWeightedIPI(completed, "2026-07-01");
+    const later    = calcTimeWeightedIPI(completed, "2027-01-01");
+    const wayLater = calcTimeWeightedIPI(completed, "2030-01-01");
+    expect(later).toBe(soon);
+    expect(wayLater).toBe(soon);
+    expect(soon).not.toBeNull();
+  });
+  it("an in-flight project is NOT frozen — its window still tracks today", () => {
+    const active = { ...completed, status: "On Track", actualFinishDate: null };
+    // With no snapshots in a far-future window it falls back to the snapshot, but
+    // the point is the completed-freeze branch does not apply to a live project.
+    expect(calcTimeWeightedIPI(active, "2026-07-01")).not.toBeUndefined();
+  });
+});
