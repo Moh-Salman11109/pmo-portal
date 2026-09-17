@@ -1237,4 +1237,21 @@ describe("completed project IPI is frozen (no decay after closure)", () => {
     // the point is the completed-freeze branch does not apply to a live project.
     expect(calcTimeWeightedIPI(active, "2026-07-01")).not.toBeUndefined();
   });
+  it("freezes even when the status has odd case/spacing (human-typed value)", () => {
+    const base = calcTimeWeightedIPI(completed, "2030-01-01");
+    for (const status of ["completed", "COMPLETED", " Completed ", "completed "]) {
+      expect(calcTimeWeightedIPI({ ...completed, status }, "2030-01-01")).toBe(base);
+    }
+  });
+  it("a post-closure snapshot can't un-freeze the window (no slide-forward)", () => {
+    // Someone opens/saves the closed project long after closure and a new
+    // snapshot lands in ipiHistory. The score must STILL read as of closure and
+    // ignore that late snapshot — not slide the window forward to it.
+    const withLateSnap = {
+      ...completed,
+      ipiHistory: [...completed.ipiHistory, { date: "2027-01-01", ipi: 40 }],
+    };
+    expect(calcTimeWeightedIPI(withLateSnap, "2027-06-01"))
+      .toBe(calcTimeWeightedIPI(completed, "2027-06-01"));
+  });
 });
