@@ -161,6 +161,33 @@ function _toMs(d) {
 }
 
 /**
+ * Robust "is this project closed?" test. The status is a HUMAN choice (a
+ * SharePoint dropdown / manual override), so a stray letter-case or a trailing
+ * space must NOT quietly let a completed project's IPI keep decaying. Normalise
+ * before comparing — never compare the raw string.
+ */
+function isCompletedStatus(status) {
+  return typeof status === "string" && status.trim().toLowerCase() === "completed";
+}
+
+/**
+ * The SINGLE instant a CLOSED project's IPI clock is frozen at — null if the
+ * project is not completed. Both the snapshot IPI (calcProjectIPIFull) and the
+ * DISPLAYED time-weighted IPI (calcTimeWeightedIPI) MUST anchor to this one
+ * definition. They used to freeze independently: the snapshot was frozen but the
+ * time-weighted path kept measuring against "today", so a completed project's
+ * displayed IPI decayed a second time. One source of truth here is what stops a
+ * third. Anchored on the recorded closure date — NEVER on the latest history
+ * snapshot, which a post-closure save could push to "today" and un-freeze.
+ */
+function completedFreezeMs(project, scheduleEndMs = null) {
+  if (!project || !isCompletedStatus(project.status)) return null;
+  const ms = _toMs(project.actualFinishDate) || _toMs(project.lastUpdate)
+    || _toMs(project.plannedEnd) || _toMs(project.baselineEnd) || scheduleEndMs;
+  return ms && ms > 0 ? ms : null;
+}
+
+/**
  * Full IPI calculation — governance-grade, regulator-auditable.
  * Returns { ipi (0–120), status, components, ev, pv }.
  *
@@ -228,9 +255,7 @@ export function calcProjectIPIFull(project, asOfDate = TODAY) {
   // Freeze at the recorded finish, else the last update, else the committed end
   // date — crucially NEVER "today". (Keyed on the Completed STATUS, not merely
   // 100% progress: a project can hit 100% and still be in execution/unclosed.)
-  const finishMs = project.status === "Completed"
-    ? (_toMs(project.actualFinishDate) || _toMs(project.lastUpdate) || scheduleEndMs)
-    : null;
+  const finishMs = completedFreezeMs(project, scheduleEndMs);
   const nowMs = finishMs && finishMs > 0 ? finishMs : asOfMs;
 
   // ── Data-reliability guards ───────────────────────────────────────────────
@@ -597,15 +622,12 @@ function projectWeight(p) {
 export function calcTimeWeightedIPI(project, asOfDate = TODAY) {
   if (project && project.excludeFromIPI) return null;
   // A Completed project's score is HISTORY: evaluate the trailing window as of
-  // its finish — NEVER "today" — so it stops moving after closure. Without this,
-  // the window slid forward with today and older (higher) snapshots dropped out,
-  // dragging a completed project's IPI down day by day. Freeze at the latest of
-  // its end/update/history dates so every snapshot stays in a fixed window.
-  if (project && project.status === "Completed") {
-    const ends = [project.actualFinishDate, project.lastUpdate, project.plannedEnd, project.baselineEnd,
-      ...((project.ipiHistory || []).map(h => h && h.date))].map(_toMs).filter(v => v != null);
-    if (ends.length) asOfDate = new Date(Math.max(...ends)).toISOString().slice(0, 10);
-  }
+  // its CLOSURE date — NEVER "today" — so it stops moving after closure. Without
+  // this, the window slid forward with today and older (higher) snapshots dropped
+  // out, dragging a completed project's IPI down day by day. Same freeze instant
+  // as the snapshot path (completedFreezeMs) so the two can never drift apart.
+  const freezeMs = completedFreezeMs(project);
+  if (freezeMs != null) asOfDate = new Date(freezeMs).toISOString().slice(0, 10);
   const { timeWeightedWindowDays } = IPI_DEFAULTS;
   let asOfMs = _toMs(asOfDate);
   if (asOfMs == null) return calcProjectIPISnapshot(project);
